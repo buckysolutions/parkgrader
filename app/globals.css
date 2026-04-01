@@ -1,26 +1,105 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc;
+  --foreground: #0a1628;
+  --navy: #0a1628;
+  --teal: #2da4a9;
+  --surface: #fafcfd;
+  --border: #e6ebf0;
+  --muted: #5b6776;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-dm-sans);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Report cards */
+.flip-card { transition: transform 0.2s ease, box-shadow 0.2s ease; overflow: hidden; background: transparent; }
+.flip-card:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(10, 22, 40, 0.08); }
+.flip-hint-icon { transition: transform 0.2s ease; }
+.flip-card:hover .flip-hint-icon { transform: translateX(2px); }
+.flip-card,
+.flip-card > div {
+  border-radius: 0 !important;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-dm-sans), sans-serif;
+}
+
+button,
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  border-radius: 0 !important;
+}
+
+input,
+textarea,
+select {
+  border-radius: 0 !important;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  letter-spacing: -0.035em;
+  font-weight: 500;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@page {
+  margin: 16mm;
+}
+
+@media print {
+  body {
+    background: #ffffff;
+    color: #0a1628;
+  }
+
+  html,
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-hidden {
+    display: none !important;
+  }
+
+  .report-page {
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  .report-page a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  .report-page section,
+  .report-page article,
+  .report-page svg,
+  .flip-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .flip-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
 }
