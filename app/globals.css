@@ -34,43 +34,35 @@
   border-radius: 0 !important;
 }
 
-@keyframes ai-gradient-spin {
+@keyframes ai-gradient-shift {
   0% {
-    transform: translate(-50%, -50%) rotate(0deg);
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
   }
   100% {
-    transform: translate(-50%, -50%) rotate(360deg);
+    background-position: 0% 50%;
   }
 }
 
 .ai-generate-button {
   position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  background: #09101d;
+  background: linear-gradient(135deg, #0a5a63 0%, #2da4a9 50%, #0a5a63 100%);
+  background-size: 200% 200%;
+  animation: ai-gradient-shift 5s ease infinite;
   box-shadow: 0 10px 24px rgba(45, 164, 169, 0.28);
   transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
 }
 
 .ai-generate-button::before {
   content: "";
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 220%;
-  height: 320%;
-  background: conic-gradient(from 0deg, #0a1628 0deg, #2da4a9 120deg, #9ef3f5 200deg, #2da4a9 280deg, #0a1628 360deg);
-  transform: translate(-50%, -50%) rotate(0deg);
-  animation: ai-gradient-spin 2.2s linear infinite;
-  z-index: -2;
+  display: none;
 }
 
 .ai-generate-button::after {
   content: "";
-  position: absolute;
-  inset: 1.5px;
-  background: linear-gradient(180deg, rgba(8, 19, 35, 0.96), rgba(10, 22, 40, 0.92));
-  z-index: -1;
+  display: none;
 }
 
 .ai-generate-button__label {
