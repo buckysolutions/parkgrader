@@ -57,6 +57,14 @@ type AnswerOption = {
   label: string;
 };
 
+type HubSpotContactOption = {
+  id: string;
+  email: string;
+  name: string;
+  company: string;
+  website: string;
+};
+
 type GuidedQuestion = {
   id: "property_type" | "primary_challenge" | "property_size";
   text: string;
@@ -98,17 +106,6 @@ type ReportSnapshot = {
 type DemoMode = null | "needs-work" | "good";
 
 const PARKGRADER_LOGO = "https://assets.buckysolutions.com/bucky_logo_parkgrader.svg";
-
-const AI_DRAFT_CHECK_IDS = new Set([
-  "pet-policy",
-  "cancellation-policy",
-  "accessibility-statement",
-  "meta-title",
-  "meta-description",
-  "communication-warmth",
-  "newsletter-capture",
-  "rate-transparency",
-]);
 
 const REPORTS_KEY = "parkgrader:reports";
 const BENCHMARKS: Record<IndustryKey, Benchmark> = {
@@ -193,6 +190,16 @@ const formatDisplayUrl = (raw: string): string => {
   }
 };
 
+const INTERNAL_TEST_DOMAIN = "buckysolutions.com";
+
+const isInternalTestDomain = (raw: string): boolean => {
+  return formatDisplayUrl(raw).toLowerCase() === INTERNAL_TEST_DOMAIN;
+};
+
+const isInternalTestEmail = (raw: string): boolean => {
+  return raw.trim().toLowerCase().endsWith(`@${INTERNAL_TEST_DOMAIN}`);
+};
+
 const makeReportId = (): string => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -246,6 +253,19 @@ const saveReportSnapshot = (snapshot: ReportSnapshot) => {
   const reports = loadReports();
   reports[snapshot.reportId] = snapshot;
   window.localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
+};
+
+const getReportIdFromPathname = (pathname: string): string => {
+  const match = pathname.match(/^\/r\/([^/]+)$/);
+  if (!match) {
+    return "";
+  }
+
+  try {
+    return decodeURIComponent(match[1] ?? "").trim();
+  } catch {
+    return (match[1] ?? "").trim();
+  }
 };
 
 const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
@@ -414,6 +434,28 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
   };
 };
 
+function TradeshowEmailConfirm({ email, onClose }: { email: string; onClose: () => void }) {
+  return (
+    <div className="px-6 pb-6 pt-6 text-center">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#E6F7F8]">
+        <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#2DA4A9]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+      </div>
+      <p className="mt-4 text-base font-medium text-[#0A1628]">Report sent!</p>
+      <p className="mt-1 text-sm text-[#5B6776]">Sent to <span className="font-medium text-[#0A1628]">{email}</span></p>
+      <p className="mt-4 text-xs text-[#94A3B8]">Ready when you are.</p>
+      <button
+        type="button"
+        onClick={onClose}
+        className="mt-4 inline-flex min-h-10 w-full items-center justify-center border border-[#D1DCE8] px-5 py-2 text-sm text-[#0A1628] transition-colors hover:border-[#2DA4A9] hover:text-[#2DA4A9]"
+      >
+        Done
+      </button>
+    </div>
+  );
+}
+
 function PolicyFooter({ fixed }: { fixed?: boolean }) {
   return (
     <footer
@@ -455,34 +497,6 @@ function TopographicPanel() {
     </div>
   );
 }
-
-const FIX_TEXTS: Record<string, string> = {
-  "ssl-valid": "Contact your web host and ask them to enable a free SSL certificate — most offer one called 'Let's Encrypt' at no extra cost. The fix usually takes just a few minutes.",
-  "https-redirect": "Ask your web host to enable an 'HTTP to HTTPS redirect' — this is usually a one-click setting in your hosting control panel and costs nothing extra.",
-  "response-time": "The most common causes are a slow hosting plan or oversized images. Ask your host about upgrading your plan, or ask a developer to compress your site's photos.",
-  "broken-links": "Click through your main navigation and key pages and fix or remove any links that lead to error pages. A developer can also run a full site scan in minutes.",
-  "pagespeed-mobile": "The most common fixes are compressing large photos and removing slow-loading plugins. A web developer can typically resolve this in a few hours.",
-  "booking-platform": "Add a booking system like Campspot, Reserve America, or RoverPass. They handle payments and reservations so guests can book anytime — even at midnight.",
-  "booking-cta": "Add a large, clearly visible 'Book Now' or 'Check Availability' button to the top of your homepage. It should be the first action a visitor sees when they land on your site.",
-  "tracking-pixels": "Install Google Analytics (it's free) and optionally Facebook Pixel. A web developer can add both to your site in under an hour.",
-  "newsletter-capture": "Add an email sign-up form to your homepage. Services like Mailchimp are free to start and let you send seasonal deals and updates to keep guests coming back.",
-  "pet-policy": "Add a 'Pet Policy' section to your site showing whether pets are allowed, any fees, size limits, and rules. This small addition often increases bookings from pet-owning guests.",
-  "rv-hookup-specs": "Add a page or section clearly listing your hookup types — 30 amp, 50 amp, water, sewer, full hookup. RV travelers read this before anything else when deciding where to book.",
-  "amenities-page": "Create a dedicated Amenities page listing everything your park offers — pool, showers, Wi-Fi, laundry, playground. Include a photo of each if you can.",
-  "rate-page": "Add a Rates or Pricing page with your nightly, weekly, and seasonal pricing. Even a 'starting from' price builds trust and saves your guests a phone call.",
-  "cancellation-policy": "Add a clear Cancellation Policy to your reservations page or FAQ. State your deadline and whether a refund is given. A visible, fair policy reduces hesitation at the booking step.",
-  "photo-gallery-quality": "Book a local photographer for a half-day session. Focus on your sites, amenities, and surrounding scenery. Good photos are the single best investment you can make in your online presence.",
-  "accessibility-statement": "Add a short section noting your accessibility features — paved paths, accessible restrooms, ADA facilities. Even a brief statement shows guests with mobility needs that you thought about them.",
-  "meta-title": "In your website editor, update your homepage title to include your park name and location — for example, 'Bryn Mawr Ocean Resort — St. Augustine, FL.' This is the headline people see in a Google search.",
-  "meta-description": "In your website editor, add a 150–160 character description of your property. Write it like a short ad: what makes you unique, where you are, and why someone should visit.",
-  "gbp-sync": "Visit business.google.com and claim or create your Google Business Profile — it's completely free. Add photos, your hours, phone number, and website. This is how most local guests find campgrounds today.",
-  "social-presence": "Create a free Facebook Business Page for your campground and link it from your website. Post photos and updates regularly — it shows guests you're active and worth visiting.",
-  "listing-signals": "Create a free listing on The Dyrt, Hipcamp, or Campendium. Fill out your profile completely with photos and amenity details. These platforms send ready-to-book campers directly to you.",
-  "facebook-link": "Check the Facebook link on your website and make sure it points to your current, active page. If your page moved or was renamed, update the link.",
-  "mobile-viewport": "Ask your web developer to add one line of code to your site: the viewport meta tag. It tells phones how to display your site correctly and is one of the quickest fixes available.",
-  "header-phone": "Ask your web developer to make your header phone number a tap-to-call link. On mobile, this lets guests call you with a single tap instead of having to write the number down.",
-  "image-count": "Add more photos to your homepage — aim for at least 5 or 6. Clear photos of your sites, amenities, and surroundings make a real difference in whether people stay or leave.",
-};
 
 const DEFAULT_SERVICE_CTA: ServiceCta = {
   badge: "Recommended Service",
@@ -751,18 +765,30 @@ export default function Home() {
   const [copied, setCopied] = useState(false);
   const [demoMode, setDemoMode] = useState<DemoMode>(null);
   const [isTradeshowMode, setIsTradeshowMode] = useState(false);
+  const [tradeshowEmailModalOpen, setTradeshowEmailModalOpen] = useState(false);
+  const [tradeshowEmailSent, setTradeshowEmailSent] = useState(false);
+  const [tradeshowConsentEmailCopy, setTradeshowConsentEmailCopy] = useState(false);
+  const [tradeshowConsentMarketing, setTradeshowConsentMarketing] = useState(false);
+  const [hasSubmittedTradeshowLead, setHasSubmittedTradeshowLead] = useState(false);
   const [isReportUnlocked, setIsReportUnlocked] = useState(false);
   const [urlInputShakeCount, setUrlInputShakeCount] = useState(0);
   const [emailInputShakeCount, setEmailInputShakeCount] = useState(0);
+  const [hubspotContactId, setHubspotContactId] = useState("");
+  const [contactSearch, setContactSearch] = useState("");
+  const [contactSearchResults, setContactSearchResults] = useState<HubSpotContactOption[]>([]);
+  const [isContactSearchOpen, setIsContactSearchOpen] = useState(false);
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+  const [selectedContactWebsite, setSelectedContactWebsite] = useState("");
   const [pendingProtectedAction, setPendingProtectedAction] = useState<ProtectedAction | null>(null);
   const [flippedCardId, setFlippedCardId] = useState<string | null>(null);
   const [hidePassingChecks, setHidePassingChecks] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
-  const [isGeneratingAiPdf, setIsGeneratingAiPdf] = useState(false);
+  const [isLandingFaqOpen, setIsLandingFaqOpen] = useState(false);
   const scanRequestRef = useRef(0);
   const loadingStartRef = useRef<number | null>(null);
   const reportSectionRef = useRef<HTMLElement | null>(null);
+  const capturedAuditReportsRef = useRef<Set<string>>(new Set());
 
   const selectedPropertyType = (answers.property_type?.value as IndustryKey | undefined) ?? "campground";
   const selectedChallenge = answers.primary_challenge?.value ?? "converting-visitors";
@@ -821,132 +847,18 @@ export default function Home() {
   const emailInputError = !isReportUnlocked ? leadNotice : "";
   const activeCheckCta = useMemo(() => getCheckCta(activeCheck), [activeCheck]);
 
-  const downloadPolicyPdf = useCallback(async () => {
-    if (!activeCheck || !scanResult || isGeneratingAiPdf) return;
-    setIsGeneratingAiPdf(true);
-    try {
-      const response = await fetch("/api/generate-fix", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: reportUrl,
-          industryLabel: scanResult.industryLabel,
-          checkId: activeCheck.id,
-          checkName: activeCheck.name,
-          finding: activeCheck.finding,
-          details: activeCheck.details,
-        }),
-      });
-      const payload = (await response.json()) as { fix?: string; message?: string };
-      if (!response.ok || !payload.fix) {
-        throw new Error(payload.message ?? "Unable to generate draft right now.");
-      }
-      const content = payload.fix;
-
-      const { jsPDF } = await import("jspdf");
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const mX = 22;
-      const pageW = 210;
-      const pageH = 297;
-      const cW = pageW - mX * 2;
-
-      // ── Logo ─────────────────────────────────────────────────────
-      let y = 18;
-      try {
-        const img = document.createElement("img") as HTMLImageElement;
-        await new Promise<void>((res, rej) => {
-          img.onload = () => res();
-          img.onerror = rej;
-          img.src = "/parkgrader-logo.svg";
-        });
-        const scale = 4;
-        const nW = 398; const nH = 58;
-        const canvas = document.createElement("canvas");
-        canvas.width = nW * scale; canvas.height = nH * scale;
-        const ctx = canvas.getContext("2d");
-        if (ctx) { ctx.scale(scale, scale); ctx.drawImage(img, 0, 0, nW, nH); }
-        const logoH = 8;
-        const logoW = logoH * (nW / nH);
-        doc.addImage(canvas.toDataURL("image/png"), "PNG", mX, y, logoW, logoH);
-        y += logoH + 8;
-      } catch {
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(13);
-        doc.setTextColor(10, 22, 40);
-        doc.text("ParkGrader", mX, y);
-        y += 14;
-      }
-
-      // ── Divider ───────────────────────────────────────────────────
-      doc.setDrawColor(200, 212, 224);
-      doc.setLineWidth(0.4);
-      doc.line(mX, y, pageW - mX, y);
-      y += 10;
-
-      // ── Title ─────────────────────────────────────────────────────
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(18);
-      doc.setTextColor(10, 22, 40);
-      doc.text(activeCheck.name, mX, y);
-      y += 7;
-
-      // URL + date in muted grey
-      const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8.5);
-      doc.setTextColor(100, 116, 139);
-      doc.text(`${reportUrl} · ${today}`, mX, y);
-      y += 10;
-
-      // ── Body ──────────────────────────────────────────────────────
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10.5);
-      doc.setTextColor(28, 38, 54);
-      const lineH = 10.5 * 0.3528 * 1.7;
-
-      for (const para of content.split(/\n{2,}/).filter(Boolean)) {
-        const wrapped = doc.splitTextToSize(para.trim(), cW) as string[];
-        const blockH = wrapped.length * lineH;
-        if (y + blockH > pageH - 18) { doc.addPage(); y = 18; }
-        for (const line of wrapped) { doc.text(line, mX, y); y += lineH; }
-        y += 4;
-      }
-
-      // ── Footer ────────────────────────────────────────────────────
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const total: number = (doc.internal as any).getNumberOfPages() as number;
-      for (let p = 1; p <= total; p++) {
-        doc.setPage(p);
-        doc.setDrawColor(200, 212, 224);
-        doc.setLineWidth(0.35);
-        doc.line(mX, pageH - 12, pageW - mX, pageH - 12);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(7.5);
-        doc.setTextColor(148, 163, 184);
-        doc.text("Generated by ParkGrader · parkgrader.com", mX, pageH - 7);
-        if (total > 1) doc.text(`${p} / ${total}`, pageW - mX, pageH - 7, { align: "right" });
-      }
-
-      doc.save(`${activeCheck.id}-draft.pdf`);
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Could not generate PDF. Please try again.");
-    } finally {
-      setIsGeneratingAiPdf(false);
-    }
-  }, [activeCheck, isGeneratingAiPdf, reportUrl, scanResult]);
-
   const shareLink = useMemo(() => {
     if (typeof window === "undefined" || !reportId) {
       return "";
     }
-    return `${window.location.origin}${window.location.pathname}?report=${reportId}`;
+    return `${window.location.origin}/r/${encodeURIComponent(reportId)}`;
   }, [reportId]);
 
   const shareMessage = useMemo(() => {
-    const scoreText = scanResult ? `Grade ${letterGrade} (${scanResult.score}/100)` : `Grade ${letterGrade}`;
+    const scoreText = `Grade ${letterGrade}`;
     const urlText = reportUrl || "your property";
     return `My ParkGrader audit for ${urlText}: ${scoreText}. ${shareLink}`;
-  }, [letterGrade, reportUrl, scanResult, shareLink]);
+  }, [letterGrade, reportUrl, shareLink]);
 
   const emailShareLink = useMemo(() => {
     if (!shareLink) {
@@ -1120,21 +1032,18 @@ export default function Home() {
     }
   }, [displayReportUrl, isGeneratingPdf]);
 
-  const syncReportParam = useCallback((nextReportId: string) => {
+  const syncReportPath = useCallback((nextReportId: string) => {
     if (typeof window === "undefined") {
       return;
     }
-    const params = new URLSearchParams(window.location.search);
-    params.set("report", nextReportId);
-    const query = params.toString();
-    window.history.replaceState({}, "", query ? `${window.location.pathname}?${query}` : window.location.pathname);
+    window.history.replaceState({}, "", `/r/${encodeURIComponent(nextReportId)}`);
   }, []);
 
   const resetToLandingPage = useCallback(() => {
     if (typeof window === "undefined") {
       return;
     }
-    window.history.replaceState({}, "", window.location.pathname);
+    window.history.replaceState({}, "", "/");
     window.location.reload();
   }, []);
 
@@ -1167,6 +1076,96 @@ export default function Home() {
     reportUrl,
     scanResult,
   ]);
+
+  const saveAuditSession = useCallback(
+    async (leadEmail?: string) => {
+      if (!reportUrl || !scanResult) {
+        throw new Error("Missing report details.");
+      }
+
+      const nextReportId = reportId || makeReportId();
+      if (!reportId) {
+        setReportId(nextReportId);
+      }
+      syncReportPath(nextReportId);
+
+      const normalizedEmail = leadEmail?.trim().toLowerCase() ?? "";
+      const reportSnapshotPayload: ReportSnapshot = {
+        reportId: nextReportId,
+        reportUrl,
+        scanResult,
+        answers,
+        name,
+        propertyName,
+        email: normalizedEmail,
+        emailConfirmation,
+        benchmarkPercentile,
+        savedAt: new Date().toISOString(),
+        demoMode,
+      };
+
+      const payload = {
+        email: normalizedEmail || undefined,
+        name,
+        property_name: propertyName,
+        url: reportUrl,
+        score: scanResult.score ?? 0,
+        property_type: selectedPropertyType,
+        primary_challenge: selectedChallenge,
+        property_size: selectedPropertySize ?? "25-75",
+        top_fails: scanResult.topFails ?? [],
+        estimated_lost_revenue: lostRevenue,
+        benchmark_percentile: benchmarkPercentile,
+        scan_date: new Date().toISOString(),
+        report_id: nextReportId,
+        report_snapshot: reportSnapshotPayload,
+        hubspot_contact_id: hubspotContactId || undefined,
+        tradeshow_consent_email: isTradeshowMode ? tradeshowConsentEmailCopy : undefined,
+        tradeshow_consent_marketing: isTradeshowMode ? tradeshowConsentMarketing : undefined,
+      };
+
+      const response = await fetch("/api/lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const result = (await response.json()) as {
+        stored?: boolean;
+        email_sent?: boolean;
+        message?: string;
+      };
+      if (!response.ok) {
+        throw new Error(result.message ?? "Unable to save lead.");
+      }
+
+      return {
+        stored: Boolean(result.stored),
+        emailSent: Boolean(result.email_sent),
+        email: normalizedEmail,
+      };
+    },
+    [
+      answers,
+      benchmarkPercentile,
+      demoMode,
+      emailConfirmation,
+      hubspotContactId,
+      isTradeshowMode,
+      lostRevenue,
+      name,
+      propertyName,
+      reportId,
+      reportUrl,
+      scanResult,
+      selectedChallenge,
+      selectedPropertySize,
+      selectedPropertyType,
+      syncReportPath,
+      tradeshowConsentEmailCopy,
+      tradeshowConsentMarketing,
+    ],
+  );
 
   const runScan = useCallback(async (site: string, industry: IndustryKey) => {
     scanRequestRef.current += 1;
@@ -1203,31 +1202,55 @@ export default function Home() {
     }
   }, []);
 
-    const validateAssessmentSite = useCallback(async (site: string, industry: IndustryKey): Promise<string | null> => {
-      const response = await fetch(
-        `/api/scan?url=${encodeURIComponent(site)}&industry=${encodeURIComponent(industry)}&validateOnly=true`,
-      );
-      const payload = (await response.json()) as { ok?: boolean; message?: string };
-      if (!response.ok || !payload.ok) {
-        return payload.message ?? "Unable to validate this website.";
+  useEffect(() => {
+    if (!isTradeshowMode || step !== "landing" || !isContactSearchOpen) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setIsLoadingContacts(true);
+      try {
+        const query = contactSearch.trim();
+        const response = await fetch(`/api/hubspot-contacts?q=${encodeURIComponent(query)}&limit=20`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          setContactSearchResults([]);
+          return;
+        }
+        const payload = (await response.json()) as { contacts?: HubSpotContactOption[] };
+        setContactSearchResults(payload.contacts ?? []);
+      } catch {
+        if (!controller.signal.aborted) {
+          setContactSearchResults([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsLoadingContacts(false);
+        }
       }
-      return null;
-    }, []);
+    }, 200);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [contactSearch, isContactSearchOpen, isTradeshowMode, step]);
 
   const beginAssessment = async () => {
-    const normalized = normalizeUrl(urlInput);
+    const normalized = normalizeUrl(isTradeshowMode ? selectedContactWebsite : urlInput);
     if (!normalized) {
-      setScanError("Please enter your URL.");
+      setScanError(isTradeshowMode ? "Select a contact with a website URL." : "Please enter your URL.");
         setUrlInputShakeCount((value) => value + 1);
       return;
     }
 
-      const validationError = await validateAssessmentSite(normalized, "campground");
-      if (validationError) {
-        setScanError(validationError);
-        setUrlInputShakeCount((value) => value + 1);
-        return;
-      }
+    if (isTradeshowMode && !hubspotContactId) {
+      setScanError("Select a contact from lookup to continue.");
+      setUrlInputShakeCount((value) => value + 1);
+      return;
+    }
 
     setAnswers({});
     setQuestionIndex(0);
@@ -1238,12 +1261,21 @@ export default function Home() {
     setCopied(false);
     setReportId("");
     setDisplayScore(0);
+    setTradeshowEmailModalOpen(false);
+    setTradeshowEmailSent(false);
+    setTradeshowConsentEmailCopy(false);
+    setTradeshowConsentMarketing(false);
+    setHasSubmittedTradeshowLead(false);
+    setContactSearch("");
+    setContactSearchResults([]);
+    setIsContactSearchOpen(false);
+    setSelectedContactWebsite("");
     setFlippedCardId(null);
     setHidePassingChecks(false);
     setIsReportUnlocked(isTradeshowMode);
     loadingStartRef.current = null;
     if (typeof window !== "undefined") {
-      window.history.replaceState({}, "", window.location.pathname);
+      window.history.replaceState({}, "", "/");
     }
     setReportUrl(normalized);
     setStep("guided");
@@ -1284,9 +1316,9 @@ export default function Home() {
     setEmailConfirmation(snapshot.emailConfirmation);
     setDemoMode(snapshot.demoMode);
     setIsReportUnlocked(Boolean(snapshot.email) || Boolean(snapshot.demoMode) || isTradeshowMode);
-    syncReportParam(snapshot.reportId);
+    syncReportPath(snapshot.reportId);
     setStep("report");
-  }, [isTradeshowMode, syncReportParam]);
+  }, [isTradeshowMode, syncReportPath]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1321,18 +1353,39 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const params = new URLSearchParams(window.location.search);
-    const reportParam = params.get("report");
     const demoParam = params.get("demo");
+    const reportIdFromPath = getReportIdFromPathname(window.location.pathname);
 
-    if (reportParam) {
-      const reports = loadReports();
-      const snapshot = reports[reportParam];
-      if (snapshot) {
-        hydrateSnapshot(snapshot);
+    const hydrateFromPath = async () => {
+      if (!reportIdFromPath) {
         return;
       }
-    }
+
+      const reports = loadReports();
+      const localSnapshot = reports[reportIdFromPath];
+      if (localSnapshot) {
+        hydrateSnapshot(localSnapshot);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/report/${encodeURIComponent(reportIdFromPath)}`);
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as { snapshot?: ReportSnapshot };
+        if (!cancelled && payload.snapshot) {
+          hydrateSnapshot(payload.snapshot);
+        }
+      } catch {
+        // Keep landing state when shared report lookup fails.
+      }
+    };
+
+    void hydrateFromPath();
 
     if (demoParam === "true" || demoParam === "good") {
       const mode: Exclude<DemoMode, null> = demoParam === "good" ? "good" : "needs-work";
@@ -1359,6 +1412,10 @@ export default function Home() {
       setDemoMode(mode);
       hydrateSnapshot(snapshot);
     }
+
+    return () => {
+      cancelled = true;
+    };
   }, [hydrateSnapshot]);
 
   useEffect(() => {
@@ -1382,15 +1439,36 @@ export default function Home() {
         if (!reportId) {
           setReportId(nextReportId);
         }
-        syncReportParam(nextReportId);
-        setIsReportUnlocked(Boolean(demoMode) || isTradeshowMode);
+        syncReportPath(nextReportId);
+        setIsReportUnlocked(Boolean(demoMode) || isTradeshowMode || isInternalTestDomain(reportUrl));
         setStep("report");
       },
       Math.max(0, minDelay - elapsed),
     );
 
     return () => window.clearTimeout(timeout);
-  }, [demoMode, isScanning, isTradeshowMode, questionsComplete, reportId, scanResult, step, syncReportParam]);
+  }, [demoMode, isScanning, isTradeshowMode, questionsComplete, reportId, reportUrl, scanResult, step, syncReportPath]);
+
+  useEffect(() => {
+    if (step !== "report" || !reportId || !reportUrl || !scanResult || demoMode) {
+      return;
+    }
+
+    if (capturedAuditReportsRef.current.has(reportId)) {
+      return;
+    }
+
+    capturedAuditReportsRef.current.add(reportId);
+
+    void (async () => {
+      try {
+        await saveAuditSession();
+      } catch (error) {
+        capturedAuditReportsRef.current.delete(reportId);
+        console.error("ParkGrader audit capture failed", error);
+      }
+    })();
+  }, [demoMode, reportId, reportUrl, saveAuditSession, scanResult, step]);
 
   useEffect(() => {
     if (step !== "partial" && step !== "report") {
@@ -1441,39 +1519,22 @@ export default function Home() {
     if (!reportId) {
       setReportId(nextReportId);
     }
-    syncReportParam(nextReportId);
+    syncReportPath(nextReportId);
 
     try {
-      const payload = {
-        email: normalizedEmail,
-        name,
-        property_name: propertyName,
-        url: reportUrl,
-        score: scanResult?.score ?? 0,
-        property_type: selectedPropertyType,
-        primary_challenge: selectedChallenge,
-        property_size: selectedPropertySize ?? "25-75",
-        top_fails: scanResult?.topFails ?? [],
-        estimated_lost_revenue: lostRevenue,
-        benchmark_percentile: benchmarkPercentile,
-        scan_date: new Date().toISOString(),
-        report_id: nextReportId,
-      };
-      const response = await fetch("/api/lead", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const result = (await response.json()) as { stored?: boolean; message?: string };
-      if (!response.ok) {
-        throw new Error(result.message ?? "Unable to save lead.");
-      }
-      console.log("ParkGrader email confirmation queued for", normalizedEmail, payload);
-      setEmailConfirmation(`A copy of this report has been sent to ${normalizedEmail}.`);
+      const result = await saveAuditSession(normalizedEmail);
+      console.log("ParkGrader email confirmation queued for", normalizedEmail);
+      setEmailConfirmation(
+        isInternalTestEmail(normalizedEmail)
+          ? `Test mode is on for ${normalizedEmail}. No email was sent.`
+          : result.emailSent
+            ? `A copy of this report has been sent to ${normalizedEmail}.`
+            : `We saved your report, but could not send email right now. Use the share link below.`,
+      );
       setLeadNotice(
         result.stored
           ? "Your details were saved successfully."
-          : "Lead capture is connected, but no Airtable or HubSpot credentials are configured yet.",
+          : "Lead capture is connected, but HubSpot credentials are not configured yet.",
       );
       setIsReportUnlocked(true);
       setPendingProtectedAction(null);
@@ -1485,7 +1546,11 @@ export default function Home() {
       }
     } catch (error) {
       console.log("ParkGrader email confirmation placeholder for", normalizedEmail);
-      setEmailConfirmation(`A copy of this report has been sent to ${normalizedEmail}.`);
+      setEmailConfirmation(
+        isInternalTestEmail(normalizedEmail)
+          ? `Test mode is on for ${normalizedEmail}. No email was sent.`
+          : `A copy of this report has been sent to ${normalizedEmail}.`,
+      );
       setLeadNotice(error instanceof Error ? error.message : "Lead capture failed.");
       setIsReportUnlocked(true);
       setPendingProtectedAction(null);
@@ -1600,6 +1665,87 @@ export default function Home() {
             exit={{ opacity: 0 }}
           >
             <TopographicPanel />
+            <Image
+              src={PARKGRADER_LOGO}
+              alt="ParkGrader"
+              width={181}
+              height={32}
+              className="pointer-events-none absolute left-6 top-6 z-20 h-8 w-auto sm:left-10 sm:top-8"
+            />
+            <div className="print-hidden absolute right-6 top-6 z-20 flex items-center gap-3 sm:right-10 sm:top-8">
+              <button
+                type="button"
+                aria-label="Language selector"
+                className="inline-flex h-12 items-center gap-2 rounded-full border border-[#AEBCCA] bg-white/75 px-5 text-base font-normal text-[#0A1628] backdrop-blur-sm transition-colors hover:border-[#2DA4A9]"
+              >
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M3 12h18" />
+                  <path d="M12 3a14.5 14.5 0 0 1 0 18" />
+                  <path d="M12 3a14.5 14.5 0 0 0 0 18" />
+                </svg>
+                <span>English</span>
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsLandingFaqOpen(true)}
+                className="inline-flex h-12 items-center justify-center rounded-full border border-[#AEBCCA] bg-white/75 px-7 text-base font-normal text-[#0A1628] backdrop-blur-sm transition-colors hover:border-[#2DA4A9]"
+              >
+                FAQ
+              </button>
+            </div>
+            {isLandingFaqOpen ? (
+              <motion.div
+                className="print-hidden fixed inset-0 z-50 flex items-center justify-center bg-[#0A1628]/55 px-4 py-6 backdrop-blur-[2px]"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsLandingFaqOpen(false)}
+              >
+                <motion.div
+                  className="relative w-full max-w-[680px] overflow-hidden border border-[#DDE7F0] bg-[#F8FAFC] shadow-[0_24px_80px_rgba(10,22,40,0.24)]"
+                  initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 18, scale: 0.98 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setIsLandingFaqOpen(false)}
+                    className="absolute right-3 top-3 inline-flex h-12 w-12 items-center justify-center text-3xl leading-none text-[#9AA9B5] transition-colors hover:text-[#0A1628]"
+                    aria-label="Close FAQ"
+                  >
+                    ×
+                  </button>
+                  <div className="border-b border-[#E6EBF0] bg-[linear-gradient(180deg,#ffffff_0%,#f6f9fc_100%)] px-6 py-6 sm:px-8">
+                    <p className="text-lg font-normal text-[#0A1628]">Frequently Asked Questions</p>
+                    <p className="mt-2 text-base text-[#435468]">Quick answers about how ParkGrader works.</p>
+                  </div>
+                  <div className="space-y-6 px-6 py-6 sm:px-8 sm:py-7">
+                    <div>
+                      <p className="text-base font-medium text-[#0A1628]">How long does the audit take?</p>
+                      <p className="mt-2 text-base leading-7 text-[#435468]">Most audits are ready in about 10-20 seconds.</p>
+                    </div>
+                    <div>
+                      <p className="text-base font-medium text-[#0A1628]">Is this really free?</p>
+                      <p className="mt-2 text-base leading-7 text-[#435468]">Yes. There is no credit card required to run an audit.</p>
+                    </div>
+                    <div>
+                      <p className="text-base font-medium text-[#0A1628]">What does ParkGrader check?</p>
+                      <p className="mt-2 text-base leading-7 text-[#435468]">We analyze booking flow, mobile experience, trust signals, and online visibility.</p>
+                    </div>
+                    <div>
+                      <p className="text-base font-medium text-[#0A1628]">Will this change my website?</p>
+                      <p className="mt-2 text-base leading-7 text-[#435468]">No. ParkGrader is read-only and does not modify your site.</p>
+                    </div>
+                  </div>
+                </motion.div>
+              </motion.div>
+            ) : null}
             <motion.div
               className="relative z-10 mx-auto w-full max-w-3xl"
               initial={{ y: 24, opacity: 0 }}
@@ -1607,8 +1753,6 @@ export default function Home() {
             >
               <div className="mx-auto max-w-[42rem] border border-[#DCE5ED] bg-[#F8FAFC] px-6 py-8 shadow-[0_10px_30px_rgba(10,22,40,0.05)] sm:px-10 sm:py-10">
                 <div className="flex flex-col items-center text-center">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[#5B6776]">Website audit for parks</p>
-                  <Image src={PARKGRADER_LOGO} alt="ParkGrader" width={181} height={32} className="mt-4 h-8 w-auto" />
                   <h1 className="mt-10 text-2xl leading-[0.98] text-[#0A1628] sm:text-[2.75rem]">
                     Audit your park
                   </h1>
@@ -1617,25 +1761,84 @@ export default function Home() {
                   </p>
                 </div>
                 <div className="mx-auto mt-12 w-full max-w-[34ch]">
-                  <div>
+                  <div className="text-left">
                     <motion.div
                       animate={urlInputShakeCount > 0 ? { x: [0, -10, 10, -7, 7, -3, 3, 0] } : { x: 0 }}
                       transition={{ duration: 0.4 }}
-                      className={`flex h-12 flex-1 items-center rounded-none bg-white px-4 shadow-[0_2px_8px_rgba(10,22,40,0.08)] ring-1 transition-colors focus-within:ring-2 ${
-                        scanError ? "ring-[#DC2626] focus-within:ring-[#DC2626]" : "ring-[#B8C6D6] focus-within:ring-[#0A1628]"
-                      }`}
                     >
-                      <input
-                        value={urlInput}
-                        onChange={(event) => {
-                          setUrlInput(event.target.value);
-                          if (scanError) {
-                            setScanError("");
-                          }
-                        }}
-                        placeholder="yourproperty.com"
-                        className="h-full w-full bg-transparent text-base text-[#0A1628] outline-none placeholder:text-[#748295]"
-                      />
+                      {isTradeshowMode ? (
+                        <div className="relative">
+                          <input
+                            value={contactSearch}
+                            onFocus={() => setIsContactSearchOpen(true)}
+                            onBlur={() => {
+                              window.setTimeout(() => setIsContactSearchOpen(false), 160);
+                            }}
+                            onChange={(event) => {
+                              setContactSearch(event.target.value);
+                              setHubspotContactId("");
+                              setSelectedContactWebsite("");
+                              if (scanError) {
+                                setScanError("");
+                              }
+                            }}
+                            placeholder="Search by name, email, or company"
+                            className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base font-medium text-[#0A1628] text-center outline-none transition-colors placeholder:text-[#8C97A8] ${
+                              scanError ? "border-[#DC2626]" : "border-[#C4D3E2] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                            }`}
+                          />
+                          {isContactSearchOpen ? (
+                            <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto border border-[#E6EBF0] bg-white shadow-[0_10px_30px_rgba(10,22,40,0.08)]">
+                              {isLoadingContacts ? (
+                                <p className="px-3 py-2 text-xs text-[#5B6776]">Loading contacts...</p>
+                              ) : contactSearchResults.length > 0 ? (
+                                contactSearchResults.map((contact) => (
+                                  <button
+                                    key={contact.id}
+                                    type="button"
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => {
+                                      setHubspotContactId(contact.id);
+                                      setContactSearch(contact.email);
+                                      setSelectedContactWebsite(contact.website || "");
+                                      setEmail(contact.email);
+                                      if (!name && contact.name) {
+                                        setName(contact.name);
+                                      }
+                                      if (!propertyName && contact.company) {
+                                        setPropertyName(contact.company);
+                                      }
+                                      setIsContactSearchOpen(false);
+                                    }}
+                                    className="block w-full border-b border-[#F1F5F9] px-3 py-2 text-left text-xs text-[#0A1628] hover:bg-[#F8FAFC]"
+                                  >
+                                    <p className="font-medium">{contact.email}</p>
+                                    {contact.name || contact.company ? (
+                                      <p className="mt-0.5 text-[#5B6776]">{[contact.name, contact.company].filter(Boolean).join(" - ")}</p>
+                                    ) : null}
+                                  </button>
+                                ))
+                              ) : (
+                                <p className="px-3 py-2 text-xs text-[#5B6776]">No contacts found.</p>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <input
+                          value={urlInput}
+                          onChange={(event) => {
+                            setUrlInput(event.target.value);
+                            if (scanError) {
+                              setScanError("");
+                            }
+                          }}
+                          placeholder="Enter your park website"
+                          className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base font-medium text-[#0A1628] text-center outline-none transition-colors placeholder:text-[#8C97A8] ${
+                            scanError ? "border-[#DC2626]" : "border-[#C4D3E2] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                          }`}
+                        />
+                      )}
                     </motion.div>
                     {scanError ? <p className="mt-2 text-sm text-[#B42318]">{scanError}</p> : null}
                   </div>
@@ -1706,7 +1909,7 @@ export default function Home() {
                 </motion.div>
               ) : null}
               <div className="print-hidden mx-auto mt-8 w-full max-w-[680px] text-center text-sm text-[#5B6776]">
-                Question {Math.min(GUIDED_QUESTIONS.length, questionIndex + 1)} of {GUIDED_QUESTIONS.length}
+                {`Question ${Math.min(GUIDED_QUESTIONS.length, questionIndex + 1)} of ${GUIDED_QUESTIONS.length}`}
               </div>
             </div>
             <PolicyFooter fixed />
@@ -1759,7 +1962,7 @@ export default function Home() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => requestProtectedAction("email-share")}
+                      onClick={() => isTradeshowMode ? setTradeshowEmailModalOpen(true) : requestProtectedAction("email-share")}
                       aria-label="Email"
                       title="Email"
                       className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-[#2DA4A9]"
@@ -1851,11 +2054,11 @@ export default function Home() {
                         y="100"
                         textAnchor="middle"
                         dominantBaseline="middle"
-                        fontSize="52"
+                        fontSize="56"
                         fontFamily="var(--font-dm-sans), sans-serif"
                         fontWeight="bold"
                         fill={displayScore >= 75 ? "#16A34A" : displayScore >= 50 ? "#D97706" : "#DC2626"}
-                      >{displayScore}</text>
+                      >{letterGrade}</text>
                     </svg>
                     </div>
                   </div>
@@ -1948,7 +2151,7 @@ export default function Home() {
                             <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">Unlock this feature</p>
                             <p className="mt-3 text-2xl leading-9 text-[#0A1628]">Enter your email to continue</p>
                             <p className="mt-3 text-sm leading-7 text-[#5B6776]">
-                              Enter your email to unlock share links, QR code, print, and PDF options and receive a copy of your audit.
+                              Enter your email to unlock share links, QR code, print, and PDF options. We will immediately send a copy of your audit.
                             </p>
                             <div className="mt-6 grid w-full grid-cols-1 gap-3">
                               <motion.div
@@ -1969,8 +2172,8 @@ export default function Home() {
                                     }
                                   }}
                                   placeholder="Email address"
-                                  className={`h-12 w-full border bg-white px-4 text-sm text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] ${
-                                    emailInputError ? "border-[#DC2626] focus:border-[#DC2626]" : "border-[#C4D3E2] focus:border-[#0A1628]"
+                                  className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] ${
+                                    emailInputError ? "border-[#DC2626] focus:border-[#DC2626]" : "border-[#C4D3E2] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
                                   }`}
                                 />
                               </motion.div>
@@ -2014,7 +2217,7 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => setIsQrModalOpen(false)}
-                          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center text-lg text-[#9AA9B5] transition-colors hover:text-[#0A1628]"
+                          className="absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center text-2xl leading-none text-[#9AA9B5] transition-colors hover:text-[#0A1628]"
                           aria-label="Close QR code"
                         >
                           ×
@@ -2045,6 +2248,120 @@ export default function Home() {
                     </motion.div>
                   ) : null}
 
+                  {tradeshowEmailModalOpen ? (
+                    <motion.section
+                      className="print-hidden fixed inset-0 z-50 flex min-h-screen flex-col overflow-hidden bg-[#F8FAFC] px-6 pb-24 pt-10 sm:px-10 sm:pt-12"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                    >
+                      <div className="relative mx-auto flex w-full max-w-[820px] flex-1 flex-col justify-center">
+                        <button
+                          type="button"
+                          onClick={() => setTradeshowEmailModalOpen(false)}
+                          className="absolute right-0 top-0 inline-flex h-12 w-12 items-center justify-center text-2xl leading-none text-[#9AA9B5] transition-colors hover:text-[#0A1628]"
+                          aria-label="Close"
+                        >
+                          ×
+                        </button>
+
+                        {tradeshowEmailSent ? (
+                          <motion.div className="mx-auto w-full max-w-[680px]" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+                            <Image src={PARKGRADER_LOGO} alt="ParkGrader" width={181} height={32} className="mx-auto h-8 w-auto" />
+                            <div className="mt-8 border border-[#E6EBF0] bg-[linear-gradient(180deg,#ffffff_0%,#f6f9fc_100%)] p-5 sm:p-6">
+                              <TradeshowEmailConfirm
+                                email={email}
+                                onClose={() => {
+                                  setTradeshowEmailModalOpen(false);
+                                  setTradeshowEmailSent(false);
+                                }}
+                              />
+                            </div>
+                          </motion.div>
+                        ) : (
+                          <motion.div className="mx-auto w-full max-w-[680px]" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+                            <Image src={PARKGRADER_LOGO} alt="ParkGrader" width={181} height={32} className="mx-auto h-8 w-auto" />
+                            <h2 className="mt-10 text-center text-2xl leading-tight text-[#0A1628] sm:text-[2.2rem]">Email this report?</h2>
+                            <p className="mt-4 text-center text-base text-[#5B6776]">Update the contact email if needed, then choose an option.</p>
+
+                            <div className="mt-8 border border-[#E6EBF0] bg-[linear-gradient(180deg,#ffffff_0%,#f6f9fc_100%)] p-5 sm:p-6">
+                              <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">Contact email</p>
+                              <motion.div
+                                className="mt-3"
+                                animate={emailInputShakeCount > 0 ? { x: [0, -10, 10, -7, 7, -3, 3, 0] } : { x: 0 }}
+                                transition={{ duration: 0.4 }}
+                              >
+                                <input
+                                  type="email"
+                                  inputMode="email"
+                                  autoComplete="email"
+                                  autoCapitalize="none"
+                                  spellCheck={false}
+                                  value={email}
+                                  onChange={(event) => {
+                                    setEmail(event.target.value);
+                                    if (leadNotice) {
+                                      setLeadNotice("");
+                                    }
+                                  }}
+                                  placeholder="name@company.com"
+                                  className="h-12 w-full border-0 border-b-2 border-[#C4D3E2] bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                                />
+                              </motion.div>
+
+                              {leadNotice ? <p className="mt-3 text-sm text-[#B42318]">{leadNotice}</p> : null}
+
+                              <div className="mt-5 space-y-2.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const normalizedEmail = email.trim().toLowerCase();
+                                    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                                    if (!emailPattern.test(normalizedEmail)) {
+                                      setLeadNotice("Please enter a valid email address.");
+                                      setEmailInputShakeCount((value) => value + 1);
+                                      return;
+                                    }
+                                    setEmail(normalizedEmail);
+                                    setLeadNotice("");
+                                    setTradeshowConsentEmailCopy(true);
+                                    setTradeshowConsentMarketing(true);
+                                    if (!hasSubmittedTradeshowLead) {
+                                      setHasSubmittedTradeshowLead(true);
+                                      void submitLead();
+                                    }
+                                    setTradeshowEmailSent(true);
+                                  }}
+                                  className="inline-flex min-h-12 w-full items-center justify-center bg-[#2DA4A9] px-5 py-3 text-base text-white transition-colors hover:bg-[#24858A]"
+                                >
+                                  Yes, send it
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setTradeshowConsentEmailCopy(false);
+                                    setTradeshowConsentMarketing(false);
+                                    setTradeshowEmailModalOpen(false);
+                                  }}
+                                  className="inline-flex min-h-12 w-full items-center justify-center border border-[#D1DCE8] px-5 py-3 text-base text-[#0A1628] transition-colors hover:border-[#2DA4A9] hover:text-[#2DA4A9]"
+                                >
+                                  No thanks
+                                </button>
+                              </div>
+                            </div>
+                            <p className="mt-3 text-center text-xs leading-relaxed text-[#5B6776]">
+                              We&apos;re committed to your privacy. Bucky Solutions uses the information you provide to contact you about relevant content, products, and services. You may unsubscribe from these communications at any time. For more information, see our
+                              <a href="https://buckysolutions.com/privacy-policy" target="_blank" rel="noreferrer" className="ml-1 text-[#2DA4A9]">
+                                Privacy Policy.
+                              </a>
+                            </p>
+                          </motion.div>
+                        )}
+                      </div>
+                      <PolicyFooter fixed />
+                    </motion.section>
+                  ) : null}
+
                   {activeCheck ? (
                     <motion.div
                       className="print-hidden fixed inset-0 z-50 flex items-center justify-center bg-[#0A1628]/55 px-4 py-6 backdrop-blur-[2px]"
@@ -2070,126 +2387,72 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={() => setFlippedCardId(null)}
-                          className="absolute right-4 top-4 inline-flex h-9 w-9 items-center justify-center text-lg text-[#9AA9B5] transition-colors hover:text-[#0A1628]"
+                          className="absolute right-4 top-4 inline-flex h-11 w-11 items-center justify-center text-2xl leading-none text-[#9AA9B5] transition-colors hover:text-[#0A1628]"
                           aria-label="Close details"
                         >
                           ×
                         </button>
 
-                        {!isReportUnlocked ? (
-                          <div className="p-6 sm:p-8">
-                            <div className="pr-10">
-                              <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">{activeCheck.name}</p>
-                              <p className="mt-3 text-2xl leading-9 text-[#0A1628]">Unlock this fix</p>
-                              <p className="mt-3 text-sm leading-7 text-[#5B6776]">
-                                Enter your email to reveal the recommended fix for this check and receive a copy of your audit.
-                              </p>
-                              <div className="mt-6 grid w-full grid-cols-1 gap-3">
-                                <motion.div
-                                  animate={emailInputShakeCount > 0 ? { x: [0, -10, 10, -7, 7, -3, 3, 0] } : { x: 0 }}
-                                  transition={{ duration: 0.4 }}
-                                >
-                                  <input
-                                    type="email"
-                                    inputMode="email"
-                                    autoComplete="email"
-                                    autoCapitalize="none"
-                                    spellCheck={false}
-                                    value={email}
-                                    onChange={(event) => {
-                                      setEmail(event.target.value);
-                                      if (emailInputError) {
-                                        setLeadNotice("");
-                                      }
-                                    }}
-                                    placeholder="Email address"
-                                    className={`h-12 w-full border bg-white px-4 text-sm text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] ${
-                                      emailInputError ? "border-[#DC2626] focus:border-[#DC2626]" : "border-[#C4D3E2] focus:border-[#0A1628]"
-                                    }`}
-                                  />
-                                </motion.div>
-                                {emailInputError ? <p className="-mt-1 text-left text-sm text-[#B42318]">{emailInputError}</p> : null}
-                              </div>
+                        <div className="p-6 sm:p-8">
+                          <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">{activeCheck.name}</p>
+                          <p className="mt-3 text-xl leading-8 text-[#0A1628]">{activeCheck.finding}</p>
+                          <p className="mt-3 text-sm leading-7 text-[#5B6776]">{activeCheck.details}</p>
+
+                          {!isReportUnlocked ? (
+                            <div className="mt-6 grid w-full grid-cols-1 gap-3">
+                              <motion.div
+                                animate={emailInputShakeCount > 0 ? { x: [0, -10, 10, -7, 7, -3, 3, 0] } : { x: 0 }}
+                                transition={{ duration: 0.4 }}
+                              >
+                                <input
+                                  type="email"
+                                  inputMode="email"
+                                  autoComplete="email"
+                                  autoCapitalize="none"
+                                  spellCheck={false}
+                                  value={email}
+                                  onChange={(event) => {
+                                    setEmail(event.target.value);
+                                    if (leadNotice) {
+                                      setLeadNotice("");
+                                    }
+                                  }}
+                                  placeholder="name@company.com"
+                                  className="h-12 w-full border-0 border-b-2 border-[#C4D3E2] bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                                />
+                              </motion.div>
                               <button
                                 type="button"
                                 onClick={() => void submitLead()}
-                                className="mt-6 inline-flex min-h-12 w-full items-center justify-center bg-[#2DA4A9] px-5 py-3 text-base text-white transition-colors hover:bg-[#24858A]"
+                                disabled={isSubmittingLead}
+                                className="inline-flex min-h-12 w-full items-center justify-center bg-[#2DA4A9] px-5 py-3 text-base text-white transition-colors hover:bg-[#24858A] disabled:cursor-not-allowed disabled:opacity-70"
                               >
-                                {isSubmittingLead ? "Unlocking..." : "Unlock this fix"}
+                                {isSubmittingLead ? "Saving..." : "Unlock full report"}
                               </button>
-                              <p className="mt-3 text-center text-xs leading-relaxed text-[#5B6776]">
-                                We&apos;re committed to your privacy. Bucky Solutions uses the information you provide to contact you about relevant content, products, and services. You may unsubscribe from these communications at any time. For more information, see our
-                                <a href="https://buckysolutions.com/privacy-policy" target="_blank" rel="noreferrer" className="ml-1 text-[#2DA4A9]">
-                                  Privacy Policy.
-                                </a>
-                              </p>
                             </div>
+                          ) : null}
+                        </div>
+
+                        {isReportUnlocked ? (
+                          <div className="flex items-center justify-between border-t border-[#E6EBF0] px-6 py-4 sm:px-8">
+                            <p className="text-sm text-[#5B6776]">
+                              {activeCheck.status === "fail"
+                                ? "Need this fixed for you?"
+                                : activeCheck.status === "pass"
+                                  ? "Want to strengthen this area even more?"
+                                  : "Want help validating this area?"}
+                            </p>
+                            <a
+                              href={activeCheckCta.href}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center justify-center bg-[#2DA4A9] px-4 py-2 text-sm text-white transition-opacity hover:opacity-90"
+                            >
+                              {activeCheckCta.buttonLabel}
+                            </a>
                           </div>
-                        ) : (
-                          <>
-                            <div className="p-6 sm:p-8">
-                              <div className="pr-10">
-                                <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">{activeCheck.name}</p>
-
-                                <p className="mt-3 text-2xl leading-9 text-[#0A1628]">{activeCheck.finding}</p>
-
-                                <div className="mt-6 grid gap-5 sm:grid-cols-2">
-                                  <div>
-                                    <p className="text-[11px] uppercase tracking-[0.1em] text-[#94A3B8]">Why This Matters</p>
-                                    <p className="mt-2 text-sm leading-7 text-[#5B6776]">{activeCheck.details}</p>
-                                  </div>
-
-                                  <div>
-                                    <p className="text-[11px] uppercase tracking-[0.1em] text-[#94A3B8]">
-                                      {activeCheck.status === "fail"
-                                        ? "How To Fix It"
-                                        : activeCheck.status === "pass"
-                                          ? "What To Keep Doing"
-                                          : "What To Check Next"}
-                                    </p>
-                                    <p className="mt-2 text-sm leading-7 text-[#0A1628]">
-                                      {activeCheck.status === "fail"
-                                        ? (FIX_TEXTS[activeCheck.id] ?? "Contact a web developer to address this issue.")
-                                        : activeCheck.status === "pass"
-                                          ? "Keep this information easy to find and up to date. Strong areas like this help visitors feel confident about booking with you."
-                                          : "We could not verify this signal confidently from the site scan alone. Confirm it manually in your Google Business Profile and on your live listings."}
-                                    </p>
-
-                                    {activeCheck.status === "fail" && AI_DRAFT_CHECK_IDS.has(activeCheck.id) ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => void downloadPolicyPdf()}
-                                        disabled={isGeneratingAiPdf}
-                                        className="mt-4 text-xs text-[#64748B] underline underline-offset-2 disabled:opacity-50"
-                                      >
-                                        {isGeneratingAiPdf ? "Preparing PDF..." : "Download AI draft as PDF"}
-                                      </button>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center justify-between border-t border-[#E6EBF0] px-6 py-4 sm:px-8">
-                              <p className="text-sm text-[#5B6776]">
-                                {activeCheck.status === "fail"
-                                  ? "Need this fixed for you?"
-                                  : activeCheck.status === "pass"
-                                    ? "Want to strengthen this area even more?"
-                                    : "Want help validating this area?"}
-                              </p>
-                              <a
-                                href={activeCheckCta.href}
-                                target="_blank"
-                                rel="noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center justify-center bg-[#2DA4A9] px-4 py-2 text-sm text-white transition-opacity hover:opacity-90"
-                              >
-                                {activeCheckCta.buttonLabel}
-                              </a>
-                            </div>
-                          </>
-                        )}
+                        ) : null}
                       </motion.div>
                     </motion.div>
                   ) : null}

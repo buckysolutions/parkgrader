@@ -244,13 +244,49 @@ const fetchWithTimeout = async (
 ): Promise<Response> => {
   const options = typeof optionsOrTimeout === "number" ? {} : optionsOrTimeout;
   const timeoutMs = typeof optionsOrTimeout === "number" ? optionsOrTimeout : (maybeTimeoutMs ?? 10000);
+  const normalizedHeaders = new Headers(options.headers ?? {});
+
+  // Some hospitality websites block non-browser user-agents by default.
+  if (!normalizedHeaders.has("user-agent")) {
+    normalizedHeaders.set(
+      "user-agent",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    );
+  }
+
+  if (!normalizedHeaders.has("accept")) {
+    normalizedHeaders.set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { ...options, signal: controller.signal, redirect: "follow" });
+    return await fetch(url, {
+      ...options,
+      headers: normalizedHeaders,
+      signal: controller.signal,
+      redirect: "follow",
+    });
   } finally {
     clearTimeout(timeout);
   }
+};
+
+const normalizeScanError = (error: unknown): string => {
+  if (!(error instanceof Error)) {
+    return "Unexpected scan error";
+  }
+
+  const lower = error.message.toLowerCase();
+  if (lower.includes("fetch failed") || lower.includes("socket hang up")) {
+    return "Unable to reach the website right now. This site may be blocking automated checks or timing out. Please retry in a moment.";
+  }
+
+  if (lower.includes("aborted") || lower.includes("timeout")) {
+    return "The website took too long to respond. Please retry in a moment.";
+  }
+
+  return error.message;
 };
 
 const normalizePageSpeedError = (message?: string, status?: number): { message: string; shouldRetry: boolean } => {
@@ -1222,7 +1258,7 @@ export async function GET(request: NextRequest) {
       checks,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unexpected scan error";
+    const message = normalizeScanError(error);
     return NextResponse.json({ message }, { status: 500 });
   }
 }
