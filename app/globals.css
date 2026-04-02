@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "ParkGraderGoogleSansGrade";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("https://fonts.gstatic.com/s/googlesans/v67/4Ua_rENHsxJlGDuGo1OIlJfC6l_24rlCK1Yo_Iqcsih3SAyH6cAwhX9RFD48TE63OOYKtrzjJ6li.ttf") format("truetype");
+}
+
 :root {
   --background: #f8fafc;
   --foreground: #0a1628;
@@ -24,6 +32,55 @@
 .flip-card,
 .flip-card > div {
   border-radius: 0 !important;
+}
+
+@keyframes ai-gradient-spin {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+.ai-generate-button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #09101d;
+  box-shadow: 0 10px 24px rgba(45, 164, 169, 0.28);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.ai-generate-button::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220%;
+  height: 320%;
+  background: conic-gradient(from 0deg, #0a1628 0deg, #2da4a9 120deg, #9ef3f5 200deg, #2da4a9 280deg, #0a1628 360deg);
+  transform: translate(-50%, -50%) rotate(0deg);
+  animation: ai-gradient-spin 2.2s linear infinite;
+  z-index: -2;
+}
+
+.ai-generate-button::after {
+  content: "";
+  position: absolute;
+  inset: 1.5px;
+  background: linear-gradient(180deg, rgba(8, 19, 35, 0.96), rgba(10, 22, 40, 0.92));
+  z-index: -1;
+}
+
+.ai-generate-button__label {
+  position: relative;
+  z-index: 1;
+}
+
+.ai-generate-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(45, 164, 169, 0.34);
 }
 
 body {

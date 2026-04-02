@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 type SupabaseAuditRow = {
   report_snapshot?: unknown;
+  score?: number | null;
 };
 
 export async function GET(
@@ -23,7 +24,7 @@ export async function GET(
   }
 
   const response = await fetch(
-    `${supabaseUrl}/rest/v1/parkgrader_audits?select=report_snapshot&report_id=eq.${encodeURIComponent(normalizedReportId)}&limit=1`,
+    `${supabaseUrl}/rest/v1/parkgrader_audits?select=report_snapshot,score&report_id=eq.${encodeURIComponent(normalizedReportId)}&limit=1`,
     {
       method: "GET",
       headers: {
@@ -39,10 +40,18 @@ export async function GET(
   }
 
   const rows = (await response.json()) as SupabaseAuditRow[];
-  const snapshot = rows?.[0]?.report_snapshot;
+  const row = rows?.[0];
+  const snapshot = row?.report_snapshot;
 
   if (!snapshot || typeof snapshot !== "object") {
     return NextResponse.json({ message: "Report not found." }, { status: 404 });
+  }
+
+  if (typeof row?.score === "number") {
+    const mutableSnapshot = snapshot as { scanResult?: { score?: number } };
+    if (mutableSnapshot.scanResult && typeof mutableSnapshot.scanResult === "object") {
+      mutableSnapshot.scanResult.score = row.score;
+    }
   }
 
   return NextResponse.json({ snapshot });

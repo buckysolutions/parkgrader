@@ -10,13 +10,11 @@ type LeadPayload = {
   property_type?: string;
   primary_challenge?: string;
   property_size?: string;
-  top_fails?: string[];
-  estimated_lost_revenue?: number;
-  benchmark_percentile?: number;
   scan_date?: string;
   report_id?: string;
   hubspot_contact_id?: string;
   report_snapshot?: unknown;
+  send_email_copy?: boolean;
 };
 
 type UpsertResult = {
@@ -32,6 +30,11 @@ type EmailCopyResult = {
 type SupabaseStoreResult = {
   enabled: boolean;
   stored: boolean;
+};
+
+type ExistingAuditRow = {
+  email?: string | null;
+  report_snapshot?: unknown;
 };
 
 const INTERNAL_TEST_DOMAIN = "buckysolutions.com";
@@ -264,6 +267,31 @@ const getSupabaseHeaders = (serviceRoleKey: string) => ({
   Prefer: "resolution=merge-duplicates,return=representation",
 });
 
+const getExistingAuditFromSupabase = async (
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  reportId: string,
+): Promise<ExistingAuditRow | null> => {
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/parkgrader_audits?select=email,report_snapshot&report_id=eq.${encodeURIComponent(reportId)}&limit=1`,
+    {
+      method: "GET",
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        "Content-Type": "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getHubSpotErrorMessage(response, "Supabase audit lookup failed."));
+  }
+
+  const rows = (await response.json()) as ExistingAuditRow[];
+  return rows[0] ?? null;
+};
+
 const storeAuditInSupabase = async (payload: Required<LeadPayload>): Promise<SupabaseStoreResult> => {
   const supabaseUrl = process.env.SUPABASE_URL?.trim() ?? "";
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
@@ -286,30 +314,15 @@ const storeAuditInSupabase = async (payload: Required<LeadPayload>): Promise<Sup
   const isTestDomain = isInternalTestDomain(domain);
   const isTestEmail = payload.email ? isInternalTestEmail(payload.email) : false;
   const headers = getSupabaseHeaders(serviceRoleKey);
+  const existingAudit = await getExistingAuditFromSupabase(supabaseUrl, serviceRoleKey, payload.report_id);
+  const persistedEmail = existingAudit?.email?.trim() ?? "";
+  const mergedSnapshot =
+    payload.report_snapshot && typeof payload.report_snapshot === "object"
+      ? { ...(payload.report_snapshot as Record<string, unknown>) }
+      : {};
 
-  const companyResponse = await fetch(
-    `${supabaseUrl}/rest/v1/parkgrader_companies?on_conflict=domain`,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify([
-        {
-          domain,
-          company_name: payload.property_name || domain,
-          website_url: payload.url,
-          last_report_id: payload.report_id,
-          last_audit_score: payload.score,
-          last_audit_at: payload.scan_date,
-          primary_challenge: payload.primary_challenge,
-          property_type: payload.property_type,
-          updated_at: new Date().toISOString(),
-        },
-      ]),
-    },
-  );
-
-  if (!companyResponse.ok) {
-    throw new Error(await getHubSpotErrorMessage(companyResponse, "Supabase company upsert failed."));
+  if (!payload.email && persistedEmail) {
+    mergedSnapshot.email = persistedEmail;
   }
 
   const auditResponse = await fetch(
@@ -323,16 +336,13 @@ const storeAuditInSupabase = async (payload: Required<LeadPayload>): Promise<Sup
           domain,
           company_name: payload.property_name || domain,
           website_url: payload.url,
-          email: payload.email || null,
+          email: payload.email || persistedEmail || null,
           score: payload.score,
           property_type: payload.property_type,
           primary_challenge: payload.primary_challenge,
           property_size: payload.property_size,
-          top_fails: payload.top_fails,
-          estimated_lost_revenue: payload.estimated_lost_revenue,
-          benchmark_percentile: payload.benchmark_percentile,
           scan_date: payload.scan_date,
-          report_snapshot: payload.report_snapshot ?? null,
+          report_snapshot: Object.keys(mergedSnapshot).length ? mergedSnapshot : payload.report_snapshot ?? null,
           is_test: isTestDomain || isTestEmail,
           created_at: new Date().toISOString(),
         },
@@ -359,9 +369,6 @@ const toHubSpotContactProperties = (payload: Required<LeadPayload>) => ({
   parkgrader_property_type: payload.property_type,
   parkgrader_primary_challenge: payload.primary_challenge,
   parkgrader_property_size: payload.property_size,
-  parkgrader_top_fails: payload.top_fails.join(", "),
-  parkgrader_estimated_lost_revenue: String(payload.estimated_lost_revenue),
-  parkgrader_benchmark_percentile: String(payload.benchmark_percentile),
   parkgrader_scan_date: payload.scan_date,
   parkgrader_report_id: payload.report_id,
 });
@@ -398,12 +405,53 @@ const findHubSpotCompanyByDomain = async (
   domain: string,
   propertyName?: string,
 ): Promise<{ id: string; auditCount: number; reportId: string } | null> => {
+  const companyProps = "audit_count,report_id,domain,website";
+
+  // 1. Native HubSpot dedup: look up by the domain idProperty directly
+  const idPropertyResponse = await fetch(
+    `https://api.hubapi.com/crm/v3/objects/companies/${encodeURIComponent(domain)}?idProperty=domain&properties=${companyProps}`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+  if (idPropertyResponse.ok) {
+    const data = (await idPropertyResponse.json()) as { id: string; properties?: { audit_count?: string; report_id?: string } };
+    return {
+      id: data.id,
+      auditCount: Number(data.properties?.audit_count ?? 0),
+      reportId: data.properties?.report_id ?? "",
+    };
+  }
+
+  // 2. Search API fallback strategies
   const searches = [
     {
       filterGroups: [{ filters: [{ propertyName: "domain", operator: "EQ", value: domain }] }],
     },
     {
-      filterGroups: [{ filters: [{ propertyName: "website", operator: "CONTAINS_TOKEN", value: domain }] }],
+      filterGroups: [
+        {
+          filters: [
+            { propertyName: "website", operator: "EQ", value: `https://${domain}` },
+          ],
+        },
+        {
+          filters: [
+            { propertyName: "website", operator: "EQ", value: `https://www.${domain}` },
+          ],
+        },
+        {
+          filters: [
+            { propertyName: "website", operator: "EQ", value: `http://${domain}` },
+          ],
+        },
+        {
+          filters: [
+            { propertyName: "website", operator: "EQ", value: `http://www.${domain}` },
+          ],
+        },
+      ],
     },
     ...(propertyName
       ? [{ filterGroups: [{ filters: [{ propertyName: "name", operator: "EQ", value: propertyName }] }] }]
@@ -863,13 +911,11 @@ export async function POST(request: NextRequest) {
       property_type: body.property_type?.trim() ?? "campground",
       primary_challenge: body.primary_challenge?.trim() ?? "converting-visitors",
       property_size: body.property_size?.trim() ?? "25-75",
-      top_fails: Array.isArray(body.top_fails) ? body.top_fails : [],
-      estimated_lost_revenue: Number(body.estimated_lost_revenue ?? 0),
-      benchmark_percentile: Number(body.benchmark_percentile ?? 0),
       scan_date: body.scan_date?.trim() ?? new Date().toISOString(),
       report_id: body.report_id?.trim() ?? `${Date.now()}`,
       hubspot_contact_id: body.hubspot_contact_id?.trim() ?? "",
       report_snapshot: body.report_snapshot,
+      send_email_copy: Boolean(body.send_email_copy),
     };
 
     if (!payload.url) {
@@ -896,10 +942,12 @@ export async function POST(request: NextRequest) {
       sent: false,
     };
 
-    try {
-      emailCopy = await sendAuditCopyEmail(payload);
-    } catch (error) {
-      console.error(error);
+    if (payload.send_email_copy) {
+      try {
+        emailCopy = await sendAuditCopyEmail(payload);
+      } catch (error) {
+        console.error(error);
+      }
     }
 
     const result = await upsertHubSpotLead(payload);

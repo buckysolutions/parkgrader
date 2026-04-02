@@ -392,9 +392,26 @@ export async function GET(request: NextRequest) {
 
   try {
     const websiteUrl = new URL(normalizedUrl);
+    const scanStartedAt = performance.now();
+    const timingEnabled = process.env.SCAN_DEBUG_TIMING === "true";
+    const phaseTimings: Record<string, number> = {};
+    const measure = async <T>(label: string, task: () => Promise<T>): Promise<T> => {
+      const startedAt = performance.now();
+      try {
+        return await task();
+      } finally {
+        if (timingEnabled) {
+          phaseTimings[label] = Math.round(performance.now() - startedAt);
+        }
+      }
+    };
+
     const fetchStart = performance.now();
     const homeResponse = await fetchWithTimeout(websiteUrl.toString());
     const responseTimeMs = Math.round(performance.now() - fetchStart);
+    if (timingEnabled) {
+      phaseTimings.homepageFetch = responseTimeMs;
+    }
     const html = await homeResponse.text();
     const loweredHtml = html.toLowerCase();
     const title = extractMeta(html, "title");
@@ -426,13 +443,77 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ok: true, url: websiteUrl.toString() });
     }
 
+    const pageSpeedApiKey = process.env.PAGESPEED_API_KEY;
+    const pageSpeedPromise = pageSpeedApiKey
+      ? (async () => {
+          let lastError = "PageSpeed API request failed.";
+
+          for (let attempt = 0; attempt < 1; attempt += 1) {
+            try {
+              const pageSpeedUrl = new URL("https://www.googleapis.com/pagespeedonline/v5/runPagespeed");
+              pageSpeedUrl.searchParams.set("url", websiteUrl.toString());
+              pageSpeedUrl.searchParams.set("strategy", "mobile");
+              pageSpeedUrl.searchParams.set("category", "performance");
+              pageSpeedUrl.searchParams.set("key", pageSpeedApiKey);
+
+              const pageSpeedResponse = await fetchWithTimeout(pageSpeedUrl.toString(), 25000);
+              const payload = (await pageSpeedResponse.json()) as {
+                lighthouseResult?: {
+                  categories?: { performance?: { score?: number } };
+                  runtimeError?: { message?: string };
+                };
+                error?: { message?: string };
+              };
+
+              if (!pageSpeedResponse.ok) {
+                const normalizedError = normalizePageSpeedError(
+                  payload.error?.message ?? `PageSpeed API returned ${pageSpeedResponse.status}.`,
+                  pageSpeedResponse.status,
+                );
+                lastError = normalizedError.message;
+                if (!normalizedError.shouldRetry) {
+                  break;
+                }
+              } else {
+                const runtimeError = payload.lighthouseResult?.runtimeError?.message;
+                const rawScore = payload.lighthouseResult?.categories?.performance?.score;
+
+                if (typeof rawScore === "number" && !Number.isNaN(rawScore)) {
+                  return {
+                    score: Math.round(rawScore * 100),
+                    error: null,
+                  };
+                }
+
+                if (runtimeError) {
+                  lastError = `Lighthouse returned error: ${runtimeError}`;
+                } else {
+                  lastError = "PageSpeed API did not return a usable performance score.";
+                }
+              }
+            } catch {
+              lastError = "PageSpeed API request failed.";
+            }
+          }
+
+          return {
+            score: null,
+            error: lastError,
+          };
+        })()
+      : Promise.resolve(null);
+
     const links = extractAnchors(html);
     const images = extractImages(html);
-    const sslData = await getSslData(websiteUrl.hostname);
 
     const httpVersion = new URL(websiteUrl.toString());
     httpVersion.protocol = "http:";
-    const httpResponse = await fetchWithTimeout(httpVersion.toString(), 10000).catch(() => null);
+    const [sslData, httpResponse] = await measure("sslAndRedirectCheck", async () => {
+      return Promise.all([
+        getSslData(websiteUrl.hostname),
+        fetchWithTimeout(httpVersion.toString(), 8000).catch(() => null),
+      ]);
+    });
     const redirectedToHttps =
       httpResponse?.url?.startsWith("https://") ||
       httpResponse?.headers.get("location")?.startsWith("https://") ||
@@ -462,21 +543,23 @@ export async function GET(request: NextRequest) {
     const internalLinks = links
       .filter((href) => isInternalLink(href, websiteUrl))
       .map((href) => new URL(href, websiteUrl).toString());
-    const uniqueInternalLinks = Array.from(new Set(internalLinks)).slice(0, 15);
+    const uniqueInternalLinks = Array.from(new Set(internalLinks)).slice(0, 6);
 
     let brokenCount = 0;
-    await Promise.all(
-      uniqueInternalLinks.map(async (link) => {
-        try {
-          const response = await fetchWithTimeout(link, 7000);
-          if (!response.ok) {
+    await measure("internalLinkScan", async () => {
+      await Promise.all(
+        uniqueInternalLinks.map(async (link) => {
+          try {
+            const response = await fetchWithTimeout(link, 4500);
+            if (!response.ok) {
+              brokenCount += 1;
+            }
+          } catch {
             brokenCount += 1;
           }
-        } catch {
-          brokenCount += 1;
-        }
-      }),
-    );
+        }),
+      );
+    });
 
     const imageCount = images.length;
     const highQualityImageCount = images.filter((image) => image.width === null || image.width >= 400).length;
@@ -493,96 +576,76 @@ export async function GET(request: NextRequest) {
     const accessibilityFound = hrefContains(["/accessibility"]) || keywordContains(["accessibility statement", "accessibility"]);
     const newsletterFound = /<input[^>]*type=["']email["']/i.test(html);
 
-    let facebookReachable = false;
-    if (facebookLink) {
-      try {
-        const response = await fetchWithTimeout(new URL(facebookLink, websiteUrl).toString(), 8000);
-        facebookReachable = response.ok;
-      } catch {
-        facebookReachable = false;
-      }
-    }
-
-    let mapReachable = false;
-    if (mapLink) {
-      try {
-        const response = await fetchWithTimeout(new URL(mapLink, websiteUrl).toString(), 8000);
-        mapReachable = response.ok;
-      } catch {
-        mapReachable = false;
-      }
-    }
-
     let pageSpeedScore: number | null = null;
     let pageSpeedStatus: CheckStatus = "unknown";
     let pageSpeedFinding = "Unable to verify PageSpeed mobile score.";
     let pageSpeedDetails = "Enter a PageSpeed API key to benchmark mobile performance accurately.";
 
-    const runPageSpeedCheck = async (apiKey?: string) => {
-      let lastError = "PageSpeed API request failed.";
+    // Run PageSpeed, Gemini, Facebook, and map reachability checks in parallel.
+    let geminiWarmthText = "";
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    const geminiModel = process.env.GEMINI_MODEL ?? "gemini-2.0-flash-lite";
 
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        try {
-          const pageSpeedUrl = new URL("https://www.googleapis.com/pagespeedonline/v5/runPagespeed");
-          pageSpeedUrl.searchParams.set("url", websiteUrl.toString());
-          pageSpeedUrl.searchParams.set("strategy", "mobile");
-          pageSpeedUrl.searchParams.set("category", "performance");
-          if (apiKey) {
-            pageSpeedUrl.searchParams.set("key", apiKey);
-          }
-
-          const pageSpeedResponse = await fetchWithTimeout(pageSpeedUrl.toString(), 15000);
-          const payload = (await pageSpeedResponse.json()) as {
-            lighthouseResult?: {
-              categories?: { performance?: { score?: number } };
-              runtimeError?: { message?: string };
-            };
-            error?: { message?: string };
-          };
-
-          if (!pageSpeedResponse.ok) {
-            const normalizedError = normalizePageSpeedError(
-              payload.error?.message ?? `PageSpeed API returned ${pageSpeedResponse.status}.`,
-              pageSpeedResponse.status,
-            );
-            lastError = normalizedError.message;
-            if (!normalizedError.shouldRetry) {
-              break;
-            }
-          } else {
-            const runtimeError = payload.lighthouseResult?.runtimeError?.message;
-            const rawScore = payload.lighthouseResult?.categories?.performance?.score;
-
-            if (typeof rawScore === "number" && !Number.isNaN(rawScore)) {
-              return {
-                score: Math.round(rawScore * 100),
-                error: null,
-              };
-            }
-
-            if (runtimeError) {
-              lastError = `Lighthouse returned error: ${runtimeError}`;
-            } else {
-              lastError = "PageSpeed API did not return a usable performance score.";
-            }
-          }
-        } catch {
-          lastError = "PageSpeed API request failed.";
-        }
-
-        if (attempt < 2) {
-          await new Promise((resolve) => setTimeout(resolve, 900));
-        }
+    const runGemini = async (): Promise<string> => {
+      if (!geminiApiKey || loweredHtml.length <= 200) {
+        return "";
       }
-
-      return {
-        score: null,
-        error: lastError,
-      };
+      const sentimentPrompt = [
+        "Analyze the tone and warmth of this hospitality business homepage copy in one word only.",
+        "Respond with ONLY: 'warm' if personal and welcoming, 'cold' if corporate/stiff, or 'neutral' if balanced.",
+        "Copy:",
+        loweredHtml.slice(0, 5000),
+      ].join("\n\n");
+      try {
+        const geminiResponse = await fetchWithTimeout(
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent?key=${encodeURIComponent(geminiApiKey)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts: [{ text: sentimentPrompt }] }],
+              generationConfig: { temperature: 0.3, maxOutputTokens: 20 },
+            }),
+          },
+          8000,
+        );
+        const geminiPayload = (await geminiResponse.json()) as {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+        return geminiPayload.candidates?.[0]?.content?.parts?.[0]?.text?.toLowerCase() ?? "";
+      } catch {
+        return "";
+      }
     };
 
-    const pageSpeedApiKey = process.env.PAGESPEED_API_KEY;
-    const pageSpeedResult = pageSpeedApiKey ? await runPageSpeedCheck(pageSpeedApiKey) : null;
+    const runFacebookCheck = async (): Promise<boolean> => {
+      if (!facebookLink) return false;
+      try {
+        const response = await fetchWithTimeout(new URL(facebookLink, websiteUrl).toString(), 6000);
+        return response.ok;
+      } catch {
+        return false;
+      }
+    };
+
+    const runMapCheck = async (): Promise<boolean> => {
+      if (!mapLink) return false;
+      try {
+        const response = await fetchWithTimeout(new URL(mapLink, websiteUrl).toString(), 6000);
+        return response.ok;
+      } catch {
+        return false;
+      }
+    };
+
+    const [pageSpeedResult, geminiResult, facebookReachable, mapReachable] = await Promise.all([
+      pageSpeedPromise,
+      measure("geminiToneCheck", runGemini),
+      measure("facebookLinkCheck", runFacebookCheck),
+      measure("mapLinkCheck", runMapCheck),
+    ]);
+
+    geminiWarmthText = geminiResult;
 
     if (pageSpeedResult && pageSpeedResult.score !== null) {
       pageSpeedScore = pageSpeedResult.score;
@@ -631,40 +694,7 @@ export async function GET(request: NextRequest) {
       hasClickableHeaderPhone ? 1 : 0,
     ].reduce((sum, val) => sum + val, 0);
 
-    // Analyze communication warmth using Gemini
-    let warmthStatus: CheckStatus = "unknown";
-    const geminiApiKey = process.env.GEMINI_API_KEY;
-    if (geminiApiKey && loweredHtml.length > 200) {
-      try {
-        const geminiModel = process.env.GEMINI_MODEL || "gemini-2.0-flash-lite";
-        const sentimentPrompt = [
-          "Analyze the tone and warmth of this hospitality business homepage copy in one word only.",
-          "Respond with ONLY: 'warm' if personal and welcoming, 'cold' if corporate/stiff, or 'neutral' if balanced.",
-          "Copy:",
-          loweredHtml.slice(0, 5000),
-        ].join("\n\n");
-
-        const geminiResponse = await fetchWithTimeout(
-          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent?key=${encodeURIComponent(geminiApiKey)}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ text: sentimentPrompt }] }],
-              generationConfig: { temperature: 0.3, maxOutputTokens: 20 },
-            }),
-          },
-          12000,
-        );
-        const geminiPayload = (await geminiResponse.json()) as {
-          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-        };
-        const warmthText = geminiPayload.candidates?.[0]?.content?.parts?.[0]?.text?.toLowerCase() ?? "";
-        warmthStatus = warmthText.includes("warm") ? "pass" : warmthText.includes("cold") ? "fail" : "unknown";
-      } catch {
-        warmthStatus = "unknown";
-      }
-    }
+    const warmthStatus: CheckStatus = geminiWarmthText.includes("warm") ? "pass" : (geminiWarmthText.includes("cold") || geminiWarmthText.includes("neutral")) ? "fail" : "unknown";
 
     const checks: Check[] = [
       createCheck({
@@ -1128,7 +1158,7 @@ export async function GET(request: NextRequest) {
           ? "Homepage copy feels personal and welcoming."
           : warmthStatus === "fail"
             ? "Homepage copy feels corporate or generic."
-            : "Unable to analyze tone.",
+            : "Homepage copy tone could not be determined — review for warmth.",
         details: warmthStatus === "pass"
           ? "Personal, warm copy makes guests feel like they'll belong at your property."
           : "Swap generic boilerplate for stories, guest testimonials, or personal touches from your team.",
@@ -1242,6 +1272,19 @@ export async function GET(request: NextRequest) {
       })
       .slice(0, 5)
       .map((check) => check.id);
+
+    if (timingEnabled) {
+      const totalMs = Math.round(performance.now() - scanStartedAt);
+      console.info(
+        "[scan-timing]",
+        JSON.stringify({
+          host: websiteUrl.hostname,
+          totalMs,
+          responseTimeMs,
+          phaseTimings,
+        }),
+      );
+    }
 
     return NextResponse.json({
       url: websiteUrl.toString(),
