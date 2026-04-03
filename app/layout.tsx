@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -60,6 +61,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${dmSans.variable} h-full antialiased`}>
+      {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ? (
+        <>
+          <Script
+            src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}`}
+            strategy="afterInteractive"
+          />
+          <Script id="ga-init" strategy="afterInteractive">
+            {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}');`}
+          </Script>
+        </>
+      ) : null}
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
