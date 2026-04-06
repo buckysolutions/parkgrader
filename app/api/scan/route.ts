@@ -585,7 +585,7 @@ export async function GET(request: NextRequest) {
             pageSpeedUrl.searchParams.set("category", "accessibility");
             pageSpeedUrl.searchParams.set("key", pageSpeedApiKey);
 
-            const pageSpeedResponse = await fetchWithTimeout(pageSpeedUrl.toString(), 20000);
+            const pageSpeedResponse = await fetchWithTimeout(pageSpeedUrl.toString(), 45000);
             const payload = (await pageSpeedResponse.json()) as {
               lighthouseResult?: {
                 categories?: {
