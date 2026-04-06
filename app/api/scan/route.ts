@@ -220,6 +220,27 @@ const platformCatalog = [
   "Staylist",
   "Cloudbeds",
   "Guesty",
+  // Vacation rental / cabin / resort platforms
+  "Streamline",
+  "streamlinevrs",
+  "Rezfusion",
+  "LiveRez",
+  "Barefoot",
+  "Track",
+  "Escapia",
+  "VacationRentPro",
+  "Kigo",
+  "Beds24",
+  "Hostaway",
+  "Smoobu",
+  "Rentlio",
+  "MyVR",
+  "OwnerRez",
+  "V12",
+  "iTrip",
+  "VRScheduler",
+  "BookingSync",
+  "BookingPal",
 ];
 
 const normalizeUrl = (raw: string): string | null => {
@@ -739,7 +760,9 @@ export async function GET(request: NextRequest) {
         const response = await fetchWithTimeout(primaryBookingLink, 7000);
         const elapsed = Math.round(performance.now() - startedAt);
         const landingHtml = await response.text();
-        const health = { reachable: response.ok, responseTimeMs: elapsed, statusCode: response.status };
+        // Any HTTP response (including 4xx bot-blocks) means the server is up.
+        // Only a network/timeout failure (caught below) = truly unreachable.
+        const health = { reachable: true, responseTimeMs: elapsed, statusCode: response.status };
 
         // Many booking engines only expose conversion tracking after one more in-flow click.
         const landingBaseUrl = new URL(primaryBookingLink);
