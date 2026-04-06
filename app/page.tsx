@@ -1466,9 +1466,6 @@ export default function Home() {
   const [tradeshowEmailModalOpen, setTradeshowEmailModalOpen] = useState(false);
   const [tradeshowEmailSent, setTradeshowEmailSent] = useState(false);
   const [tradeshowConsentEmailCopy, setTradeshowConsentEmailCopy] = useState(false);
-  const [slowScanModalOpen, setSlowScanModalOpen] = useState(false);
-  const [slowScanEmailInput, setSlowScanEmailInput] = useState("");
-  const [slowScanEmailSubmitted, setSlowScanEmailSubmitted] = useState(false);
   const [tradeshowConsentMarketing, setTradeshowConsentMarketing] = useState(false);
   const [hasSubmittedTradeshowLead, setHasSubmittedTradeshowLead] = useState(false);
   const [isReportUnlocked, setIsReportUnlocked] = useState(false);
@@ -1509,7 +1506,7 @@ export default function Home() {
   const hydratedFromSavedReportRef = useRef(false);
   const previousFlippedCardIdRef = useRef<string | null>(null);
   const saveAuditSessionRef = useRef<((leadEmail?: string, options?: SaveAuditSessionOptions) => Promise<{ stored: boolean; emailSent: boolean; email: string }>) | null>(null);
-  const slowScanCapturedEmailRef = useRef("");
+
 
   const selectedPropertyType = (answers.property_type?.value as IndustryKey | undefined) ?? "campground";
   const selectedChallenge = answers.primary_challenge?.value ?? "converting-visitors";
@@ -2317,13 +2314,8 @@ export default function Home() {
       setPartialLoadingMessageIndex((value) => (value + 1) % PARTIAL_LOADING_MESSAGES.length);
     }, 3500);
 
-    const slowTimeout = window.setTimeout(() => {
-      setSlowScanModalOpen(true);
-    }, 35000);
-
     return () => {
       window.clearInterval(interval);
-      window.clearTimeout(slowTimeout);
     };
   }, [step]);
 
@@ -2344,8 +2336,7 @@ export default function Home() {
 
     void (async () => {
       try {
-        const capturedEmail = slowScanCapturedEmailRef.current;
-        await saveAuditSession(capturedEmail || undefined, { sendEmailCopy: Boolean(capturedEmail) });
+        await saveAuditSession(undefined, { sendEmailCopy: false });
       } catch (error) {
         capturedAuditReportsRef.current.delete(reportId);
         console.error("ParkGrader audit capture failed", error);
@@ -2927,69 +2918,7 @@ export default function Home() {
               </AnimatePresence>
             </div>
             <PolicyFooter fixed />
-            <AnimatePresence>
-              {slowScanModalOpen && (
-                <motion.div
-                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                >
-                  <motion.div
-                    className="w-full max-w-sm bg-white px-8 py-7 shadow-xl"
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 8 }}
-                  >
-                    {slowScanEmailSubmitted ? (
-                      <>
-                        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#E6F7F8]">
-                          <svg viewBox="0 0 24 24" className="h-5 w-5 text-[#2DA4A9]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-                        </div>
-                        <p className="text-center text-base font-medium text-[#0A1628]">Got it! We&apos;ll email your report.</p>
-                        <p className="mt-1 text-center text-sm text-[#5B6776]">Sent to <span className="font-medium text-[#0A1628]">{slowScanCapturedEmailRef.current}</span></p>
-                        <button type="button" onClick={() => setSlowScanModalOpen(false)} className="mt-5 w-full border border-[#D1DCE8] py-2 text-sm text-[#5B6776] transition-colors hover:border-[#2DA4A9] hover:text-[#2DA4A9]">
-                          Keep waiting
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-base font-semibold text-[#0A1628]">Still working on it&hellip;</p>
-                        <p className="mt-1 text-sm text-[#5B6776]">Google&apos;s Lighthouse audit can take up to 45 seconds. Enter your email and we&apos;ll send the report the moment it&apos;s ready.</p>
-                        <input
-                          type="email"
-                          value={slowScanEmailInput}
-                          onChange={(e) => setSlowScanEmailInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && slowScanEmailInput.trim()) {
-                              slowScanCapturedEmailRef.current = slowScanEmailInput.trim().toLowerCase();
-                              setSlowScanEmailSubmitted(true);
-                            }
-                          }}
-                          placeholder="your@email.com"
-                          className="mt-4 w-full border border-[#D1DCE8] px-4 py-2 text-sm text-[#0A1628] outline-none focus:border-[#2DA4A9]"
-                          autoFocus
-                        />
-                        <button
-                          type="button"
-                          disabled={!slowScanEmailInput.trim()}
-                          onClick={() => {
-                            slowScanCapturedEmailRef.current = slowScanEmailInput.trim().toLowerCase();
-                            setSlowScanEmailSubmitted(true);
-                          }}
-                          className="mt-3 w-full bg-[#0A1628] py-2 text-sm font-medium text-white transition-colors hover:bg-[#1a2d4a] disabled:opacity-40"
-                        >
-                          Email me the report
-                        </button>
-                        <button type="button" onClick={() => setSlowScanModalOpen(false)} className="mt-3 w-full text-sm text-[#94A3B8] hover:text-[#5B6776]">
-                          No thanks, I&apos;ll keep waiting
-                        </button>
-                      </>
-                    )}
-                  </motion.div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+
           </motion.section>
         )}
 
