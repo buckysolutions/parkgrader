@@ -7,7 +7,6 @@ import {
   ArrowRightIcon,
   CalendarDaysIcon,
   ChartBarSquareIcon,
-  ChatBubbleLeftEllipsisIcon,
   CheckCircleIcon,
   ChevronDownIcon,
   ClipboardDocumentListIcon,
@@ -67,10 +66,15 @@ type ScanCheck = {
   effort: Effort;
   impact: Impact;
   serviceKey: string;
+  estimatedImpact?: string;
+  benchmark?: string;
 };
 
 type ScanResponse = {
   url: string;
+  pageSpeedReportUrl?: string;
+  overallBenchmarkText?: string;
+  accessibilityScore?: number | null;
   industry: IndustryKey;
   industryLabel: string;
   unitLabel: string;
@@ -127,6 +131,8 @@ type ReportSnapshot = {
   reportUrl: string;
   scanResult: ScanResponse;
   aiFixDraftByCheckId?: Record<string, string>;
+  localReviewCompareByCheckId?: Record<string, LocalReviewCompareResult>;
+  previousScanResult?: ScanResponse | null;
   answers: Answers;
   name: string;
   propertyName: string;
@@ -138,6 +144,27 @@ type ReportSnapshot = {
 
 type SaveAuditSessionOptions = {
   sendEmailCopy?: boolean;
+  aiFixDraftByCheckIdOverride?: Record<string, string>;
+  localReviewCompareByCheckIdOverride?: Record<string, LocalReviewCompareResult>;
+};
+
+type LocalReviewCompareResult = {
+  subject: {
+    name: string;
+    rating: number | null;
+    reviewCount: number;
+  };
+  competitors: Array<{
+    name: string;
+    rating: number | null;
+    reviewCount: number;
+  }>;
+  benchmark: {
+    averageRating: number;
+    averageReviewCount: number;
+    reviewGap: number;
+    weeklyTarget: number;
+  };
 };
 
 type DemoMode = null | "needs-work" | "good";
@@ -217,17 +244,26 @@ const PAIN_LEVEL_ICON_BY_KEY: Record<PainLevel, HeroIcon> = {
 };
 
 const CHECK_ICON_BY_ID: Record<string, HeroIcon> = {
+  "technical-trust-security": ShieldCheckIcon,
   "ssl-valid": ShieldCheckIcon,
   "https-redirect": ShieldCheckIcon,
   "response-time": BoltIcon,
   "broken-links": LinkIcon,
   "pagespeed-mobile": DevicePhoneMobileIcon,
+  "canonical-redirect-hygiene": GlobeAltIcon,
   "booking-platform": CalendarDaysIcon,
+  "booking-engine-health": BoltIcon,
   "booking-cta": ArrowRightIcon,
+  "date-picker-discoverability": CalendarDaysIcon,
   "tracking-pixels": ChartBarSquareIcon,
+  "abandonment-recovery-readiness": ChartBarSquareIcon,
   "newsletter-capture": EnvelopeIcon,
   "pet-policy": QueueListIcon,
   "rv-hookup-specs": TruckIcon,
+  "big-rig-readiness": TruckIcon,
+  "wifi-quality-claims": BoltIcon,
+  "arrival-directions-clarity": MapPinIcon,
+  "ev-extra-vehicle-policy": CreditCardIcon,
   "amenities-page": HomeModernIcon,
   "rate-page": ReceiptPercentIcon,
   "cancellation-policy": DocumentTextIcon,
@@ -236,19 +272,27 @@ const CHECK_ICON_BY_ID: Record<string, HeroIcon> = {
   "meta-title": TagIcon,
   "meta-description": NewspaperIcon,
   "gbp-sync": MapPinIcon,
+  "local-review-competitiveness": MapPinIcon,
   "social-presence": UsersIcon,
   "listing-signals": ClipboardDocumentListIcon,
   "facebook-link": LinkIcon,
   "mobile-viewport": DevicePhoneMobileIcon,
   "header-phone": PhoneIcon,
+  "mobile-tap-targets": DevicePhoneMobileIcon,
+  "phone-conversion-readiness": PhoneIcon,
   "image-count": PhotoIcon,
   "listing-completeness": ClipboardDocumentListIcon,
   "rate-transparency": ReceiptPercentIcon,
   "contact-friction": PhoneIcon,
-  "communication-warmth": ChatBubbleLeftEllipsisIcon,
+  "trust-stack-completeness": ShieldCheckIcon,
+  "local-search-intent-coverage": MagnifyingGlassIcon,
+  "visual-proof-relevance": PhotoIcon,
+  "visual-trust": PhotoIcon,
   "seasonal-visibility": SunIcon,
   "visual-storytelling": PhotoIcon,
   "payment-flexibility": CreditCardIcon,
+  "structured-data": GlobeAltIcon,
+  "accessibility-score": UserCircleIcon,
 };
 
 const normalizeUrl = (raw: string): string => {
@@ -256,23 +300,30 @@ const normalizeUrl = (raw: string): string => {
   if (!value) {
     return "";
   }
-  if (value.startsWith("http://") || value.startsWith("https://")) {
-    return value;
+
+  try {
+    const parsed = value.startsWith("http://") || value.startsWith("https://")
+      ? new URL(value)
+      : new URL(`https://${value}`);
+    const hostname = parsed.hostname.replace(/^www\./i, "").toLowerCase();
+    if (!hostname) {
+      return "";
+    }
+    return hostname;
+  } catch {
+    const fallback = value
+      .replace(/^https?:\/\//i, "")
+      .replace(/^www\./i, "")
+      .split(/[/?#]/)[0]
+      .split(":")[0]
+      .trim()
+      .toLowerCase();
+    return fallback;
   }
-  return `https://${value}`;
 };
 
 const formatDisplayUrl = (raw: string): string => {
-  const normalized = normalizeUrl(raw);
-  if (!normalized) {
-    return "";
-  }
-
-  try {
-    return new URL(normalized).hostname.replace(/^www\./, "");
-  } catch {
-    return raw.trim().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "");
-  }
+  return normalizeUrl(raw);
 };
 
 const hasEnabledQueryFlag = (params: URLSearchParams, key: string): boolean => {
@@ -302,10 +353,18 @@ const makeReportId = (): string => {
 };
 
 const scoreToLetterGrade = (score: number): string => {
-  if (score >= 90) return "A";
-  if (score >= 75) return "B";
-  if (score >= 60) return "C";
-  if (score >= 50) return "D";
+  if (score >= 97) return "A+";
+  if (score >= 93) return "A";
+  if (score >= 90) return "A-";
+  if (score >= 87) return "B+";
+  if (score >= 83) return "B";
+  if (score >= 80) return "B-";
+  if (score >= 77) return "C+";
+  if (score >= 73) return "C";
+  if (score >= 70) return "C-";
+  if (score >= 67) return "D+";
+  if (score >= 63) return "D";
+  if (score >= 60) return "D-";
   return "F";
 };
 
@@ -463,6 +522,7 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
 
   return {
     url: good ? "https://demoindustryleader.com" : "https://democampground.com",
+    overallBenchmarkText: good ? "Industry average for campgrounds and RV parks is 68. You are 13 points above average." : "Industry average for campgrounds and RV parks is 68. You are 21 points below average.",
     industry: "campground",
     industryLabel: "Campground / RV Park",
     unitLabel: "sites",
@@ -557,7 +617,7 @@ const DEFAULT_SERVICE_CTA: ServiceCta = {
   title: "Website conversion tune-up",
   description: "Fix the highest-friction issues first so more visitors turn into booked stays.",
   buttonLabel: "Talk to Bucky's",
-  href: "https://www.buckysolutions.com/contact?service=website-conversion",
+  href: "https://www.buckysolutions.com/consulting/",
 };
 
 const SERVICE_CTA_BY_KEY: Record<string, ServiceCta> = {
@@ -566,77 +626,77 @@ const SERVICE_CTA_BY_KEY: Record<string, ServiceCta> = {
     title: "Trust and security cleanup",
     description: "Patch SSL and redirect issues so guests stop seeing trust-breaking warnings before they book.",
     buttonLabel: "Fix trust issues",
-    href: "https://www.buckysolutions.com/contact?service=security",
+    href: "https://www.buckysolutions.com/services/cybersecurity/",
   },
   pagespeed: {
     badge: "Speed Sprint",
     title: "Mobile speed improvement sprint",
     description: "Reduce slow load times, heavy assets, and performance bottlenecks that are costing direct bookings.",
     buttonLabel: "Improve speed",
-    href: "https://www.buckysolutions.com/contact?service=pagespeed",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   booking_cta: {
     badge: "Booking Conversion",
     title: "Booking path optimization",
     description: "Make booking buttons, pricing, and conversion paths obvious so high-intent visitors stop dropping out.",
     buttonLabel: "Improve booking flow",
-    href: "https://www.buckysolutions.com/contact?service=booking-conversion",
+    href: "https://www.buckysolutions.com/services/booking-automation/",
   },
   booking_platform: {
     badge: "Booking System",
     title: "Direct booking setup",
     description: "Add or improve the reservation stack so guests can check availability and book without friction.",
     buttonLabel: "Set up bookings",
-    href: "https://www.buckysolutions.com/contact?service=booking-platform",
+    href: "https://www.buckysolutions.com/services/booking-automation/",
   },
   tracking_pixels: {
     badge: "Tracking Setup",
     title: "Analytics and retargeting setup",
     description: "Install GA4, tag management, and retargeting pixels so traffic and campaign ROI become measurable.",
     buttonLabel: "Set up tracking",
-    href: "https://www.buckysolutions.com/contact?service=tracking",
+    href: "https://www.buckysolutions.com/services/vendor-management/",
   },
   photos: {
     badge: "Visual Refresh",
     title: "Photo and visual conversion refresh",
     description: "Upgrade imagery and page presentation so guests can picture the stay and trust the experience faster.",
     buttonLabel: "Upgrade visuals",
-    href: "https://www.buckysolutions.com/contact?service=visual-refresh",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   google_business: {
     badge: "Visibility Boost",
     title: "Local visibility improvement",
     description: "Strengthen your Google Business Profile and discovery signals so more nearby guests actually find you.",
     buttonLabel: "Improve visibility",
-    href: "https://www.buckysolutions.com/contact?service=local-visibility",
+    href: "https://www.buckysolutions.com/services/local-seo/",
   },
   listing_signals: {
     badge: "Listing Boost",
     title: "Marketplace listing cleanup",
     description: "Tighten listing coverage and consistency across discovery channels where guests already shop.",
     buttonLabel: "Strengthen listings",
-    href: "https://www.buckysolutions.com/contact?service=listings",
+    href: "https://www.buckysolutions.com/services/local-seo/",
   },
   social: {
     badge: "Social Presence",
     title: "Social profile cleanup",
     description: "Repair or strengthen your connected social presence so trust signals support booking decisions.",
     buttonLabel: "Fix social signals",
-    href: "https://www.buckysolutions.com/contact?service=social",
+    href: "https://www.buckysolutions.com/services/vendor-management/",
   },
   meta_tags: {
     badge: "Search Visibility",
     title: "Search snippet optimization",
     description: "Rewrite titles and descriptions so your search presence earns more clicks from the right guests.",
     buttonLabel: "Improve search snippets",
-    href: "https://www.buckysolutions.com/contact?service=seo-foundation",
+    href: "https://www.buckysolutions.com/services/local-seo/",
   },
   mobile: {
     badge: "Mobile UX",
     title: "Mobile usability fixes",
     description: "Fix viewport, tap targets, and mobile interaction issues that push guests away on phones.",
     buttonLabel: "Fix mobile UX",
-    href: "https://www.buckysolutions.com/contact?service=mobile-ux",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   default: DEFAULT_SERVICE_CTA,
 };
@@ -651,131 +711,195 @@ const getServiceCta = (serviceKey?: string | null): ServiceCta => {
 const CHECK_CTA_BY_ID: Record<string, Pick<ServiceCta, "buttonLabel" | "href">> = {
   "ssl-valid": {
     buttonLabel: "Harden site security",
-    href: "https://www.buckysolutions.com/contact?service=security&module=ssl-valid",
+    href: "https://www.buckysolutions.com/services/cybersecurity/",
   },
   "https-redirect": {
     buttonLabel: "Fix secure redirects",
-    href: "https://www.buckysolutions.com/contact?service=security&module=https-redirect",
+    href: "https://www.buckysolutions.com/services/cybersecurity/",
   },
   "response-time": {
     buttonLabel: "Speed up load time",
-    href: "https://www.buckysolutions.com/contact?service=pagespeed&module=response-time",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   "broken-links": {
     buttonLabel: "Repair broken links",
-    href: "https://www.buckysolutions.com/contact?service=website-conversion&module=broken-links",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   "pagespeed-mobile": {
     buttonLabel: "Improve mobile score",
-    href: "https://www.buckysolutions.com/contact?service=pagespeed&module=pagespeed-mobile",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
+  "canonical-redirect-hygiene": {
+    buttonLabel: "Fix URL setup",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
+  "technical-trust-security": {
+    buttonLabel: "Fix trust + security setup",
+    href: "https://www.buckysolutions.com/services/cybersecurity/",
   },
   "booking-platform": {
     buttonLabel: "Upgrade booking stack",
-    href: "https://www.buckysolutions.com/contact?service=booking-platform&module=booking-platform",
+    href: "https://www.buckysolutions.com/services/booking-automation/",
+  },
+  "booking-engine-health": {
+    buttonLabel: "Fix booking uptime",
+    href: "https://www.buckysolutions.com/services/booking-automation/",
   },
   "booking-cta": {
     buttonLabel: "Strengthen booking CTA",
-    href: "https://www.buckysolutions.com/contact?service=booking-conversion&module=booking-cta",
+    href: "https://www.buckysolutions.com/services/booking-automation/",
+  },
+  "date-picker-discoverability": {
+    buttonLabel: "Show date options sooner",
+    href: "https://www.buckysolutions.com/services/booking-automation/",
   },
   "tracking-pixels": {
     buttonLabel: "Set up tracking",
-    href: "https://www.buckysolutions.com/contact?service=tracking&module=tracking-pixels",
+    href: "https://www.buckysolutions.com/services/vendor-management/",
+  },
+  "abandonment-recovery-readiness": {
+    buttonLabel: "Set up recovery tracking",
+    href: "https://www.buckysolutions.com/services/vendor-management/",
   },
   "newsletter-capture": {
     buttonLabel: "Add email capture",
-    href: "https://www.buckysolutions.com/contact?service=tracking&module=newsletter-capture",
+    href: "https://www.buckysolutions.com/services/vendor-management/",
   },
   "pet-policy": {
     buttonLabel: "Add policy content",
-    href: "https://www.buckysolutions.com/contact?service=website-conversion&module=pet-policy",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   "rv-hookup-specs": {
     buttonLabel: "Publish hookup specs",
-    href: "https://www.buckysolutions.com/contact?service=website-conversion&module=rv-hookup-specs",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
+  "big-rig-readiness": {
+    buttonLabel: "Add big-rig details",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
+  "wifi-quality-claims": {
+    buttonLabel: "Clarify Wi-Fi quality",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
+  "arrival-directions-clarity": {
+    buttonLabel: "Improve arrival directions",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
+  "ev-extra-vehicle-policy": {
+    buttonLabel: "Add vehicle policies",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   "amenities-page": {
     buttonLabel: "Build amenities page",
-    href: "https://www.buckysolutions.com/contact?service=visual-refresh&module=amenities-page",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   "rate-page": {
     buttonLabel: "Improve pricing visibility",
-    href: "https://www.buckysolutions.com/contact?service=booking-conversion&module=rate-page",
+    href: "https://www.buckysolutions.com/services/booking-automation/",
   },
   "cancellation-policy": {
     buttonLabel: "Add clear policy",
-    href: "https://www.buckysolutions.com/contact?service=website-conversion&module=cancellation-policy",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   "photo-gallery-quality": {
     buttonLabel: "Upgrade photos",
-    href: "https://www.buckysolutions.com/contact?service=visual-refresh&module=photo-gallery-quality",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   "accessibility-statement": {
     buttonLabel: "Improve accessibility",
-    href: "https://www.buckysolutions.com/contact?service=mobile-ux&module=accessibility-statement",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   "meta-title": {
     buttonLabel: "Improve page titles",
-    href: "https://www.buckysolutions.com/contact?service=seo-foundation&module=meta-title",
+    href: "https://www.buckysolutions.com/services/local-seo/",
   },
   "meta-description": {
     buttonLabel: "Improve meta descriptions",
-    href: "https://www.buckysolutions.com/contact?service=seo-foundation&module=meta-description",
+    href: "https://www.buckysolutions.com/services/local-seo/",
   },
   "gbp-sync": {
     buttonLabel: "Improve GBP visibility",
-    href: "https://www.buckysolutions.com/contact?service=local-visibility&module=gbp-sync",
+    href: "https://www.buckysolutions.com/services/local-seo/",
+  },
+  "local-review-competitiveness": {
+    buttonLabel: "Increase review volume",
+    href: "https://www.buckysolutions.com/services/local-seo/",
   },
   "social-presence": {
     buttonLabel: "Improve social presence",
-    href: "https://www.buckysolutions.com/contact?service=social&module=social-presence",
+    href: "https://www.buckysolutions.com/services/vendor-management/",
   },
   "listing-signals": {
     buttonLabel: "Strengthen listings",
-    href: "https://www.buckysolutions.com/contact?service=listings&module=listing-signals",
+    href: "https://www.buckysolutions.com/services/local-seo/",
   },
   "facebook-link": {
     buttonLabel: "Fix social links",
-    href: "https://www.buckysolutions.com/contact?service=social&module=facebook-link",
+    href: "https://www.buckysolutions.com/services/vendor-management/",
   },
   "mobile-viewport": {
     buttonLabel: "Improve mobile rendering",
-    href: "https://www.buckysolutions.com/contact?service=mobile-ux&module=mobile-viewport",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   "header-phone": {
     buttonLabel: "Improve call conversion",
-    href: "https://www.buckysolutions.com/contact?service=mobile-ux&module=header-phone",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
+  "mobile-tap-targets": {
+    buttonLabel: "Improve mobile tap targets",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
+  "phone-conversion-readiness": {
+    buttonLabel: "Improve phone booking path",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   "image-count": {
     buttonLabel: "Improve visual content",
-    href: "https://www.buckysolutions.com/contact?service=visual-refresh&module=image-count",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   "listing-completeness": {
     buttonLabel: "Complete listing profile",
-    href: "https://www.buckysolutions.com/contact?service=listings&module=listing-completeness",
+    href: "https://www.buckysolutions.com/services/local-seo/",
   },
   "rate-transparency": {
     buttonLabel: "Improve rate transparency",
-    href: "https://www.buckysolutions.com/contact?service=booking-conversion&module=rate-transparency",
+    href: "https://www.buckysolutions.com/services/booking-automation/",
   },
   "contact-friction": {
     buttonLabel: "Reduce contact friction",
-    href: "https://www.buckysolutions.com/contact?service=booking-conversion&module=contact-friction",
+    href: "https://www.buckysolutions.com/services/booking-automation/",
   },
-  "communication-warmth": {
-    buttonLabel: "Improve messaging tone",
-    href: "https://www.buckysolutions.com/contact?service=seo-foundation&module=communication-warmth",
+  "trust-stack-completeness": {
+    buttonLabel: "Strengthen trust signals",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
+  "local-search-intent-coverage": {
+    buttonLabel: "Improve local search basics",
+    href: "https://www.buckysolutions.com/services/local-seo/",
+  },
+  "visual-proof-relevance": {
+    buttonLabel: "Improve key proof photos",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   "seasonal-visibility": {
     buttonLabel: "Improve offer visibility",
-    href: "https://www.buckysolutions.com/contact?service=booking-conversion&module=seasonal-visibility",
+    href: "https://www.buckysolutions.com/services/booking-automation/",
   },
   "visual-storytelling": {
     buttonLabel: "Strengthen storytelling",
-    href: "https://www.buckysolutions.com/contact?service=visual-refresh&module=visual-storytelling",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
   "payment-flexibility": {
     buttonLabel: "Improve payment options",
-    href: "https://www.buckysolutions.com/contact?service=booking-platform&module=payment-flexibility",
+    href: "https://www.buckysolutions.com/services/booking-automation/",
+  },
+  "structured-data": {
+    buttonLabel: "Add structured data",
+    href: "https://www.buckysolutions.com/services/local-seo/",
+  },
+  "accessibility-score": {
+    buttonLabel: "Improve accessibility",
+    href: "https://www.buckysolutions.com/services/website-management/",
   },
 };
 
@@ -783,9 +907,57 @@ const PASS_LEARN_CTA_BY_ID: Record<string, string> = {
   "ssl-valid": "Learn about site security",
   "https-redirect": "Learn about secure routing",
   "response-time": "Learn about fast load speed",
+  "broken-links": "Learn about link health",
+  "pagespeed-mobile": "Learn about mobile speed",
+  "canonical-redirect-hygiene": "Learn about URL consistency",
+  "technical-trust-security": "Learn about trust signals",
   "mobile-viewport": "Learn about mobile readiness",
   "meta-title": "Learn about search signage",
   "meta-description": "Learn about search snippets",
+  "booking-platform": "Learn about booking systems",
+  "booking-engine-health": "Learn about booking uptime",
+  "booking-cta": "Learn about booking visibility",
+  "date-picker-discoverability": "Learn about date pickers",
+  "tracking-pixels": "Learn about guest tracking",
+  "abandonment-recovery-readiness": "Learn about recovery tracking",
+  "newsletter-capture": "Learn about email capture",
+  "pet-policy": "Learn about pet policies",
+  "rv-hookup-specs": "Learn about hookup specs",
+  "big-rig-readiness": "Learn about rig readiness",
+  "wifi-quality-claims": "Learn about Wi-Fi claims",
+  "arrival-directions-clarity": "Learn about arrival directions",
+  "ev-extra-vehicle-policy": "Learn about vehicle policies",
+  "amenities-page": "Learn about amenity pages",
+  "rate-page": "Learn about pricing pages",
+  "cancellation-policy": "Learn about cancellation policies",
+  "photo-gallery-quality": "Learn about photo quality",
+  "accessibility-statement": "Learn about accessibility",
+  "gbp-sync": "Learn about Google listings",
+  "local-review-competitiveness": "Learn about review strategy",
+  "social-presence": "Learn about social presence",
+  "listing-signals": "Learn about listing strength",
+  "facebook-link": "Learn about social links",
+  "header-phone": "Learn about call conversion",
+  "mobile-tap-targets": "Learn about tap targets",
+  "phone-conversion-readiness": "Learn about phone bookings",
+  "image-count": "Learn about visual content",
+  "listing-completeness": "Learn about listing profiles",
+  "rate-transparency": "Learn about rate clarity",
+  "contact-friction": "Learn about contact ease",
+  "trust-stack-completeness": "Learn about trust signals",
+  "local-search-intent-coverage": "Learn about local search",
+  "visual-proof-relevance": "Learn about proof photos",
+  "seasonal-visibility": "Learn about seasonal offers",
+  "visual-storytelling": "Learn about storytelling",
+  "visual-trust": "Learn about visual trust",
+  "payment-flexibility": "Learn about payment options",
+  "booking-click-depth": "Learn about booking depth",
+  "availability-visibility": "Learn about availability",
+  "fee-transparency": "Learn about fee clarity",
+  "onsite-guest-proof": "Learn about guest proof",
+  "authentic-photography": "Learn about authentic photos",
+  "structured-data": "Learn about structured data",
+  "accessibility-score": "Learn about accessibility",
 };
 
 const PASS_BENEFIT_BY_ID: Record<string, string> = {
@@ -795,6 +967,54 @@ const PASS_BENEFIT_BY_ID: Record<string, string> = {
   "mobile-viewport": "Smartphone ready: your website layout stays readable and easy to use when guests look you up from the road.",
   "meta-title": "Search engine signage: your Google listing label is clear, so the right guests can recognize your park faster.",
   "meta-description": "Your search preview explains the value of your park clearly, improving click quality from potential guests.",
+  "broken-links": "All internal links are working correctly. Guests and search engines can navigate your site without hitting dead ends.",
+  "pagespeed-mobile": "Your site loads quickly on mobile devices, keeping road-tripping guests engaged instead of bouncing to a competitor.",
+  "canonical-redirect-hygiene": "Your URL structure is clean and consistent, so search engines index one authoritative version of your site.",
+  "technical-trust-security": "Your technical trust stack is solid — SSL, HTTPS, and canonical tags are all aligned and working together.",
+  "booking-platform": "You have an online booking system in place. Guests can check dates and reserve without needing to call or email.",
+  "booking-engine-health": "Your booking page loads reliably and responds quickly, so guests aren't blocked when they're ready to pay.",
+  "booking-cta": "Your booking button is clearly visible, making it easy for motivated guests to start a reservation right away.",
+  "date-picker-discoverability": "Guests can quickly find where to check available dates, reducing friction at the most critical step.",
+  "tracking-pixels": "Analytics tracking is installed, giving you visibility into how guests find your site and what they do before booking.",
+  "abandonment-recovery-readiness": "Booking-step events are in place so you can follow up with guests who start but don't finish reservations.",
+  "newsletter-capture": "You're collecting guest emails, which means you can fill shoulder-season openings and build repeat bookings over time.",
+  "pet-policy": "Your pet policy is published and easy to find. Pet owners can self-qualify before booking, reducing pre-trip calls.",
+  "rv-hookup-specs": "Hookup specifications are clearly listed, helping RV travelers confirm compatibility before driving to your property.",
+  "big-rig-readiness": "Big-rig details like max length and pull-through availability are visible, so large-rig owners can book with confidence.",
+  "wifi-quality-claims": "Wi-Fi quality claims are clearly stated, helping remote workers and streaming-dependent guests set the right expectations.",
+  "arrival-directions-clarity": "Clear arrival directions are published, helping guests navigate confidently and start their stay without stress.",
+  "ev-extra-vehicle-policy": "Vehicle and EV policies are visible, reducing checkout hesitation and pre-booking support calls.",
+  "amenities-page": "Amenity information is easy to find, giving guests the details they need to picture their stay and commit to booking.",
+  "rate-page": "Pricing is visible and transparent, so guests can evaluate your property without needing to contact you first.",
+  "cancellation-policy": "Your cancellation policy is published and clear, building trust and reducing booking hesitation.",
+  "photo-gallery-quality": "Your photos are high quality and representative, helping guests picture the experience before they arrive.",
+  "accessibility-statement": "Accessibility information is available, helping guests with mobility or access needs plan their visit.",
+  "gbp-sync": "Your Google Business Profile is active and consistent with your website, strengthening local search visibility.",
+  "local-review-competitiveness": "Your review volume and ratings are competitive locally, supporting trust and search ranking in your area.",
+  "social-presence": "Active social profiles are linked from your site, giving guests additional proof that your property is real and active.",
+  "listing-signals": "Directory listing signals are healthy, keeping your property visible across the channels where guests discover new parks.",
+  "facebook-link": "Your Facebook link is working and reachable, maintaining a connected social presence that supports guest trust.",
+  "header-phone": "A phone number is prominently displayed, giving guests a direct line when they're ready to book or have questions.",
+  "mobile-tap-targets": "Tap targets on your mobile site are properly sized, making navigation easy for guests browsing on their phones.",
+  "phone-conversion-readiness": "Your phone booking path is smooth and accessible, capturing guests who prefer to reserve by phone.",
+  "image-count": "Your site has strong visual content volume, giving guests enough imagery to feel confident about booking.",
+  "listing-completeness": "Your listing profiles are thorough and complete, maximizing your visibility on discovery platforms.",
+  "rate-transparency": "Rates are clearly displayed before checkout, building trust and reducing abandoned bookings.",
+  "contact-friction": "Contacting you is simple and low-friction, so guests with questions can reach you quickly and book faster.",
+  "trust-stack-completeness": "Key trust signals — reviews, security, and policies — are visible where guests need them most.",
+  "local-search-intent-coverage": "Your homepage clearly states what you are and where you are, helping local searchers find you faster.",
+  "visual-proof-relevance": "Key proof photos cover the essentials guests care about — sites, bathrooms, amenities, and arrival.",
+  "seasonal-visibility": "Current promotions and seasonal offers are prominently displayed, helping convert price-sensitive searchers.",
+  "visual-storytelling": "Your visual content tells the story of the guest experience, helping visitors imagine their stay and commit to booking.",
+  "visual-trust": "Your images look authentic and recent, building trust that what guests see online matches what they'll find on arrival.",
+  "payment-flexibility": "Multiple payment options are available at checkout, reducing the chance guests abandon over payment limitations.",
+  "booking-click-depth": "Guests can go from your homepage to a completed booking in just a few clicks, minimizing drop-off along the way.",
+  "availability-visibility": "Date availability is easy to check, so guests comparing parks can quickly see if you have open sites for their trip.",
+  "fee-transparency": "All fees are disclosed before the final payment screen, so guests feel informed and are less likely to abandon checkout.",
+  "onsite-guest-proof": "Real guest reviews are displayed on your site, building trust faster than anything you could write yourself.",
+  "authentic-photography": "Your photos look genuine and property-specific, giving guests confidence that the real experience matches the website.",
+  "structured-data": "Structured data is present on your site, helping Google display rich search results with stars, pricing, and business details.",
+  "accessibility-score": "Your site scores well on accessibility, making it usable for guests with disabilities and improving overall user experience.",
 };
 
 const PAIN_LEVEL_ORDER: PainLevel[] = ["money-losers", "maintenance-needed", "working-well"];
@@ -885,60 +1105,161 @@ const WRITING_HEAVY_CHECK_IDS = new Set([
   "pet-policy",
   "cancellation-policy",
   "accessibility-statement",
-  "meta-title",
-  "meta-description",
-  "communication-warmth",
-  "newsletter-capture",
-  "seasonal-visibility",
+  "ev-extra-vehicle-policy",
+]);
+
+const COMPETITOR_COMPARE_INTENT_CHECK_IDS = new Set([
+  "local-review-competitiveness",
 ]);
 
 const CHECK_DIRECT_FIX_BY_ID: Record<string, string> = {
-  "ssl-valid": "Enable SSL in your hosting panel and renew certificates automatically so browsers never show security warnings.",
-  "https-redirect": "Force all HTTP traffic to HTTPS at the server level so every visitor lands on the secure version by default.",
-  "response-time": "Compress oversized images, defer heavy scripts, and upgrade hosting if TTFB is slow. Aim for sub-1.2s initial response.",
-  "broken-links": "Crawl internal links, fix 404s, and replace outdated URLs in nav, footer, and key CTA pages.",
-  "pagespeed-mobile": "Prioritize image optimization, script reduction, and caching. Focus first on mobile LCP and CLS issues.",
-  "booking-platform": "Use a modern booking engine with clear availability, transparent pricing, and low-friction checkout.",
-  "booking-cta": "Place one primary booking CTA above the fold and repeat it in key sections with consistent wording.",
-  "tracking-pixels": "Install GA4 and GTM, then verify events for booking clicks, form submits, and key funnel actions.",
-  "newsletter-capture": "Add one simple email opt-in with a clear value proposition such as seasonal offers or local trip tips.",
-  "pet-policy": "Publish a clear pet policy page with allowed pets, fees, restrictions, and any required vaccination rules.",
-  "rv-hookup-specs": "List exact hookup specs per site type (30/50 amp, water, sewer) in an easy-to-scan comparison block.",
-  "amenities-page": "Create one amenities page with photos, brief descriptions, and location cues so guests can self-qualify quickly.",
-  "rate-page": "Show starting rates and seasonal ranges before checkout to reduce uncertainty and improve conversion quality.",
-  "cancellation-policy": "Add a policy section that states deadlines, refund rules, and exceptions in plain language.",
-  "photo-gallery-quality": "Replace low-quality images with bright, high-resolution photos of sites, cabins, and core amenities.",
-  "accessibility-statement": "Publish accessibility details for paths, facilities, and accommodation options plus a contact path for requests.",
-  "meta-title": "Use a location + property type title format and keep it concise so search users immediately understand the offer.",
-  "meta-description": "Write benefit-driven descriptions that include key differentiators and a clear booking-oriented action.",
-  "gbp-sync": "Complete your Google Business Profile with accurate NAP data, updated photos, categories, and regular posts.",
-  "social-presence": "Keep social links active and post recent visual content so guests see current proof of experience quality.",
-  "listing-signals": "Standardize listing data across key directories and ensure direct booking links resolve correctly.",
-  "facebook-link": "Point social links to your active business pages and remove dead or outdated account references.",
-  "mobile-viewport": "Ensure viewport is configured correctly and test on common phone sizes for readable text and tap targets.",
-  "header-phone": "Make the phone number tap-to-call and visible in the mobile header for high-intent, urgent bookers.",
-  "image-count": "Add more relevant hero and gallery images that match high-intent guest questions before booking.",
-  "listing-completeness": "Fill every major listing section (photos, amenities, rules, policies, booking links) to maximize conversion.",
-  "rate-transparency": "Expose price anchors early with nightly/weekly context so shoppers can assess fit quickly.",
-  "contact-friction": "Reduce form fields, simplify contact options, and make response expectations clear.",
-  "communication-warmth": "Use human, specific language and guest-focused outcomes instead of generic marketing phrases.",
-  "seasonal-visibility": "Surface seasonal offers in hero and booking pathways so promotions are visible before drop-off points.",
-  "visual-storytelling": "Show complete stay narratives: arrival, accommodation, amenities, and local experience cues.",
-  "payment-flexibility": "Offer familiar payment options and clearly communicate accepted methods before checkout.",
+  "ssl-valid":
+    "Your hosting company can turn this on for free in most cases — it's often a one-click option in your control panel. Search for \"SSL certificate\" in your hosting dashboard, or call your host and ask them to enable it. Once it's on, your site address will start with https:// and browsers will stop showing the \"Not Secure\" warning to your guests.",
+  "https-redirect":
+    "Even with SSL turned on, your site might still load the old http:// version for some visitors. Ask your web person or host to add a redirect that automatically sends everyone to the secure https:// version. This is usually a one-line change to a file called .htaccess, or a toggle in your hosting settings.",
+  "response-time":
+    "Large photo files are the #1 cause of slow websites. Compress your images before uploading using a free tool like Squoosh. Ask your host if they offer caching — it's usually free and makes a huge difference for repeat visitors.",
+  "broken-links":
+    "Broken links often happen when you update a page or rename something and forget to update the links pointing to it. Walk through your main navigation, footer, and any 'Book Now' buttons and click each one to make sure they still work. A free tool like Dead Link Checker (deadlinkchecker.com) can scan your whole site automatically and list every broken link in one report.",
+  "pagespeed-mobile":
+    "The fastest way to fix this is to share the PageSpeed report below with your web developer or hosting provider. They'll see exactly which files are slowing you down and how to fix them. If you're doing it yourself, focus on compressing photos, removing unused plugins, and turning off auto-play videos.",
+  "canonical-redirect-hygiene":
+    "Ask your web person to pick one official website address (for example, https://www.yourpark.com) and force all other versions to redirect to it. Then set your canonical tag to that same exact address on each page. This keeps Google and guests from seeing multiple versions of the same page.",
+  "technical-trust-security":
+    "Treat this as one cleanup task: make sure your SSL is valid, force all traffic to HTTPS, and set canonical tags to your one preferred host. Ask your web person to confirm all three are aligned so guests always land on one secure version of your site.",
+  "booking-platform":
+    "Guests expect to be able to check dates and reserve online without having to call or email first. If you don't have an online booking system, popular options for campgrounds and RV parks include Campspot, CampLife, and Rezdy. Many connect directly to your website. If you're not sure where to start, contact one of those providers and ask for a demo — setup is usually straightforward.",
+  "booking-engine-health":
+    "Click your main booking link from your homepage on both phone and desktop and make sure it opens fast and works every time. If it fails or hangs, contact your booking provider support and your website host with a screenshot and the exact time it happened. A simple uptime monitor can alert you if the booking page goes down again.",
+  "booking-cta":
+    "Every page on your site should have one clear button that says something like \"Reserve Your Site\" or \"Check Availability\" — and it should be easy to spot without scrolling. Place it near the top of the page in a color that stands out. If your site only has a phone number or a contact form, guests who prefer booking online will leave.",
+  "date-picker-discoverability":
+    "Put a date picker or a clear 'Check Availability' button near the top of your homepage so guests can start right away. Do not hide date search behind multiple clicks or deep menu pages. People comparing parks quickly will leave if they cannot check dates in a few seconds.",
+  "tracking-pixels":
+    "Without tracking in place, you have no way of knowing how guests found your site or what they did before booking. Google Analytics is free and takes about 15 minutes to set up — search \"install Google Analytics\" and follow the step-by-step guide, or have your web person add a small snippet of code to every page. Once it's running, you can see things like how many people visited, where they came from, and which pages they left from.",
+  "abandonment-recovery-readiness":
+    "Set up tracking for key booking steps like 'begin checkout' and 'booking complete' so you can follow up with people who quit halfway. Some booking vendors fire these events in ways that source scans cannot see, so ask your booking vendor or web person to confirm the events in GA4 DebugView and Meta Test Events. Once this is in place, you can run simple reminder ads to bring interested guests back.",
+  "newsletter-capture":
+    "An email list is one of the most reliable ways to fill open sites, especially in shoulder seasons. Add a simple signup form to your homepage with a short reason to join — something like \"Get early access to seasonal deals and local trip ideas.\" If writing that sounds annoying, use AI to draft the headline and signup copy for you, then paste it onto your site. Free tools like Mailchimp or Constant Contact let you collect emails and send newsletters without any technical setup.",
+  "pet-policy":
+    "Pet owners look for pet-friendly parks before booking, so make it obvious on your site what pets are allowed, any size or breed limits, any extra fees, and leash rules. If you do not want to write that yourself, hit the AI button below and let it draft the policy for you.",
+  "rv-hookup-specs":
+    "RV travelers need to know if your hookups match their rig before they drive hours to get there. List the details for each site type: 30-amp or 50-amp power, water hookup, sewer connection (full hookup, water and electric only, dry camping, etc.), and max rig length if there's a limit. A simple table or bullet list on your site pages is enough — don't make guests call to find out.",
+  "big-rig-readiness":
+    "Add two details right next to site selection: maximum rig length and whether each site is pull-through or back-in. Big-rig owners will skip booking if they cannot confirm fit in seconds.",
+  "wifi-quality-claims":
+    "If you offer Wi-Fi, say how good it is in plain language: for example 'Streaming-friendly at main sites' or 'Good for email and browsing.' If you know your speed range, include it so remote workers can self-qualify.",
+  "arrival-directions-clarity":
+    "Create a short 'Getting Here' section with the exact entrance instructions and any GPS warnings (like low-clearance bridges or roads to avoid). This prevents stressful arrivals and angry first impressions.",
+  "ev-extra-vehicle-policy":
+    "Publish a simple vehicle policy page that answers two common questions: EV charging rules and extra vehicle fees/limits. Clear rules reduce pre-booking calls and checkout hesitation.",
+  "amenities-page":
+    "A clear amenities page helps guests picture their stay and decide to book. List everything you offer — pool, bathhouses, laundry, fire pits, store, dog park, playground, Wi-Fi — and for each one, add a photo and a short note like the hours or location. Guests who can visualize the experience are much more likely to book.",
+  "rate-page":
+    "Guests who can't find your prices often don't call to ask — they just leave. Show your nightly or weekly rates on the site with a basic breakdown by site type (tent, RV full hookup, cabin, etc.) and note any seasonal changes. You don't need to list every fee, but showing a starting price helps guests know whether they're in the right place before they spend time trying to book.",
+  "cancellation-policy":
+    "Guests won't book if they're afraid of losing money on a non-refundable reservation. Put your cancellation policy in plain language on your site: how many days ahead someone needs to cancel, whether they get a full refund or a credit, and whether there are exceptions for weather or emergencies. If needed, use AI to write a plain-English version for you, then paste it onto your site. Link to your policy from the booking page so guests see it before they pay.",
+  "photo-gallery-quality":
+    "Bad photos are one of the biggest reasons guests choose a competitor. Every photo on your site should be taken in good natural light (not at night or on a cloudy day), shot horizontally, and show the best parts of your property. At minimum, you want photos of your best RV sites, cabins or glamping units, the bathhouse, common areas, and your entry or welcome sign. A local real estate or event photographer can shoot a full property set for $200–$500 and the difference is almost always worth it.",
+  "accessibility-statement":
+    "If your park has accessible routes, restrooms, or campsites, say so on your site — guests with mobility needs will specifically look for this information. List what's available: paved or hard-packed paths, accessible restrooms or shower rooms, ADA-designated sites, and a phone number or email for guests who need to ask questions. If you are not sure how to word it, use AI to draft the statement for you and paste it onto your site. If accessibility is limited, being honest about it is still better than leaving guests to guess.",
+  "meta-title":
+    "Your page title is what shows up as the blue link in Google search results. To improve it, include your property name, location, and what you offer — something like \"Shady Pines RV Park | Full Hookup Sites in Asheville, NC.\" If you want help phrasing it, use AI to generate a few options, then paste the best one into your SEO settings in Squarespace, Wix, or WordPress.",
+  "meta-description":
+    "The short text that appears under your link in Google search results is called a meta description. Most platforms let you edit this under \"SEO Settings\" for each page. Write 1–2 sentences that describe what makes your park worth booking, mention your location, and end with something actionable like \"Book your site online today.\" If you do not want to write it yourself, use AI to draft it, then paste it into your page settings. Keep it under 155 characters so Google doesn't cut it off.",
+  "gbp-sync":
+    "Your Google Business Profile is often the first thing people see when they search your park. Log in at business.google.com and make sure your address, phone number, and website link are correct. Add recent photos (at least 10), fill in your hours, select the right business categories (like RV Park or Campground), and post an update at least once a month. Profiles that are active and complete rank higher and get more calls.",
+  "local-review-competitiveness":
+    "To improve local win-rate, ask for fresh Google reviews weekly and reply to every review quickly. Review volume and recency often decide who gets the click when guests compare nearby parks.",
+  "social-presence":
+    "An active social media presence reassures guests that your park is open and well-maintained. Post a photo or short video at least once or twice a week — it doesn't need to be professional. A quick shot of a sunset, a fire pit, or happy guests goes a long way. Make sure the links on your website point to your real active pages, not an old or unused account.",
+  "listing-signals":
+    "This check looks for directory signals on your site, not a live scan of The Dyrt, Campendium, Hipcamp, or RV Life. If you are not listed on those platforms yet, claim or create profiles there, keep your address, phone, and website consistent, and add real photos so guests can find you more easily.",
+  "facebook-link":
+    "The Facebook link on your site is pointing to a page that no longer works or doesn't exist. Log in to Facebook and find your official business page URL, then update the link on your website to match. If you don't have an active Facebook page for your park, either remove the icon from your site or create a page — a broken social link makes your site look abandoned.",
+  "mobile-viewport":
+    "When a site doesn't display correctly on phones, text appears tiny, buttons are too small to tap, and guests have to pinch and zoom just to read anything. This is usually a settings issue rather than a big redesign. If your site is on a platform like Squarespace, Wix, or WordPress, open the mobile preview and check how each page looks. Ask your web person to confirm that the mobile viewport tag is set correctly — it's a quick fix.",
+  "header-phone":
+    "When guests are looking up your park on their phone, they often want to call right away. Make sure your phone number is visible at the top of the page on mobile — ideally as a tappable link that opens the dialer automatically. On most website platforms, you can add a click-to-call link by formatting your phone number like this: tel:+18005551234. Your web person can also add a sticky header bar with a call button that follows guests as they scroll.",
+  "mobile-tap-targets":
+    "On phones, make your main 'Book' and 'Call' buttons large enough to tap easily with one thumb. Keep space around them so guests do not hit the wrong link by mistake. Preview your site on a real phone and make sure booking actions are easy to tap without zooming.",
+  "phone-conversion-readiness":
+    "Put your phone number at the top of mobile pages and make it tap-to-call. Add simple wording like 'Call now for same-day availability' near the number so guests know what to do. If people have to search for your number or copy-paste it, you lose calls.",
+  "image-count":
+    "Your homepage doesn't have enough photos to give guests a feel for the experience. Most guests want to see the actual sites, the bathhouse, any recreation areas, and the general vibe of the property before booking. Aim for at least 6–10 photos on your homepage or gallery. You don't need a professional shoot — a recent smartphone photo in good daylight is much better than no photo.",
+  "listing-completeness":
+    "Empty sections in your online listings signal to guests (and to booking platforms) that your park is incomplete or undermanaged. Log in to each platform where you have a listing — your booking engine, Google, The Dyrt, Hipcamp, etc. — and fill in every section: description, photos, amenities, rules, cancellation policy, and rates. Platforms reward complete listings with better visibility in search results.",
+  "rate-transparency":
+    "Guests often abandon a booking when the price jumps unexpectedly at checkout. To avoid this, show your nightly rate early — before guests click into the booking flow. If there's a cleaning fee, reservation fee, or tax, mention the approximate total somewhere visible so the final number isn't a surprise. Even a line like \"Sites from $45/night, fees apply\" builds more trust than showing a price for the first time at payment.",
+  "contact-friction":
+    "If the only way to contact you is a long form with 8 fields, many guests won't bother. Simplify your contact page to just the basics — name, email, and message. Better yet, also show a phone number, your typical response time, and a link to your booking page for guests who just want to reserve. The easier you make it to reach you, the more inquiries you'll get.",
+  "trust-stack-completeness":
+    "Show your key trust signals in obvious places: secure site (https), clear cancellation policy, and real guest reviews. Guests should not need to dig for these basics before paying. A few trust signals in the booking path can make the difference between hesitation and reservation.",
+  "local-search-intent-coverage":
+    "Make sure your homepage and Google listing clearly say what you are and where you are. Include your property type and location in your page title and main intro text, and keep your map listing active with fresh photos and reviews. This helps nearby searchers find you faster.",
+  "seasonal-visibility":
+    "If you're running a summer special or a fall deal, make sure guests can actually see it. Put your current promotion near the top of your homepage where it's impossible to miss — not buried in a blog post or a footer banner. Something as simple as a bold headline that says \"Book by July 4th and save 15%\" with a direct link to availability is enough to move reservations. If you need help writing the offer, use AI to generate the promo text and paste it onto your homepage.",
+  "visual-storytelling":
+    "Guests book the experience, not just the site. Beyond showing photos of your RV hookups, show what it feels like to stay there: a campfire at dusk, kids at the playground, people relaxing by the pool, the view from your best site. A short video walk-through or a photo series that follows the journey from arrival to evening can do more for bookings than a dozen spec photos.",
+  "visual-proof-relevance":
+    "Make sure your photos prove the essentials guests care about: where they will stay, bathroom quality, amenities, and what arrival looks like. If one of those is missing, add 2-3 clear real photos for that section. Real proof photos reduce doubt and help people book with confidence.",
+  "visual-trust":
+    "Replace generic or stock-looking images with real, recent photos of your actual sites, bathhouse, amenities, and entrance. Real visuals build trust much faster than polished but generic imagery.",
+  "payment-flexibility":
+    "If your booking system only accepts one or two payment types, some guests will abandon checkout when their preferred method isn't available. Check your booking settings and enable credit card, debit card, and if possible PayPal or Apple Pay. If you accept checks or cash for walk-ins, mention that on your site too. The more options you offer, the fewer guests you lose at the final step.",
+  "booking-click-depth":
+    "Count how many clicks it takes from your homepage to actually completing a reservation — if it's more than 3 or 4, you're losing guests along the way. Simplify by putting a \"Check Availability\" button on your homepage that links directly into your booking calendar. Remove any unnecessary intermediate pages or steps that add friction before a guest can select their dates.",
+  "availability-visibility":
+    "Guests who can't quickly see whether you have open dates for their trip will move on to the next park. Put a date picker or an availability calendar near the top of your homepage so guests can check right away without hunting for it. Even a simple \"Check Availability\" button that links to your booking calendar is better than burying it under multiple menu levels.",
+  "fee-transparency":
+    "Guests don't mind paying fees — they mind being surprised by them. Show your cleaning fee, reservation fee, or any other mandatory charges on your rates page or booking page before the final payment screen. A simple line like \"A $15 reservation fee applies\" is all it takes. When guests feel informed, they're more likely to complete the booking instead of abandoning it.",
+  "onsite-guest-proof":
+    "Real guest reviews build trust faster than anything you can write yourself. The easiest fix is to copy a handful of your best Google or TripAdvisor reviews and display them on your homepage with the guest's first name and star rating. You can also embed a Google Reviews widget directly into your site. Guests who see recent positive reviews from real people are far more likely to book.",
+  "authentic-photography":
+    "Stock-looking photos — perfect sunsets, models by a fire — make guests wonder if your park actually looks that way. Replace them with real photos of your actual property: your specific sites, your real bathhouse, your actual view. Even a well-lit smartphone photo of the real thing is more convincing than a polished stock image. Guests book based on what they expect to find when they arrive.",
+  "structured-data":
+    "Ask your web developer to add JSON-LD structured data to your homepage. Use LodgingBusiness or LocalBusiness as the type, include your address, phone, price range, and aggregate ratings if available. Google's Structured Data Markup Helper can generate the code — then paste it into your site's HTML head. This helps Google show rich results with stars and pricing for your property.",
+  "accessibility-score":
+    "Start with the biggest wins: add alt text to all images, make sure form fields have labels, check that text contrast meets a 4.5:1 ratio, and use proper heading hierarchy (h1, h2, h3). Free tools like WAVE or axe DevTools can scan your site and show exactly which elements need fixing. Most fixes take a few minutes each.",
+};
+
+const condenseFixCopy = (copy: string): string => {
+  const normalized = copy.replace(/\s+/g, " ").trim();
+  const sentences = normalized.match(/[^.!?]+[.!?]/g) ?? [normalized];
+
+  if (sentences.length <= 2) {
+    return normalized;
+  }
+
+  const firstTwo = sentences.slice(0, 2).join(" ").trim();
+  if (firstTwo.length >= 210) {
+    return firstTwo;
+  }
+
+  return sentences.slice(0, 3).join(" ").trim();
 };
 
 const CHECK_DISPLAY_LABEL_BY_ID: Record<string, string> = {
+  "technical-trust-security": "Technical trust & security",
   "ssl-valid": "Site security",
   "https-redirect": "Secure website routing",
   "response-time": "Fast loading",
   "broken-links": "Working website links",
   "pagespeed-mobile": "Phone loading speed",
+  "canonical-redirect-hygiene": "Website URL consistency",
   "booking-platform": "Online booking system",
+  "booking-engine-health": "Booking page health",
   "booking-cta": "Book now visibility",
+  "date-picker-discoverability": "Date picker visibility",
   "tracking-pixels": "Guest follow-up tracking",
+  "abandonment-recovery-readiness": "Booking recovery tracking",
   "newsletter-capture": "Guest email signup",
   "pet-policy": "Pet policy visibility",
   "rv-hookup-specs": "RV hookup details",
+  "big-rig-readiness": "Big-rig readiness",
+  "wifi-quality-claims": "Wi-Fi quality clarity",
+  "arrival-directions-clarity": "Arrival directions clarity",
+  "ev-extra-vehicle-policy": "EV and extra-vehicle policy",
   "amenities-page": "Amenities visibility",
   "rate-page": "Pricing visibility",
   "cancellation-policy": "Cancellation policy visibility",
@@ -947,19 +1268,32 @@ const CHECK_DISPLAY_LABEL_BY_ID: Record<string, string> = {
   "meta-title": "Search engine signage",
   "meta-description": "Search result description",
   "gbp-sync": "Google listing strength",
+  "local-review-competitiveness": "Local review competitiveness",
   "social-presence": "Social media presence",
-  "listing-signals": "Directory listing presence",
+  "listing-signals": "Directory listing signals",
   "facebook-link": "Facebook link health",
   "mobile-viewport": "Smartphone readiness",
   "header-phone": "Tap-to-call phone number",
+  "mobile-tap-targets": "Phone tap button size",
+  "phone-conversion-readiness": "Phone booking readiness",
   "image-count": "Homepage photos",
   "listing-completeness": "Listing coverage",
   "rate-transparency": "Price clarity",
   "contact-friction": "Contact convenience",
-  "communication-warmth": "Welcoming website tone",
+  "trust-stack-completeness": "Booking trust signals",
+  "local-search-intent-coverage": "Local search basics",
+  "visual-proof-relevance": "Proof photo coverage",
+  "visual-trust": "Visual trust",
   "seasonal-visibility": "Seasonal offer visibility",
   "visual-storytelling": "Visual sales strength",
   "payment-flexibility": "Payment flexibility",
+  "booking-click-depth": "Booking click count",
+  "availability-visibility": "Availability visible early",
+  "fee-transparency": "Fee transparency",
+  "onsite-guest-proof": "On-site guest proof",
+  "authentic-photography": "Authentic photography",
+  "structured-data": "Structured data for search",
+  "accessibility-score": "Accessibility score",
 };
 
 const getCheckDisplayLabel = (check?: ScanCheck | null): string => {
@@ -968,6 +1302,141 @@ const getCheckDisplayLabel = (check?: ScanCheck | null): string => {
   }
 
   return CHECK_DISPLAY_LABEL_BY_ID[check.id] ?? check.name;
+};
+
+const getCheckFooterMeta = (check?: ScanCheck | null): string | null => {
+  if (!check?.effort) return null;
+
+  switch (check.effort) {
+    case "Low":
+      return "Easy · 5 mins";
+    case "Medium":
+      return "Medium · 15 mins";
+    case "High":
+      return "Hard · 30+ mins";
+    default:
+      return null;
+  }
+};
+
+const getCheckHeadline = (check?: ScanCheck | null): string => {
+  if (!check) return "";
+  const p = check.status === "pass";
+  const f = check.status === "fail";
+  switch (check.id) {
+    case "technical-trust-security":
+      return p ? "Technical trust and security are solid" : f ? "Technical trust and security need cleanup" : "Technical trust setup needs one more step";
+    case "pagespeed-mobile":
+      return p ? "Site loads fast on phones" : f ? "Site loads slowly on phones" : "Phone load speed is borderline";
+    case "canonical-redirect-hygiene":
+      return p ? "Website URL setup is clean" : f ? "Website URL setup needs cleanup" : "Website URL setup needs review";
+    case "response-time":
+      return p ? "Website responds quickly" : f ? "Website is slow to respond" : "Website response is borderline";
+    case "booking-engine-health":
+      return p ? "Booking page is up and running" : f ? "Booking page may be down" : "Booking page health needs review";
+    case "date-picker-discoverability":
+      return p ? "Guests can start date search quickly" : f ? "Date search is hard to find" : "Date search visibility needs review";
+    case "big-rig-readiness":
+      return p ? "Big-rig details are clearly posted" : f ? "Big-rig details are missing" : "Big-rig details are partially visible";
+    case "wifi-quality-claims":
+      return p ? "Wi-Fi quality is clearly explained" : f ? "Wi-Fi quality is unclear" : "Wi-Fi is mentioned but not qualified";
+    case "arrival-directions-clarity":
+      return p ? "Arrival directions are clear" : f ? "Arrival directions are hard to find" : "Arrival instructions need more detail";
+    case "ev-extra-vehicle-policy":
+      return p ? "Vehicle policies are clearly posted" : f ? "Vehicle policies are missing" : "Vehicle policies are only partially posted";
+    case "abandonment-recovery-readiness":
+      return p ? "Can recover unfinished bookings" : f ? "Can't recover unfinished bookings" : "Booking recovery events are unverified";
+    case "booking-cta":
+      return p ? "Book now button is easy to find" : f ? "Book now button is hard to find" : "Book now button could be clearer";
+    case "booking-click-depth":
+      return p ? "Guests can book in just a few clicks" : f ? "Too many clicks required to book" : "Booking takes a few too many clicks";
+    case "booking-platform":
+      return p ? "Guests can book online" : f ? "No online booking found" : "Online booking needs review";
+    case "local-review-competitiveness":
+      return p ? "Review strength looks competitive" : f ? "Review strength trails local competition" : "Review competitiveness is borderline";
+    case "availability-visibility":
+      return p ? "Guests can see open dates easily" : f ? "Open dates are hard to find" : "Availability could be more visible";
+    case "fee-transparency":
+      return p ? "All fees are shown up front" : f ? "Guests see surprise fees" : "Fee timing could be clearer";
+    case "onsite-guest-proof":
+      return p ? "Guest reviews are showing" : f ? "No guest reviews found on the site" : "Guest reviews could be more visible";
+    case "visual-trust":
+      return p ? "Photos build strong trust" : f ? "Photos may be hurting trust" : "Photos are decent but not fully convincing";
+    case "authentic-photography":
+      return p ? "Photos look real and personal" : f ? "Photos look too stock or generic" : "Photos could feel more personal";
+    case "rate-page":
+    case "rate-transparency":
+      return p ? "Nightly rates are easy to find" : f ? "Nightly rates are hard to find" : "Pricing could be easier to find";
+    case "cancellation-policy":
+      return p ? "Cancellation policy is easy to find" : f ? "No cancellation policy found" : "Cancellation policy is hard to find";
+    case "ssl-valid":
+      return p ? "Site has a valid security certificate" : f ? "Site is missing a security certificate" : "Security certificate needs attention";
+    case "https-redirect":
+      return p ? "Site loads securely by default" : f ? "Site doesn't always load securely" : "Secure site routing needs attention";
+    case "broken-links":
+      return p ? "No broken links found" : f ? "Some links on the site are broken" : "One or more links may be broken";
+    case "tracking-pixels":
+      return p ? "Ad retargeting is active" : f ? "Ad retargeting isn't set up" : "Ad retargeting needs attention";
+    case "newsletter-capture":
+      return p ? "Email signup form is present" : f ? "No email signup form found" : "Email signup could be more visible";
+    case "pet-policy":
+      return p ? "Pet policy is clearly posted" : f ? "Pet policy is missing or unclear" : "Pet policy could be clearer";
+    case "rv-hookup-specs":
+      return p ? "RV hookup details are listed" : f ? "RV hookup details are missing" : "RV hookup info could be clearer";
+    case "amenities-page":
+      return p ? "Amenities are clearly listed" : f ? "Amenities aren't listed anywhere" : "Amenities page could be improved";
+    case "photo-gallery-quality":
+      return p ? "Photo gallery looks inviting" : f ? "Photo gallery needs better photos" : "Photo gallery could be stronger";
+    case "accessibility-statement":
+      return p ? "ADA accessibility info is posted" : f ? "No ADA accessibility info found" : "Accessibility statement needs attention";
+    case "meta-title":
+      return p ? "Google page title is set up well" : f ? "Google page title needs work" : "Google page title could be stronger";
+    case "meta-description":
+      return p ? "Google search preview text is set" : f ? "Google search preview text is missing" : "Google preview text could be better";
+    case "gbp-sync":
+      return p ? "Google listing looks complete" : f ? "Google listing looks incomplete" : "Google listing needs attention";
+    case "social-presence":
+      return p ? "Active on social media" : f ? "Hard to find on social media" : "Social media presence is limited";
+    case "listing-signals":
+      return p ? "Directory signals found on site" : f ? "No directory signals found on site" : "Directory signals need attention";
+    case "facebook-link":
+      return p ? "Facebook page link is working" : f ? "Facebook page link is broken" : "Facebook link needs attention";
+    case "mobile-viewport":
+      return p ? "Site looks good on phones" : f ? "Site doesn't display well on phones" : "Phone display needs attention";
+    case "header-phone":
+      return p ? "Phone number is easy to tap" : f ? "Phone number is hard to tap on mobile" : "Clickable phone number needs attention";
+    case "mobile-tap-targets":
+      return p ? "Phone buttons are easy to tap" : f ? "Phone buttons are hard to tap" : "Phone button tap size needs work";
+    case "phone-conversion-readiness":
+      return p ? "Phone call path is conversion-ready" : f ? "Phone call path is weak" : "Phone call path needs tuning";
+    case "image-count":
+      return p ? "Homepage has plenty of photos" : f ? "Homepage doesn't have enough photos" : "More homepage photos would help";
+    case "listing-completeness":
+      return p ? "Online listings look complete" : f ? "Online listings are incomplete" : "Online listings need more detail";
+    case "contact-friction":
+      return p ? "Easy to get in touch" : f ? "Hard to get in touch" : "Contact info could be easier to find";
+    case "trust-stack-completeness":
+      return p ? "Trust signals are strong" : f ? "Trust signals are too weak" : "Trust signals are incomplete";
+    case "local-search-intent-coverage":
+      return p ? "Local search basics are covered" : f ? "Local search basics are missing" : "Local search basics need review";
+    case "visual-proof-relevance":
+      return p ? "Photos cover what guests care about" : f ? "Important proof photos are missing" : "Proof photo coverage is partial";
+    case "seasonal-visibility":
+      return p ? "Seasonal deals are easy to spot" : f ? "No seasonal deals visible to guests" : "Seasonal offers could be more visible";
+    case "visual-storytelling":
+      return p ? "Photos and visuals sell the experience" : f ? "Photos and visuals don't sell the experience" : "Visuals could do more to attract guests";
+    case "payment-flexibility":
+      return p ? "Multiple payment options available" : f ? "Very few payment options available" : "Payment options could be expanded";
+    case "structured-data":
+      return p ? "Rich search data is in place" : f ? "No structured data found for search engines" : "Structured data is partially set up";
+    case "accessibility-score":
+      return p ? "Accessibility score is strong" : f ? "Accessibility needs improvement" : "Accessibility score is borderline";
+    default: {
+      if (p) return "This check passed";
+      if (f) return "This check found an issue";
+      return "This check needs review";
+    }
+  }
 };
 
 export default function Home() {
@@ -1022,14 +1491,23 @@ export default function Home() {
   const [aiFixDraftByCheckId, setAiFixDraftByCheckId] = useState<Record<string, string>>({});
   const [aiFixCopied, setAiFixCopied] = useState(false);
   const [aiFixError, setAiFixError] = useState("");
+  const [isComparingLocalReviews, setIsComparingLocalReviews] = useState(false);
+  const [localReviewCompareError, setLocalReviewCompareError] = useState("");
+  const [localReviewCompareByCheckId, setLocalReviewCompareByCheckId] = useState<Record<string, LocalReviewCompareResult>>({});
   const [partialLoadingMessageIndex, setPartialLoadingMessageIndex] = useState(0);
+  const [previousScanResult, setPreviousScanResult] = useState<ScanResponse | null>(null);
   const [collapsedPainGroups, setCollapsedPainGroups] = useState<Partial<Record<PainLevel, boolean>>>({});
   const [isHydratingSharedReport, setIsHydratingSharedReport] = useState(() => Boolean(getReportIdFromPathname(pathname ?? "")));
+  const [engagementIssueClicks, setEngagementIssueClicks] = useState(0);
+  const [hasShownEngagementPrompt, setHasShownEngagementPrompt] = useState(false);
+  const [hasClosedSecondIssue, setHasClosedSecondIssue] = useState(false);
+  const [secondIssueCloseScrollY, setSecondIssueCloseScrollY] = useState<number | null>(null);
   const scanRequestRef = useRef(0);
   const loadingStartRef = useRef<number | null>(null);
   const reportSectionRef = useRef<HTMLElement | null>(null);
   const capturedAuditReportsRef = useRef<Set<string>>(new Set());
   const hydratedFromSavedReportRef = useRef(false);
+  const previousFlippedCardIdRef = useRef<string | null>(null);
   const saveAuditSessionRef = useRef<((leadEmail?: string, options?: SaveAuditSessionOptions) => Promise<{ stored: boolean; emailSent: boolean; email: string }>) | null>(null);
   const slowScanCapturedEmailRef = useRef("");
 
@@ -1064,7 +1542,8 @@ export default function Home() {
 
   const currentQuestion = questionsComplete ? null : GUIDED_QUESTIONS[questionIndex] ?? null;
 
-  const letterGrade = scoreToLetterGrade(displayScore);
+  const finalScore = scanResult?.score ?? 0;
+  const letterGrade = scoreToLetterGrade(finalScore);
   const displayReportUrl = useMemo(() => formatDisplayUrl(reportUrl), [reportUrl]);
   const emailInputError = !isReportUnlocked ? leadNotice : "";
   const activeCheckCta = useMemo(() => getCheckCtaForStatus(activeCheck), [activeCheck]);
@@ -1072,11 +1551,16 @@ export default function Home() {
     () => Boolean(activeCheck && WRITING_HEAVY_CHECK_IDS.has(activeCheck.id)),
     [activeCheck],
   );
+  const activeCheckNeedsCompareIntent = useMemo(
+    () => Boolean(activeCheck && COMPETITOR_COMPARE_INTENT_CHECK_IDS.has(activeCheck.id)),
+    [activeCheck],
+  );
   const activeCheckDirectFix = useMemo(() => {
     if (!activeCheck) {
       return "";
     }
-    return (
+
+    return condenseFixCopy(
       CHECK_DIRECT_FIX_BY_ID[activeCheck.id] ??
       "Prioritize this issue in your next sprint, implement the smallest high-impact change first, then re-run the audit."
     );
@@ -1096,7 +1580,7 @@ export default function Home() {
     );
   }, [activeCheck]);
 
-  const showFixContent = isReportUnlocked;
+  const showFixContent = true;
 
   const shareLink = useMemo(() => {
     if (typeof window === "undefined" || !reportId) {
@@ -1200,8 +1684,15 @@ export default function Home() {
       }
 
       const nextDraft = payload.fix.trim();
-      setAiFixDraftByCheckId((prev) => ({ ...prev, [activeCheck.id]: nextDraft }));
-      await saveAuditSessionRef.current?.(undefined, { sendEmailCopy: false });
+      const nextAiFixDraftByCheckId = {
+        ...aiFixDraftByCheckId,
+        [activeCheck.id]: nextDraft,
+      };
+      setAiFixDraftByCheckId(nextAiFixDraftByCheckId);
+      await saveAuditSessionRef.current?.(undefined, {
+        sendEmailCopy: false,
+        aiFixDraftByCheckIdOverride: nextAiFixDraftByCheckId,
+      });
     } catch (error) {
       setAiFixError(error instanceof Error ? error.message : "Unable to generate AI fix right now.");
     } finally {
@@ -1209,9 +1700,51 @@ export default function Home() {
     }
   }, [activeCheck, aiFixDraftByCheckId, isGeneratingAiFix, reportUrl, scanResult]);
 
+  const triggerCompetitorCompareIntent = useCallback(async () => {
+    if (!activeCheck || activeCheck.id !== "local-review-competitiveness") {
+      return;
+    }
+
+    if (!reportUrl || isComparingLocalReviews || localReviewCompareByCheckId[activeCheck.id]) {
+      return;
+    }
+
+    setIsComparingLocalReviews(true);
+    setLocalReviewCompareError("");
+
+    try {
+      const response = await fetch("/api/local-review-compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: reportUrl, reportId }),
+      });
+
+      const payload = (await response.json()) as LocalReviewCompareResult | { message?: string };
+      if (!response.ok || !("subject" in payload)) {
+        throw new Error("message" in payload ? (payload.message ?? "Unable to compare local reviews right now.") : "Unable to compare local reviews right now.");
+      }
+
+      const nextLocalReviewCompareByCheckId = {
+        ...localReviewCompareByCheckId,
+        [activeCheck.id]: payload,
+      };
+
+      setLocalReviewCompareByCheckId(nextLocalReviewCompareByCheckId);
+      await saveAuditSessionRef.current?.(undefined, {
+        sendEmailCopy: false,
+        localReviewCompareByCheckIdOverride: nextLocalReviewCompareByCheckId,
+      });
+    } catch (error) {
+      setLocalReviewCompareError(error instanceof Error ? error.message : "Unable to compare local reviews right now.");
+    } finally {
+      setIsComparingLocalReviews(false);
+    }
+  }, [activeCheck, isComparingLocalReviews, localReviewCompareByCheckId, reportId, reportUrl]);
+
   useEffect(() => {
     setAiFixError("");
     setAiFixCopied(false);
+    setLocalReviewCompareError("");
   }, [activeCheck?.id]);
 
   const generatePdfReport = useCallback(async () => {
@@ -1396,7 +1929,10 @@ export default function Home() {
         reportId: nextReportId,
         reportUrl,
         scanResult,
-        aiFixDraftByCheckId,
+        aiFixDraftByCheckId: options?.aiFixDraftByCheckIdOverride ?? aiFixDraftByCheckId,
+        localReviewCompareByCheckId:
+          options?.localReviewCompareByCheckIdOverride ?? localReviewCompareByCheckId,
+        previousScanResult: previousScanResult || undefined,
         answers,
         name,
         propertyName,
@@ -1453,7 +1989,9 @@ export default function Home() {
       emailConfirmation,
       hubspotContactId,
       isTradeshowMode,
+      localReviewCompareByCheckId,
       name,
+      previousScanResult,
       propertyName,
       reportId,
       reportUrl,
@@ -1489,6 +2027,7 @@ export default function Home() {
       if (requestId !== scanRequestRef.current) {
         return;
       }
+      setPreviousScanResult(scanResult);
       setScanResult(payload);
       setReportUrl(payload.url);
     } catch (error) {
@@ -1573,7 +2112,12 @@ export default function Home() {
     setIsContactSearchOpen(false);
     setSelectedContactWebsite("");
     setAiFixDraftByCheckId({});
+    setLocalReviewCompareByCheckId({});
     setFlippedCardId(null);
+    setEngagementIssueClicks(0);
+    setHasShownEngagementPrompt(false);
+    setHasClosedSecondIssue(false);
+    setSecondIssueCloseScrollY(null);
     setIsReportUnlocked(isTradeshowMode);
     hydratedFromSavedReportRef.current = false;
     loadingStartRef.current = null;
@@ -1614,13 +2158,20 @@ export default function Home() {
     setReportUrl(snapshot.reportUrl);
     setScanResult(snapshot.scanResult);
     setAiFixDraftByCheckId(snapshot.aiFixDraftByCheckId ?? {});
+    setLocalReviewCompareByCheckId(snapshot.localReviewCompareByCheckId ?? {});
+    setPreviousScanResult(snapshot.previousScanResult ?? null);
     setAnswers(snapshot.answers);
     setName(snapshot.name);
     setPropertyName(snapshot.propertyName);
     setEmail(snapshot.email);
     setEmailConfirmation(snapshot.emailConfirmation);
     setDemoMode(snapshot.demoMode);
-    setIsReportUnlocked(Boolean(snapshot.email) || Boolean(snapshot.demoMode) || isTradeshowMode);
+    const unlocked = Boolean(snapshot.email) || Boolean(snapshot.demoMode) || isTradeshowMode;
+    setIsReportUnlocked(unlocked);
+    setEngagementIssueClicks(0);
+    setHasShownEngagementPrompt(unlocked);
+    setHasClosedSecondIssue(false);
+    setSecondIssueCloseScrollY(null);
     syncReportPath(snapshot.reportId);
     setStep("report");
   }, [isTradeshowMode, syncReportPath]);
@@ -1803,21 +2354,31 @@ export default function Home() {
   }, [demoMode, reportId, reportUrl, saveAuditSession, scanResult, step]);
 
   useEffect(() => {
-    if (step !== "partial" && step !== "report") {
+    if (step !== "report") {
       return;
     }
-    let frame = 0;
-    const totalFrames = 36;
-    const interval = window.setInterval(() => {
-      frame += 1;
-      const nextValue = Math.round(((scanResult?.score ?? 0) * frame) / totalFrames);
-      setDisplayScore(nextValue);
-      if (frame >= totalFrames) {
-        window.clearInterval(interval);
-        setDisplayScore(scanResult?.score ?? 0);
+    const targetScore = scanResult?.score ?? 0;
+    const durationMs = 950;
+    const startedAt = performance.now();
+    let raf = 0;
+
+    setDisplayScore(0);
+
+    const tick = (now: number) => {
+      const elapsed = now - startedAt;
+      const progress = Math.min(elapsed / durationMs, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplayScore(Math.round(targetScore * eased));
+
+      if (progress < 1) {
+        raf = window.requestAnimationFrame(tick);
+      } else {
+        setDisplayScore(targetScore);
       }
-    }, 26);
-    return () => window.clearInterval(interval);
+    };
+
+    raf = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(raf);
   }, [scanResult?.score, step]);
 
   const submitLead = async () => {
@@ -1862,6 +2423,7 @@ export default function Home() {
           : "Lead capture is connected, but HubSpot credentials are not configured yet.",
       );
       setIsReportUnlocked(true);
+      setHasShownEngagementPrompt(true);
       setPendingProtectedAction(null);
       setStep("report");
       if (actionToRun) {
@@ -1878,6 +2440,7 @@ export default function Home() {
       );
       setLeadNotice(error instanceof Error ? error.message : "Lead capture failed.");
       setIsReportUnlocked(true);
+      setHasShownEngagementPrompt(true);
       setPendingProtectedAction(null);
       setStep("report");
       if (actionToRun) {
@@ -1957,7 +2520,68 @@ export default function Home() {
     setPendingProtectedAction(action);
   }, [isReportUnlocked, performProtectedAction]);
 
-  const visibleChecks = scanResult?.checks ?? [];
+  const openCheckDetails = useCallback((checkId: string) => {
+    setFlippedCardId(checkId);
+    if (!isReportUnlocked) {
+      setEngagementIssueClicks((value) => value + 1);
+    }
+  }, [isReportUnlocked]);
+
+  useEffect(() => {
+    const wasOpen = previousFlippedCardIdRef.current !== null;
+    const isNowClosed = wasOpen && flippedCardId === null;
+
+    if (isNowClosed && !isReportUnlocked && step === "report" && engagementIssueClicks >= 2 && !hasClosedSecondIssue) {
+      setHasClosedSecondIssue(true);
+      setSecondIssueCloseScrollY(window.scrollY);
+    }
+
+    previousFlippedCardIdRef.current = flippedCardId;
+  }, [engagementIssueClicks, flippedCardId, hasClosedSecondIssue, isReportUnlocked, step]);
+
+  useEffect(() => {
+    if (step !== "report" || isReportUnlocked || hasShownEngagementPrompt) {
+      return;
+    }
+
+    if (engagementIssueClicks < 3 || flippedCardId !== null) {
+      return;
+    }
+
+    setHasShownEngagementPrompt(true);
+    setPendingProtectedAction((existing) => existing ?? "share");
+  }, [engagementIssueClicks, flippedCardId, hasShownEngagementPrompt, isReportUnlocked, step]);
+
+  useEffect(() => {
+    if (step !== "report" || isReportUnlocked || hasShownEngagementPrompt) {
+      return;
+    }
+
+    const handleScroll = () => {
+      const scrollableHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (scrollableHeight <= 0) {
+        return;
+      }
+
+      const scrollPct = (window.scrollY / scrollableHeight) * 100;
+      const hasBrowsedAfterSecondClose =
+        hasClosedSecondIssue && secondIssueCloseScrollY !== null && Math.abs(window.scrollY - secondIssueCloseScrollY) >= 120;
+
+      if ((scrollPct >= 50 || hasBrowsedAfterSecondClose) && flippedCardId === null) {
+        setHasShownEngagementPrompt(true);
+        setPendingProtectedAction((existing) => existing ?? "share");
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [flippedCardId, hasClosedSecondIssue, hasShownEngagementPrompt, isReportUnlocked, secondIssueCloseScrollY, step]);
+
+  const visibleChecks = (scanResult?.checks ?? []).filter(
+    (check) => !(check.id === "abandonment-recovery-readiness" && check.status === "unknown"),
+  );
 
   const detailedPainGroups = PAIN_LEVEL_ORDER.map((painLevel) => ({
     painLevel,
@@ -2377,7 +3001,7 @@ export default function Home() {
                   <button type="button" onClick={resetToLandingPage} className="inline-flex cursor-pointer items-center" aria-label="Back to ParkGrader start page">
                     <Image src={PARKGRADER_LOGO} alt="ParkGrader" width={181} height={32} className="h-8 w-auto" />
                   </button>
-                  <div className="print-hidden flex flex-wrap items-center justify-end gap-1 text-right text-[#0A1628]">
+                  <div className={`print-hidden flex flex-wrap items-center justify-end gap-1 text-right text-[#0A1628] ${isReportUnlocked ? "" : "opacity-80"}`}>
                     <button
                       type="button"
                       onClick={() => requestProtectedAction("share")}
@@ -2433,7 +3057,7 @@ export default function Home() {
                       <motion.path
                         d="M 20 128 A 100 100 0 0 1 220 128"
                         fill="none"
-                        stroke={displayScore >= 75 ? "#16A34A" : displayScore >= 50 ? "#D97706" : "#DC2626"}
+                        stroke={finalScore >= 75 ? "#16A34A" : finalScore >= 50 ? "#D97706" : "#DC2626"}
                         strokeWidth="16"
                         strokeLinecap="round"
                         initial={{ pathLength: 0 }}
@@ -2465,10 +3089,10 @@ export default function Home() {
                         y="100"
                         textAnchor="middle"
                         dominantBaseline="middle"
-                        fontSize="60"
+                        fontSize={letterGrade.length > 1 ? "56" : "72"}
                         fontFamily="ParkGraderGoogleSansGrade"
                         fontWeight="700"
-                        fill={displayScore >= 75 ? "#16A34A" : displayScore >= 50 ? "#D97706" : "#DC2626"}
+                        fill={finalScore >= 75 ? "#16A34A" : finalScore >= 50 ? "#D97706" : "#DC2626"}
                       >{letterGrade}</text>
                     </svg>
                     </div>
@@ -2478,6 +3102,51 @@ export default function Home() {
 
                 {isTradeshowMode ? (
                   <p className="print-hidden mt-6 text-center text-xs uppercase tracking-[0.12em] text-[#5B6776]">Tradeshow mode enabled</p>
+                ) : null}
+
+                {previousScanResult ? (
+                  <motion.div
+                    className="mt-8 border border-[#E6EBF0] bg-white p-5"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">Score comparison</p>
+                    <div className="mt-3 flex items-center gap-4">
+                      <span className="text-2xl font-medium text-[#94A3B8]">{previousScanResult.score}</span>
+                      <ArrowRightIcon className="h-5 w-5 text-[#94A3B8]" aria-hidden="true" />
+                      <span className={`text-2xl font-medium ${scanResult.score > previousScanResult.score ? "text-[#16A34A]" : scanResult.score < previousScanResult.score ? "text-[#DC2626]" : "text-[#0A1628]"}`}>
+                        {scanResult.score}
+                      </span>
+                      <span className={`text-base ${scanResult.score > previousScanResult.score ? "text-[#16A34A]" : scanResult.score < previousScanResult.score ? "text-[#DC2626]" : "text-[#5B6776]"}`}>
+                        {scanResult.score > previousScanResult.score
+                          ? `+${scanResult.score - previousScanResult.score} points`
+                          : scanResult.score < previousScanResult.score
+                            ? `${scanResult.score - previousScanResult.score} points`
+                            : "No change"}
+                      </span>
+                    </div>
+                    {(() => {
+                      const prevFailIds = new Set(previousScanResult.checks.filter((c) => c.status === "fail").map((c) => c.id));
+                      const nowPassIds = scanResult.checks.filter((c) => c.status === "pass" && prevFailIds.has(c.id)).map((c) => c.id);
+                      const prevPassIds = new Set(previousScanResult.checks.filter((c) => c.status === "pass").map((c) => c.id));
+                      const nowFailIds = scanResult.checks.filter((c) => c.status === "fail" && prevPassIds.has(c.id)).map((c) => c.id);
+                      if (nowPassIds.length === 0 && nowFailIds.length === 0) return null;
+                      return (
+                        <div className="mt-3 space-y-1">
+                          {nowPassIds.map((id) => (
+                            <p key={id} className="text-sm text-[#16A34A]">
+                              + {CHECK_DISPLAY_LABEL_BY_ID[id] ?? id} now passing
+                            </p>
+                          ))}
+                          {nowFailIds.map((id) => (
+                            <p key={id} className="text-sm text-[#DC2626]">
+                              - {CHECK_DISPLAY_LABEL_BY_ID[id] ?? id} now failing
+                            </p>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </motion.div>
                 ) : null}
 
                 <div className="relative mt-12">
@@ -2506,12 +3175,12 @@ export default function Home() {
                           <motion.article
                             key={check.id}
                             className="flip-card group relative flex min-h-[220px] flex-col cursor-pointer transition-shadow md:aspect-square md:min-h-0"
-                            onClick={() => setFlippedCardId(check.id)}
+                            onClick={() => openCheckDetails(check.id)}
                             initial={{ opacity: 0, y: 12 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: index * 0.04 }}
                           >
-                            <div className={`flex h-full flex-col border border-[#E6EBF0] bg-[#fafcfd] p-5 md:p-6 ${
+                            <div className={`flex h-full flex-col border border-[#E6EBF0] bg-[#FEFFFF] p-5 md:p-6 ${
                               check.status === "pass"
                                 ? "border-t-[3px] border-t-[#2DA4A9]"
                                 : check.status === "fail"
@@ -2524,14 +3193,27 @@ export default function Home() {
                                   <span>{getCheckDisplayLabel(check)}</span>
                                 </p>
                               </div>
-                              <p className="mt-5 text-lg leading-8 text-[#0A1628]">{check.finding}</p>
+                              <p className="mt-5 text-lg font-medium leading-8 text-[#0A1628]">{getCheckHeadline(check)}</p>
+                              {check.estimatedImpact ? (
+                                <>
+                                  <p className="mt-3 text-base leading-7 text-[#5B6776]">{check.estimatedImpact.replace(/^Estimated impact:\s*/i, "")}</p>
+                                  <p className="mt-3 text-left">
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openCheckDetails(check.id);
+                                      }}
+                                      className="cursor-pointer text-base font-medium text-[#2DA4A9] underline transition-colors"
+                                    >
+                                      {check.status === "pass" ? "Why this matters" : "How do I fix this?"}
+                                    </button>
+                                  </p>
+                                </>
+                              ) : null}
                               <div className="mt-auto flex items-center justify-between gap-3 pt-4">
-                                <div className="flex items-center gap-2 text-[#9AA9B5] transition-colors group-hover:text-[#2DA4A9]">
-                                  <ArrowRightIcon className="flip-hint-icon h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                                  <span className="text-[10px] uppercase tracking-[0.08em]">
-                                    {check.status === "fail" ? "Open fix details" : "Open benefit details"}
-                                  </span>
-                                </div>
+                                {(() => { const footerMeta = getCheckFooterMeta(check); return footerMeta ? <span className="text-[11px] text-[#94A3B8]">{footerMeta}</span> : <span />; })()}
+                                <ArrowRightIcon className="flip-hint-icon h-4 w-4 shrink-0 text-[#9AA9B5] transition-colors group-hover:text-[#2DA4A9]" aria-hidden="true" />
                               </div>
                             </div>
                           </motion.article>
@@ -2828,19 +3510,38 @@ export default function Home() {
                               <div className="pr-10">
                                 <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">{getCheckDisplayLabel(activeCheck)}</p>
                               </div>
-                              <p className="mt-3 text-xl leading-8 text-[#0A1628]">{activeCheck.finding}</p>
+                              <p className="mt-3 text-xl font-medium leading-8 text-[#0A1628]">{getCheckHeadline(activeCheck)}</p>
                             </>
                           ) : null}
                           {showFixContent ? (
-                            <div className="mt-5 border-t border-[#E6EBF0] pt-4">
-                              <p className="text-[11px] uppercase tracking-[0.1em] text-[#94A3B8]">
-                                {activeCheck.status === "pass" ? "How this helps you" : "How to fix it"}
-                              </p>
-                              <p className="mt-2 text-base leading-7 text-[#5B6776]">
+                            <div className="mt-5">
+                              <p className="text-base leading-7 text-[#5B6776]">
                                 {activeCheck.status === "pass" ? activeCheckBenefit : activeCheckDirectFix}
                               </p>
+                
+                              {activeCheck.id === "pagespeed-mobile" && scanResult?.pageSpeedReportUrl ? (
+                                <a
+                                  href={scanResult.pageSpeedReportUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mt-6 inline-block text-sm font-medium text-[#2DA4A9] underline transition-colors hover:text-[#24858A]"
+                                >
+                                  View full PageSpeed report
+                                </a>
+                              ) : null}
 
-                              {isReportUnlocked && activeCheckNeedsAi ? (
+                              {activeCheck.id === "response-time" ? (
+                                <a
+                                  href="https://squoosh.app"
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mt-6 inline-block text-sm font-medium text-[#2DA4A9] underline transition-colors hover:text-[#24858A]"
+                                >
+                                  Try Squoosh to compress images
+                                </a>
+                              ) : null}
+
+                              {activeCheckNeedsAi ? (
                                 <>
                                   {(() => {
                                     const draft = activeCheck ? (aiFixDraftByCheckId[activeCheck.id] ?? "") : "";
@@ -2868,14 +3569,48 @@ export default function Home() {
                                           type="button"
                                           onClick={() => void generateAiFix()}
                                           disabled={isGeneratingAiFix}
-                                          className="ai-generate-button inline-flex items-center justify-center px-4 py-2 text-xs font-semibold uppercase tracking-[0.06em] text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                          className="inline-block text-sm font-medium text-[#2DA4A9] underline transition-colors hover:text-[#24858A] disabled:cursor-not-allowed disabled:opacity-60"
                                         >
-                                          <span className="ai-generate-button__label">{isGeneratingAiFix ? "Generating..." : "Generate with AI"}</span>
+                                          {isGeneratingAiFix ? "Generating with AI..." : "Generate with AI"}
                                         </button>
                                       </div>
                                     );
                                   })()}
                                 </>
+                              ) : null}
+
+                              {activeCheckNeedsCompareIntent ? (
+                                <div className="mt-4">
+                                  <button
+                                    type="button"
+                                    onClick={() => void triggerCompetitorCompareIntent()}
+                                    disabled={isComparingLocalReviews || Boolean(activeCheck && localReviewCompareByCheckId[activeCheck.id])}
+                                    className="inline-block text-sm font-medium text-[#2DA4A9] underline transition-colors hover:text-[#24858A] disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    {isComparingLocalReviews
+                                      ? "Comparing local competitors..."
+                                      : activeCheck && localReviewCompareByCheckId[activeCheck.id]
+                                        ? "Local comparison generated"
+                                        : "Compare my reviews to local competitors"}
+                                  </button>
+
+                                  {localReviewCompareError ? (
+                                    <p className="mt-2 text-base text-[#B42318]">{localReviewCompareError}</p>
+                                  ) : null}
+
+                                  {activeCheck && localReviewCompareByCheckId[activeCheck.id] ? (
+                                    <div className="mt-3 border border-[#E6EBF0] bg-white p-3">
+                                      <p className="text-base leading-7 text-[#0A1628]">
+                                        You are at {localReviewCompareByCheckId[activeCheck.id].subject.rating ?? "N/A"} stars with {localReviewCompareByCheckId[activeCheck.id].subject.reviewCount} reviews. Nearby competitors average {localReviewCompareByCheckId[activeCheck.id].benchmark.averageRating} stars with {localReviewCompareByCheckId[activeCheck.id].benchmark.averageReviewCount} reviews.
+                                      </p>
+                                      <p className="mt-2 text-base leading-7 text-[#5B6776]">
+                                        {localReviewCompareByCheckId[activeCheck.id].benchmark.reviewGap > 0
+                                          ? `You need about ${localReviewCompareByCheckId[activeCheck.id].benchmark.reviewGap} more reviews to match that local average (~${localReviewCompareByCheckId[activeCheck.id].benchmark.weeklyTarget}/week for 12 months).`
+                                          : "You are currently at or above the nearby review-volume average."}
+                                      </p>
+                                    </div>
+                                  ) : null}
+                                </div>
                               ) : null}
                             </div>
                           ) : null}

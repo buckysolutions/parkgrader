@@ -27,6 +27,8 @@ type Check = {
   effort: Effort;
   impact: Impact;
   serviceKey: string;
+  estimatedImpact?: string;
+  benchmark?: string;
 };
 
 type CategoryWeightMap = Record<CheckCategory, number>;
@@ -92,6 +94,91 @@ const industryConfig: Record<IndustryKey, IndustryConfig> = {
   },
 };
 
+const FAIL_IMPACT_BY_CHECK_ID: Partial<Record<string, string>> = {
+  "ssl-valid": "Estimated impact: Security warnings can stop bookings before guests even view the property.",
+  "https-redirect": "Estimated impact: Mixed secure/insecure routing weakens trust at the first click.",
+  "response-time": "Estimated impact: Slow response time can leak high-intent mobile traffic before the site even loads.",
+  "broken-links": "Estimated impact: Dead-end pages make the property feel unmaintained and increase drop-off.",
+  "pagespeed-mobile": "Estimated impact: Slow mobile loading can reduce bookings from guests comparing parks on the road.",
+  "technical-trust-security": "Estimated impact: Weak security and URL trust signals can cause abandonment before guests even browse your park.",
+  "canonical-redirect-hygiene": "Estimated impact: Broken canonical and redirect setup can split traffic and weaken trust from search visitors.",
+  "booking-platform": "Estimated impact: Without a modern booking path, guests are more likely to call later or book elsewhere first.",
+  "booking-engine-health": "Estimated impact: If the booking page is down or slow, ready-to-book guests leave immediately.",
+  "booking-cta": "Estimated impact: If the reserve path is hard to spot, guests may never make it into checkout.",
+  "date-picker-discoverability": "Estimated impact: If guests cannot see dates early, many abandon before trying to book.",
+  "abandonment-recovery-readiness": "Estimated impact: Without recovery tracking, near-bookers disappear with no follow-up path.",
+  "tracking-pixels": "Estimated impact: You lose the ability to bring back visitors who left before booking.",
+  "newsletter-capture": "Estimated impact: You may be missing repeat-booking and nurture opportunities from undecided visitors.",
+  "pet-policy": "Estimated impact: Pet owners may abandon due to uncertainty instead of calling to clarify.",
+  "rv-hookup-specs": "Estimated impact: RV guests may leave when power and hookup details are unclear.",
+  "big-rig-readiness": "Estimated impact: Big-rig guests may skip your park when max length and site type details are missing.",
+  "wifi-quality-claims": "Estimated impact: Remote workers and families may avoid booking when Wi-Fi quality is unclear.",
+  "arrival-directions-clarity": "Estimated impact: Missing arrival guidance can lead to stressful arrivals and bad first impressions.",
+  "ev-extra-vehicle-policy": "Estimated impact: Missing EV and extra-vehicle rules can create pre-booking hesitation and support load.",
+  "amenities-page": "Estimated impact: Guests may not see enough value to justify your rate or location.",
+  "rate-page": "Estimated impact: Hidden pricing increases bounce from shoppers who just want to self-qualify quickly.",
+  "cancellation-policy": "Estimated impact: Unclear refund rules create hesitation for advance planners and families.",
+  "photo-gallery-quality": "Estimated impact: Weak visuals make it harder for guests to imagine the stay and trust the value.",
+  "accessibility-statement": "Estimated impact: Guests with accessibility needs may leave rather than risk uncertainty.",
+  "meta-title": "Estimated impact: Searchers may skip your listing if they cannot instantly identify what and where you are.",
+  "meta-description": "Estimated impact: Weak search copy lowers click quality from Google and maps traffic.",
+  "gbp-sync": "Estimated impact: Below-baseline map presence can suppress local discovery and trust.",
+  "local-review-competitiveness": "Estimated impact: If review strength lags nearby competitors, guests may choose another park first.",
+  "social-presence": "Estimated impact: Missing social proof makes the property feel less current and less trustworthy.",
+  "listing-signals": "Estimated impact: Limited listing presence means fewer discovery paths before guests ever reach your site.",
+  "facebook-link": "Estimated impact: Broken profile links create trust leakage and wasted clicks.",
+  "mobile-viewport": "Estimated impact: A poor phone layout can cause immediate abandonment from mobile guests.",
+  "mobile-tap-targets": "Estimated impact: Hard-to-tap buttons on phones create friction right before booking actions.",
+  "header-phone": "Estimated impact: Guests ready to call may bounce if they cannot connect in one tap.",
+  "phone-conversion-readiness": "Estimated impact: Weak phone-call setup can cost high-intent guests who prefer calling first.",
+  "image-count": "Estimated impact: Thin imagery reduces emotional buy-in and lowers conversion confidence.",
+  "listing-completeness": "Estimated impact: Incomplete third-party presence can weaken both discovery and direct-booking confidence.",
+  "rate-transparency": "Estimated impact: Guests may abandon booking due to uncertainty around price fit.",
+  "contact-friction": "Estimated impact: Every extra step or missing contact option increases inquiry drop-off.",
+  "trust-stack-completeness": "Estimated impact: Missing trust signals can increase hesitation before guests commit money.",
+  "local-search-intent-coverage": "Estimated impact: Weak local relevance signals reduce discovery from nearby searchers.",
+  "seasonal-visibility": "Estimated impact: Hidden promotions reduce off-peak demand and urgency.",
+  "visual-storytelling": "Estimated impact: Guests may not emotionally connect with the stay quickly enough to convert.",
+  "visual-proof-relevance": "Estimated impact: Missing core proof photos can leave guests unsure what the stay is really like.",
+  "payment-flexibility": "Estimated impact: Unclear payment options can create final-step hesitation.",
+  "booking-click-depth": "Estimated impact: A long booking path increases drop-off before guests ever see checkout.",
+  "availability-visibility": "Estimated impact: Guests may leave if they cannot check dates and availability early.",
+  "fee-transparency": "Estimated impact: Surprise fees can reduce trust and increase checkout abandonment.",
+  "onsite-guest-proof": "Estimated impact: Without visible guest proof, trust has to be rebuilt from scratch on your site.",
+  "authentic-photography": "Estimated impact: Stock-feeling photography can make the property feel less credible and less memorable.",
+  "structured-data": "Estimated impact: Missing structured data means Google cannot show rich results like ratings, prices, and availability for your property.",
+  "accessibility-score": "Estimated impact: Poor accessibility can exclude guests with disabilities and hurt search rankings.",
+};
+
+const PASS_IMPACT_BY_CHECK_ID: Partial<Record<string, string>> = {
+  "pagespeed-mobile": "Estimated impact: Faster mobile loading supports more confident browsing and more completed bookings.",
+  "booking-cta": "Estimated impact: A clear reserve path keeps high-intent guests moving toward checkout.",
+  "rate-transparency": "Estimated impact: Visible pricing helps guests self-qualify and reduces unnecessary drop-off.",
+  "onsite-guest-proof": "Estimated impact: Visible guest proof builds trust before visitors leave the homepage.",
+  "authentic-photography": "Estimated impact: Real visuals help guests picture the stay and justify the rate faster.",
+};
+
+const getEstimatedImpactForCheck = (check: Check): string => {
+  if (check.status === "pass") {
+    return PASS_IMPACT_BY_CHECK_ID[check.id] ?? "Estimated impact: This healthy signal removes friction and strengthens booking confidence.";
+  }
+
+  if (check.status === "unknown") {
+    return "Estimated impact: This signal is unclear, which means guests may still face avoidable uncertainty.";
+  }
+
+  return FAIL_IMPACT_BY_CHECK_ID[check.id] ?? "Estimated impact: This issue may be creating avoidable booking friction for ready-to-book guests.";
+};
+
+const getDifficultyForCheck = (check: Check): string => {
+  const difficultyMap: Record<string, string> = {
+    Low: "Easy",
+    Medium: "Medium",
+    High: "Hard",
+  };
+  return `Difficulty: ${difficultyMap[check.effort] || "Medium"}`;
+};
+
 const SHARED_PROPERTY_PATTERNS = [
   /\brv park\b/i,
   /\brv resort\b/i,
@@ -142,12 +229,23 @@ const normalizeUrl = (raw: string): string | null => {
   }
 
   try {
-    if (value.startsWith("http://") || value.startsWith("https://")) {
-      return new URL(value).toString();
+    const parsed = value.startsWith("http://") || value.startsWith("https://")
+      ? new URL(value)
+      : new URL(`https://${value}`);
+    const hostname = parsed.hostname.replace(/^www\./i, "").toLowerCase();
+    if (!hostname) {
+      return null;
     }
-    return new URL(`https://${value}`).toString();
+    return hostname;
   } catch {
-    return null;
+    const fallback = value
+      .replace(/^https?:\/\//i, "")
+      .replace(/^www\./i, "")
+      .split(/[/?#]/)[0]
+      .split(":")[0]
+      .trim()
+      .toLowerCase();
+    return fallback || null;
   }
 };
 
@@ -202,6 +300,22 @@ const isLikelyOutdoorHospitalitySite = (input: {
 const extractAnchors = (html: string): string[] => {
   const matches = html.matchAll(/<a[^>]*href=["']([^"']+)["'][^>]*>/gi);
   return Array.from(matches).map((entry) => entry[1]);
+};
+
+const extractFormActions = (html: string): string[] => {
+  const matches = html.matchAll(/<form[^>]*action=["']([^"']+)["'][^>]*>/gi);
+  return Array.from(matches).map((entry) => entry[1]);
+};
+
+const detectTrackingPixels = (html: string): string[] => {
+  return [
+    /fbq\(|connect\.facebook\.net|facebook pixel/i.test(html) ? "Facebook Pixel" : null,
+    /googletagmanager\.com|gtag\(|gtm\.js/i.test(html) ? "Google Tag Manager" : null,
+  ].filter((value): value is string => Boolean(value));
+};
+
+const hasBookingRecoverySignals = (html: string): boolean => {
+  return /begin_checkout|add_payment_info|purchase|booking_complete|reservation_confirmed|thank-you|thank you|conversion/i.test(html);
 };
 
 const extractImages = (html: string): Array<{ width: number | null; src: string }> => {
@@ -381,17 +495,18 @@ const createCheck = (input: {
 
 export async function GET(request: NextRequest) {
   const requestedUrl = request.nextUrl.searchParams.get("url") ?? "";
-  const normalizedUrl = normalizeUrl(requestedUrl);
+  const normalizedHost = normalizeUrl(requestedUrl);
   const industry = getIndustry(request.nextUrl.searchParams.get("industry"));
   const validateOnly = request.nextUrl.searchParams.get("validateOnly") === "true";
   const config = industryConfig[industry];
 
-  if (!normalizedUrl) {
+  if (!normalizedHost) {
     return NextResponse.json({ message: "Please provide a valid URL." }, { status: 400 });
   }
 
   try {
-    const websiteUrl = new URL(normalizedUrl);
+    const canonicalHost = normalizedHost;
+    let websiteUrl = new URL(`https://${canonicalHost}/`);
     const scanStartedAt = performance.now();
     const timingEnabled = process.env.SCAN_DEBUG_TIMING === "true";
     const phaseTimings: Record<string, number> = {};
@@ -406,12 +521,93 @@ export async function GET(request: NextRequest) {
       }
     };
 
+    // Start SSL + HTTP redirect checks immediately (they don't depend on HTML).
+    const httpVersion = new URL(websiteUrl.toString());
+    httpVersion.protocol = "http:";
+    const sslAndRedirectPromise = measure("sslAndRedirectCheck", async () => {
+      return Promise.all([
+        getSslData(websiteUrl.hostname),
+        fetchWithTimeout(httpVersion.toString(), 8000).catch(() => null),
+      ]);
+    });
+
     const fetchStart = performance.now();
-    const homeResponse = await fetchWithTimeout(websiteUrl.toString());
+    let homeResponse: Response;
+    try {
+      homeResponse = await fetchWithTimeout(websiteUrl.toString());
+    } catch (primaryError) {
+      const fallbackUrl = new URL(websiteUrl.toString());
+      fallbackUrl.hostname = `www.${websiteUrl.hostname}`;
+      try {
+        homeResponse = await fetchWithTimeout(fallbackUrl.toString());
+        websiteUrl = fallbackUrl;
+      } catch {
+        throw primaryError;
+      }
+    }
     const responseTimeMs = Math.round(performance.now() - fetchStart);
     if (timingEnabled) {
       phaseTimings.homepageFetch = responseTimeMs;
     }
+
+    // Start PageSpeed immediately after URL is confirmed — it only needs the URL, not HTML.
+    const pageSpeedApiKey = process.env.PAGESPEED_API_KEY?.trim();
+    const pageSpeedReportUrl = `https://pagespeed.web.dev/analysis?url=${encodeURIComponent(websiteUrl.toString())}`;
+
+    const pageSpeedPromise = pageSpeedApiKey
+      ? (async () => {
+          try {
+            const pageSpeedUrl = new URL("https://www.googleapis.com/pagespeedonline/v5/runPagespeed");
+            pageSpeedUrl.searchParams.set("url", websiteUrl.toString());
+            pageSpeedUrl.searchParams.set("strategy", "mobile");
+            pageSpeedUrl.searchParams.set("category", "performance");
+            pageSpeedUrl.searchParams.set("category", "accessibility");
+            pageSpeedUrl.searchParams.set("key", pageSpeedApiKey);
+
+            const pageSpeedResponse = await fetchWithTimeout(pageSpeedUrl.toString(), 20000);
+            const payload = (await pageSpeedResponse.json()) as {
+              lighthouseResult?: {
+                categories?: {
+                  performance?: { score?: number };
+                  accessibility?: { score?: number };
+                };
+                runtimeError?: { message?: string };
+              };
+              error?: { message?: string };
+            };
+
+            if (!pageSpeedResponse.ok) {
+              const normalizedError = normalizePageSpeedError(
+                payload.error?.message ?? `PageSpeed API returned ${pageSpeedResponse.status}.`,
+                pageSpeedResponse.status,
+              );
+              return { score: null, accessibilityScore: null, error: normalizedError.message };
+            }
+
+            const runtimeError = payload.lighthouseResult?.runtimeError?.message;
+            const rawScore = payload.lighthouseResult?.categories?.performance?.score;
+            const rawA11yScore = payload.lighthouseResult?.categories?.accessibility?.score;
+
+            const perfScore = typeof rawScore === "number" && !Number.isNaN(rawScore) ? Math.round(rawScore * 100) : null;
+            const a11yScore = typeof rawA11yScore === "number" && !Number.isNaN(rawA11yScore) ? Math.round(rawA11yScore * 100) : null;
+
+            if (perfScore !== null) {
+              return { score: perfScore, accessibilityScore: a11yScore, error: null };
+            }
+
+            return {
+              score: null,
+              accessibilityScore: a11yScore,
+              error: runtimeError
+                ? `Lighthouse returned error: ${runtimeError}`
+                : "PageSpeed API did not return a usable performance score.",
+            };
+          } catch {
+            return { score: null, accessibilityScore: null, error: "PageSpeed check is taking longer than expected right now." };
+          }
+        })()
+      : Promise.resolve(null);
+
     const html = await homeResponse.text();
     const loweredHtml = html.toLowerCase();
     const title = extractMeta(html, "title");
@@ -440,80 +636,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (validateOnly) {
-      return NextResponse.json({ ok: true, url: websiteUrl.toString() });
+      return NextResponse.json({ ok: true, url: canonicalHost });
     }
-
-    const pageSpeedApiKey = process.env.PAGESPEED_API_KEY;
-    const pageSpeedPromise = pageSpeedApiKey
-      ? (async () => {
-          let lastError = "PageSpeed API request failed.";
-
-          for (let attempt = 0; attempt < 1; attempt += 1) {
-            try {
-              const pageSpeedUrl = new URL("https://www.googleapis.com/pagespeedonline/v5/runPagespeed");
-              pageSpeedUrl.searchParams.set("url", websiteUrl.toString());
-              pageSpeedUrl.searchParams.set("strategy", "mobile");
-              pageSpeedUrl.searchParams.set("category", "performance");
-              pageSpeedUrl.searchParams.set("key", pageSpeedApiKey);
-
-              const pageSpeedResponse = await fetchWithTimeout(pageSpeedUrl.toString(), 25000);
-              const payload = (await pageSpeedResponse.json()) as {
-                lighthouseResult?: {
-                  categories?: { performance?: { score?: number } };
-                  runtimeError?: { message?: string };
-                };
-                error?: { message?: string };
-              };
-
-              if (!pageSpeedResponse.ok) {
-                const normalizedError = normalizePageSpeedError(
-                  payload.error?.message ?? `PageSpeed API returned ${pageSpeedResponse.status}.`,
-                  pageSpeedResponse.status,
-                );
-                lastError = normalizedError.message;
-                if (!normalizedError.shouldRetry) {
-                  break;
-                }
-              } else {
-                const runtimeError = payload.lighthouseResult?.runtimeError?.message;
-                const rawScore = payload.lighthouseResult?.categories?.performance?.score;
-
-                if (typeof rawScore === "number" && !Number.isNaN(rawScore)) {
-                  return {
-                    score: Math.round(rawScore * 100),
-                    error: null,
-                  };
-                }
-
-                if (runtimeError) {
-                  lastError = `Lighthouse returned error: ${runtimeError}`;
-                } else {
-                  lastError = "PageSpeed API did not return a usable performance score.";
-                }
-              }
-            } catch {
-              lastError = "PageSpeed API request failed.";
-            }
-          }
-
-          return {
-            score: null,
-            error: lastError,
-          };
-        })()
-      : Promise.resolve(null);
 
     const links = extractAnchors(html);
     const images = extractImages(html);
 
-    const httpVersion = new URL(websiteUrl.toString());
-    httpVersion.protocol = "http:";
-    const [sslData, httpResponse] = await measure("sslAndRedirectCheck", async () => {
-      return Promise.all([
-        getSslData(websiteUrl.hostname),
-        fetchWithTimeout(httpVersion.toString(), 8000).catch(() => null),
-      ]);
-    });
+    // Await SSL + redirect results (started before homepage fetch).
+    const [sslData, httpResponse] = await sslAndRedirectPromise;
     const redirectedToHttps =
       httpResponse?.url?.startsWith("https://") ||
       httpResponse?.headers.get("location")?.startsWith("https://") ||
@@ -535,33 +665,13 @@ export async function GET(request: NextRequest) {
     const phoneMatch = headerHtml.match(/(\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/);
     const hasClickableHeaderPhone = /href=["']tel:/i.test(headerHtml);
 
-    const trackingPixels = [
-      /fbq\(|connect\.facebook\.net|facebook pixel/i.test(html) ? "Facebook Pixel" : null,
-      /googletagmanager\.com|gtag\(|gtm\.js/i.test(html) ? "Google Tag Manager" : null,
-    ].filter((value): value is string => Boolean(value));
+    const homepageTrackingPixels = detectTrackingPixels(html);
 
     const internalLinks = links
       .filter((href) => isInternalLink(href, websiteUrl))
       .map((href) => new URL(href, websiteUrl).toString());
     const uniqueInternalLinks = Array.from(new Set(internalLinks)).slice(0, 6);
 
-    let brokenCount = 0;
-    await measure("internalLinkScan", async () => {
-      await Promise.all(
-        uniqueInternalLinks.map(async (link) => {
-          try {
-            const response = await fetchWithTimeout(link, 4500);
-            if (!response.ok) {
-              brokenCount += 1;
-            }
-          } catch {
-            brokenCount += 1;
-          }
-        }),
-      );
-    });
-
-    const imageCount = images.length;
     const highQualityImageCount = images.filter((image) => image.width === null || image.width >= 400).length;
     const listingHits = config.listingKeywords.filter((keyword) => loweredHtml.includes(keyword)).length;
 
@@ -575,47 +685,116 @@ export async function GET(request: NextRequest) {
     const cancellationFound = keywordContains(["cancel", "refund", "cancellation policy", "cancellation"]);
     const accessibilityFound = hrefContains(["/accessibility"]) || keywordContains(["accessibility statement", "accessibility"]);
     const newsletterFound = /<input[^>]*type=["']email["']/i.test(html);
+    const bookingLinks = links.filter((href) => /book|reserve|availability|campspot|hipcamp|reserveamerica|roverpass|dockwa|resnexus|newbook|lodgify/i.test(href));
+    const primaryBookingLink = bookingLinks[0] ? new URL(bookingLinks[0], websiteUrl).toString() : null;
+    const canonicalMatch =
+      html.match(/<link[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["'][^>]*>/i) ??
+      html.match(/<link[^>]*href=["']([^"']+)["'][^>]*rel=["']canonical["'][^>]*>/i);
+    let canonicalUrl: URL | null = null;
+    if (canonicalMatch?.[1]) {
+      try {
+        canonicalUrl = new URL(canonicalMatch[1], websiteUrl);
+      } catch {
+        canonicalUrl = null;
+      }
+    }
+    const onsiteGuestProofCount = (html.match(/testimonial|guest review|guest said|what guests say|five-star|5-star|★★★★★|review/gi) || []).length;
+    const onsiteGuestProofVisible = onsiteGuestProofCount >= 2 || /reviewCount|aggregateRating|testimonial/i.test(html);
+    const stockImageCount = images.filter((image) => /unsplash|pexels|shutterstock|istockphoto|stock\.adobe/i.test(image.src)).length;
+
+    const hasDateSignalsOnHomepage = /check[ -]?in|check[ -]?out|arrival|departure|select dates|date picker|availability calendar|search availability/i.test(loweredHtml);
+    const hasTapFriendlyBookingSignal = hasViewport && bookingCallToAction;
+    const hasTapFriendlyCallSignal = hasClickableHeaderPhone;
+    const callIntentSignal = /call now|tap to call|speak with us|call us/i.test(loweredHtml);
+
+    // Structured data detection.
+    const jsonLdBlocks = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>[\s\S]*?<\/script>/gi) ?? [];
+    const jsonLdText = jsonLdBlocks.join(" ").toLowerCase();
+    const hasLocalBusinessSchema = /localbusiness|lodgingbusiness|campground|rv ?park|boatyard|accommoda/i.test(jsonLdText);
+    const hasAggregateRating = /aggregaterating/i.test(jsonLdText);
+    const hasPriceSchema = /offers|pricerange|price/i.test(jsonLdText);
+    const structuredDataScore = [hasLocalBusinessSchema, hasAggregateRating, hasPriceSchema].filter(Boolean).length;
 
     let pageSpeedScore: number | null = null;
     let pageSpeedStatus: CheckStatus = "unknown";
     let pageSpeedFinding = "Unable to verify PageSpeed mobile score.";
-    let pageSpeedDetails = "Enter a PageSpeed API key to benchmark mobile performance accurately.";
+    let pageSpeedDetails = "PageSpeed is taking longer than expected. We can still show the rest of your audit now.";
 
-    // Run PageSpeed, Gemini, Facebook, and map reachability checks in parallel.
-    let geminiWarmthText = "";
-    const geminiApiKey = process.env.GEMINI_API_KEY;
-    const geminiModel = process.env.GEMINI_MODEL ?? "gemini-2.0-flash-lite";
+    // Run PageSpeed, Facebook, and map reachability checks in parallel.
 
-    const runGemini = async (): Promise<string> => {
-      if (!geminiApiKey || loweredHtml.length <= 200) {
-        return "";
-      }
-      const sentimentPrompt = [
-        "Analyze the tone and warmth of this hospitality business homepage copy in one word only.",
-        "Respond with ONLY: 'warm' if personal and welcoming, 'cold' if corporate/stiff, or 'neutral' if balanced.",
-        "Copy:",
-        loweredHtml.slice(0, 5000),
-      ].join("\n\n");
+    const runMapCheck = async (): Promise<boolean> => {
+      if (!mapLink) return false;
       try {
-        const geminiResponse = await fetchWithTimeout(
-          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent?key=${encodeURIComponent(geminiApiKey)}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ text: sentimentPrompt }] }],
-              generationConfig: { temperature: 0.3, maxOutputTokens: 20 },
-            }),
-          },
-          8000,
-        );
-        const geminiPayload = (await geminiResponse.json()) as {
-          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-        };
-        return geminiPayload.candidates?.[0]?.content?.parts?.[0]?.text?.toLowerCase() ?? "";
+        const response = await fetchWithTimeout(new URL(mapLink, websiteUrl).toString(), 6000);
+        return response.ok;
       } catch {
-        return "";
+        return false;
       }
+    };
+
+    const runBookingLandingCheck = async (): Promise<{ html: string; reachable: boolean; responseTimeMs: number | null; statusCode: number | null }> => {
+      if (!primaryBookingLink) return { html: "", reachable: false, responseTimeMs: null, statusCode: null };
+      const startedAt = performance.now();
+      try {
+        const response = await fetchWithTimeout(primaryBookingLink, 7000);
+        const elapsed = Math.round(performance.now() - startedAt);
+        const landingHtml = await response.text();
+        const health = { reachable: response.ok, responseTimeMs: elapsed, statusCode: response.status };
+
+        // Many booking engines only expose conversion tracking after one more in-flow click.
+        const landingBaseUrl = new URL(primaryBookingLink);
+        const nextStepCandidates = [
+          ...extractAnchors(landingHtml),
+          ...extractFormActions(landingHtml),
+        ]
+          .map((href) => {
+            try {
+              return new URL(href, landingBaseUrl).toString();
+            } catch {
+              return null;
+            }
+          })
+          .filter((href): href is string => Boolean(href))
+          .filter((href) => {
+            try {
+              const parsed = new URL(href);
+              return parsed.host === landingBaseUrl.host;
+            } catch {
+              return false;
+            }
+          })
+          .filter((href) => /checkout|book|reserve|availability|guest|payment|confirm|thank|cart|step/i.test(href));
+
+        const nextStepUrl = Array.from(new Set(nextStepCandidates))[0] ?? null;
+        if (!nextStepUrl) {
+          return { ...health, html: landingHtml.toLowerCase() };
+        }
+
+        try {
+          const nextStepResponse = await fetchWithTimeout(nextStepUrl, 5000);
+          const nextStepHtml = await nextStepResponse.text();
+          return { ...health, html: `${landingHtml}\n${nextStepHtml}`.toLowerCase() };
+        } catch {
+          return { ...health, html: landingHtml.toLowerCase() };
+        }
+      } catch {
+        return { html: "", reachable: false, responseTimeMs: null, statusCode: null };
+      }
+    };
+
+    const runBrokenLinkCheck = async (): Promise<number> => {
+      let broken = 0;
+      await Promise.all(
+        uniqueInternalLinks.map(async (link) => {
+          try {
+            const response = await fetchWithTimeout(link, 3000);
+            if (!response.ok) broken += 1;
+          } catch {
+            broken += 1;
+          }
+        }),
+      );
+      return broken;
     };
 
     const runFacebookCheck = async (): Promise<boolean> => {
@@ -628,37 +807,34 @@ export async function GET(request: NextRequest) {
       }
     };
 
-    const runMapCheck = async (): Promise<boolean> => {
-      if (!mapLink) return false;
-      try {
-        const response = await fetchWithTimeout(new URL(mapLink, websiteUrl).toString(), 6000);
-        return response.ok;
-      } catch {
-        return false;
-      }
-    };
-
-    const [pageSpeedResult, geminiResult, facebookReachable, mapReachable] = await Promise.all([
+    const [pageSpeedResult, mapReachable, bookingLandingResult, brokenCount, facebookReachable] = await Promise.all([
       pageSpeedPromise,
-      measure("geminiToneCheck", runGemini),
-      measure("facebookLinkCheck", runFacebookCheck),
       measure("mapLinkCheck", runMapCheck),
+      measure("bookingLandingCheck", runBookingLandingCheck),
+      measure("internalLinkScan", runBrokenLinkCheck),
+      measure("facebookLinkCheck", runFacebookCheck),
     ]);
+    const bookingLandingHtml = bookingLandingResult.html;
+    const bookingHealth = { reachable: bookingLandingResult.reachable, responseTimeMs: bookingLandingResult.responseTimeMs, statusCode: bookingLandingResult.statusCode };
 
-    geminiWarmthText = geminiResult;
-
+    let accessibilityScore: number | null = null;
     if (pageSpeedResult && pageSpeedResult.score !== null) {
       pageSpeedScore = pageSpeedResult.score;
+      accessibilityScore = pageSpeedResult.accessibilityScore ?? null;
       pageSpeedStatus = pageSpeedScore >= 60 ? "pass" : "fail";
-      pageSpeedFinding = `Mobile performance score ${pageSpeedScore}.`;
+      pageSpeedFinding =
+        pageSpeedStatus === "pass"
+          ? "Your site is loading at a healthy speed on phones."
+          : "Your site is loading slower than it should on phones.";
       pageSpeedDetails =
         pageSpeedStatus === "pass"
           ? "Your online experience is loading fast enough for most mobile shoppers."
           : "A slow mobile experience is one of the fastest ways to lose high-intent guests.";
     } else if (pageSpeedApiKey) {
+      accessibilityScore = pageSpeedResult?.accessibilityScore ?? null;
       pageSpeedStatus = "unknown";
-      pageSpeedFinding = "Unable to verify PageSpeed mobile score.";
-      pageSpeedDetails = pageSpeedResult?.error ?? "PageSpeed API did not return a usable result.";
+      pageSpeedFinding = "We could not confirm phone loading speed on this scan.";
+      pageSpeedDetails = pageSpeedResult?.error ?? "PageSpeed check is still warming up. Please run again in a minute for a fresh score.";
     }
 
     const photoWeight = industry === "glamping" ? 2 : 1;
@@ -672,59 +848,80 @@ export async function GET(request: NextRequest) {
     const hasLiveChat = /tidio|intercom|drift|crisp|livechat|zendesk|olark/i.test(html);
     const contactFrictionScore = [phoneInHeader, hasEmailLink, hasBookingForm, hasLiveChat].filter(Boolean).length;
 
-    const gbpPresent = mapReachable && mapLink !== null;
-    const hasHipcampLink = links.some((href) => href.toLowerCase().includes("hipcamp"));
-    const hasCampendiumLink = links.some((href) => href.toLowerCase().includes("campendium"));
-    const hasTheDyrtLink = links.some((href) => href.toLowerCase().includes("thedyrt"));
-    const listingPlatformCount = [hasHipcampLink, hasCampendiumLink, hasTheDyrtLink].filter(Boolean).length;
-    const gbpFieldsEstimate = gbpPresent ? [mapReachable, reviewCount !== null, phoneMatch !== null, description.length > 50].filter(Boolean).length : 0;
-    const listingCompletenessScore = gbpPresent ? gbpFieldsEstimate + listingPlatformCount : 0;
-
     const pricesVisible = ratesFound || /\$[0-9]|from \$|starting at|per night|nightly/i.test(html);
+    const bookingSurface = `${loweredHtml} ${bookingLandingHtml}`;
+    const availabilityVisibleEarly = /check[ -]?in|check[ -]?out|arrival|departure|available dates|availability calendar|select dates|search availability|site type/i.test(bookingSurface);
+    const feesVisibleEarly = /cleaning fee|service fee|booking fee|resort fee|processing fee|taxes and fees|additional fees/i.test(bookingSurface);
+    const bookingClickEstimate = !primaryBookingLink && !bookingCallToAction
+      ? 5
+      : bookingCallToAction && pricesVisible && availabilityVisibleEarly
+        ? 2
+        : bookingCallToAction && (pricesVisible || availabilityVisibleEarly)
+          ? 3
+          : primaryBookingLink
+            ? 4
+            : 5;
     const rateTransparency = pricesVisible ? "pass" : "fail";
 
     const seasonalKeywords = ["early bird", "off-season", "shoulder season", "group rate", "weekly discount", "monthly rate", "special offer", "promo"];
     const hasSeasonalPromo = seasonalKeywords.some((keyword) => loweredHtml.includes(keyword));
-
-    const videoEmbeds = (html.match(/youtube\.com|vimeo\.com|<video/gi) || []).length;
-    const visualAssmtScore = imageCount + (videoEmbeds > 0 ? 1 : 0);
 
     const paymentMethods = [
       /stripe|square\/pay|paypal|apple pay|google pay|amex|visa|mastercard/i.test(html) ? 1 : 0,
       hasClickableHeaderPhone ? 1 : 0,
     ].reduce((sum, val) => sum + val, 0);
 
-    const warmthStatus: CheckStatus = geminiWarmthText.includes("warm") ? "pass" : (geminiWarmthText.includes("cold") || geminiWarmthText.includes("neutral")) ? "fail" : "unknown";
+    const trackingPixels = Array.from(new Set([
+      ...homepageTrackingPixels,
+      ...detectTrackingPixels(bookingLandingHtml),
+    ]));
+    const bookingRecoverySignals = hasBookingRecoverySignals(`${loweredHtml} ${bookingLandingHtml}`);
+    const trustStackScore = [sslData.valid, redirectedToHttps, cancellationFound, onsiteGuestProofVisible].filter(Boolean).length;
+    const visualProofCategoryScore = [
+      /rv site|campsite|cabin interior|glamping tent|slip/i.test(loweredHtml),
+      /bathhouse|restroom|shower|laundry/i.test(loweredHtml),
+      /pool|playground|fire pit|dock|trail|amenities/i.test(loweredHtml),
+      /entrance|welcome sign|map|directions|getting here/i.test(loweredHtml),
+    ].filter(Boolean).length;
+    const scannedHostNormalized = websiteUrl.hostname.replace(/^www\./i, "").toLowerCase();
+    const canonicalHostNormalized = canonicalUrl?.hostname.replace(/^www\./i, "").toLowerCase() ?? null;
+    const canonicalRedirectHealthy = redirectedToHttps && Boolean(
+      canonicalUrl &&
+      canonicalUrl.protocol === "https:" &&
+      canonicalHostNormalized === scannedHostNormalized,
+    );
+    const securitySignals = [sslData.valid, redirectedToHttps, canonicalRedirectHealthy].filter(Boolean).length;
+    const hasMaxLengthInfo = /max(?:imum)?\s*(?:rv|rig|vehicle)?\s*length|up to\s*\d{2,3}\s*(?:ft|feet)|\d{2,3}\s*(?:ft|feet)\s*(?:max|maximum)|rig\s*length/i.test(bookingSurface);
+    const hasSiteTypeInfo = /pull[ -]?through|pullthrough|back[ -]?in|backin/i.test(bookingSurface);
+    const wifiMentioned = /wi-?fi|internet/i.test(loweredHtml);
+    const wifiQualityMentioned = /high[ -]?speed|fast\s*wifi|stream(?:ing)?\s*friendly|remote\s*work|work\s*from\s*(?:camp|rv)|\b\d{2,4}\s*mbps\b|fiber/i.test(loweredHtml);
+    const hasArrivalSection = hrefContains(["/directions", "/getting-here", "/arrival"]) || keywordContains(["directions", "getting here", "arrival instructions", "how to get here"]);
+    const gpsPitfallWarning = /low\s*clearance|bridge\s*clearance|avoid\s+.*road|do not use\s+gps|use\s+main\s+entrance|truck\s*route|rv\s*route/i.test(loweredHtml);
+    const hasEvChargingPolicy = keywordContains(["ev charging", "electric vehicle", "tesla", "level 2 charger", "charging policy", "do not charge from pedestal", "pedestal charging"]);
+    const hasExtraVehiclePolicy = keywordContains(["extra vehicle", "additional vehicle", "second vehicle", "tow vehicle", "extra car", "vehicle fee", "parking pass"]);
 
     const checks: Check[] = [
       createCheck({
-        id: "ssl-valid",
-        name: "SSL certificate",
+        id: "technical-trust-security",
+        name: "Technical trust & security",
         category: "Technical Performance",
-        status: sslData.valid ? "pass" : "fail",
-        finding: sslData.valid
-          ? `Certificate valid for ${sslData.daysUntilExpiry} more days.`
-          : "SSL certificate is invalid or unavailable.",
-        details: sslData.valid
-          ? "Secure browsing is in place across your online experience."
-          : sslData.error ?? "Visitors will see a 'Not Secure' warning in their browser — most people click away immediately without ever seeing your campground.",
+        status: !sslData.valid || !redirectedToHttps
+          ? "fail"
+          : canonicalUrl && !canonicalRedirectHealthy
+            ? "fail"
+            : canonicalUrl
+              ? "pass"
+              : "unknown",
+        finding: `${securitySignals} of 3 trust-and-security signals detected (SSL, HTTPS redirect, canonical alignment).`,
+        details: !sslData.valid || !redirectedToHttps
+          ? "Enable SSL and force all traffic to HTTPS. This is table stakes for bookings and trust."
+          : canonicalUrl && !canonicalRedirectHealthy
+            ? `Canonical ${canonicalUrl.toString()} does not match your preferred secure host.`
+            : canonicalUrl
+              ? "Security and preferred URL setup look aligned."
+              : "SSL and HTTPS redirect are good, but no canonical tag was detected to confirm preferred URL.",
         effort: "Low",
         impact: "High",
-        serviceKey: "ssl",
-      }),
-      createCheck({
-        id: "https-redirect",
-        name: "HTTPS redirect",
-        category: "Technical Performance",
-        status: redirectedToHttps ? "pass" : "fail",
-        finding: redirectedToHttps
-          ? "HTTP requests redirect to HTTPS."
-          : "HTTP does not reliably redirect to HTTPS.",
-        details: redirectedToHttps
-          ? "Guests consistently land on the secure version of your online experience."
-          : "Some visitors type your address without 'https://' — they should land on the secure version automatically, but right now that may not be happening.",
-        effort: "Low",
-        impact: "Medium",
         serviceKey: "ssl",
       }),
       createCheck({
@@ -784,6 +981,25 @@ export async function GET(request: NextRequest) {
         impact: "High",
         serviceKey: "booking_cta",
       }),
+      ...(primaryBookingLink
+        ? [
+            createCheck({
+              id: "booking-engine-health",
+              name: "Booking engine uptime",
+              category: "Booking & Conversion",
+              status: bookingHealth.reachable ? (bookingHealth.responseTimeMs !== null && bookingHealth.responseTimeMs <= 2500 ? "pass" : "unknown") : "fail",
+              finding: bookingHealth.reachable
+                ? `Booking page is reachable${bookingHealth.responseTimeMs !== null ? ` in ${bookingHealth.responseTimeMs}ms` : ""}.`
+                : `Booking page appears unreachable${bookingHealth.statusCode ? ` (status ${bookingHealth.statusCode})` : ""}.`,
+              details: bookingHealth.reachable
+                ? "Guests can reach your booking page right now."
+                : "If your booking page is down, guests leave and book elsewhere. Test this link daily or set uptime alerts.",
+              effort: "Low",
+              impact: "High",
+              serviceKey: "booking_platform",
+            }),
+          ]
+        : []),
       createCheck({
         id: "booking-cta",
         name: "Primary booking CTA",
@@ -797,6 +1013,73 @@ export async function GET(request: NextRequest) {
           : "If a visitor can't quickly find a 'Book Now' button, they'll move on to a competitor who makes it obvious. Don't make people hunt for how to reserve.",
         effort: "Low",
         impact: "High",
+        serviceKey: "booking_cta",
+      }),
+      createCheck({
+        id: "date-picker-discoverability",
+        name: "Date picker discoverability",
+        category: "Booking & Conversion",
+        status: hasDateSignalsOnHomepage ? "pass" : primaryBookingLink ? "fail" : "unknown",
+        finding: hasDateSignalsOnHomepage
+          ? "Date or availability controls appear on the homepage."
+          : primaryBookingLink
+            ? "No clear date or availability controls were found on the homepage."
+            : "Unable to verify date visibility without a booking path.",
+        details: hasDateSignalsOnHomepage
+          ? "Guests can start checking dates without hunting around."
+          : "Show a date picker or a clear 'Check Availability' action near the top of the homepage so guests can start quickly.",
+        effort: "Low",
+        impact: "High",
+        serviceKey: "booking_cta",
+      }),
+      createCheck({
+        id: "booking-click-depth",
+        name: "Booking click depth",
+        category: "Booking & Conversion",
+        status: bookingClickEstimate <= 3 ? "pass" : bookingClickEstimate === 4 ? "unknown" : "fail",
+        finding: `Booking likely takes about ${bookingClickEstimate} clicks from homepage to real checkout progress.`,
+        details:
+          bookingClickEstimate <= 3
+            ? "Your booking path is relatively direct for guests who already want to reserve."
+            : bookingClickEstimate === 4
+              ? "Your booking path is workable, but there is room to reduce steps before guests see real booking progress."
+              : "Once booking takes too many steps, comparison shoppers start dropping out before they ever reach checkout.",
+        effort: "Medium",
+        impact: "High",
+        serviceKey: "booking_cta",
+      }),
+      createCheck({
+        id: "availability-visibility",
+        name: "Availability visible early",
+        category: "Booking & Conversion",
+        status: availabilityVisibleEarly ? "pass" : primaryBookingLink ? "fail" : "unknown",
+        finding: availabilityVisibleEarly
+          ? "Guests can likely see dates or availability early in the booking path."
+          : primaryBookingLink
+            ? "Availability is not clearly visible early in the booking path."
+            : "Unable to verify availability visibility without a reachable booking step.",
+        details: availabilityVisibleEarly
+          ? "Shoppers can quickly confirm fit before investing effort."
+          : "Guests want to know whether you have space before they commit time to forms and date selection.",
+        effort: "Medium",
+        impact: "High",
+        serviceKey: "booking_cta",
+      }),
+      createCheck({
+        id: "fee-transparency",
+        name: "Fee transparency",
+        category: "Booking & Conversion",
+        status: feesVisibleEarly ? "pass" : primaryBookingLink ? "fail" : "unknown",
+        finding: feesVisibleEarly
+          ? "Fee language appears before or during early booking steps."
+          : primaryBookingLink
+            ? "No early fee disclosure was detected before checkout steps."
+            : "Unable to verify fee transparency without a reachable booking step.",
+        details: feesVisibleEarly
+          ? "Guests can evaluate the real price earlier, which supports trust."
+          : "When fees appear late, guests often feel surprised or misled even if the total price is still acceptable.",
+        effort: "Low",
+        impact: "Medium",
         serviceKey: "booking_cta",
       }),
       createCheck({
@@ -814,6 +1097,25 @@ export async function GET(request: NextRequest) {
             : "Without tracking tools, you have no way to remind visitors who almost booked to come back. It's like having a brochure rack with no way to know who picked one up.",
         effort: "Low",
         impact: "Medium",
+        serviceKey: "tracking_pixels",
+      }),
+      createCheck({
+        id: "abandonment-recovery-readiness",
+        name: "Abandonment recovery readiness",
+        category: "Booking & Conversion",
+        status: trackingPixels.length > 0 && bookingRecoverySignals ? "pass" : trackingPixels.length > 0 ? "unknown" : "fail",
+        finding: trackingPixels.length > 0 && bookingRecoverySignals
+          ? "Retargeting pixels and booking-conversion signals were detected."
+          : trackingPixels.length > 0
+            ? "Retargeting pixels detected, but booking-conversion events could not be verified from source scan."
+            : "No reliable abandonment-recovery setup was detected.",
+        details: trackingPixels.length > 0 && bookingRecoverySignals
+          ? "You are better positioned to bring back guests who leave before booking."
+          : trackingPixels.length > 0
+            ? "Some booking vendors fire conversion events via hosted checkout, tag rules, or server-side APIs that are not visible in page source. Confirm begin-checkout and booking-complete events in GA4 DebugView and Meta Test Events."
+            : "Set up tracking for booking-start and booking-complete events so you can run follow-up ads to unfinished bookers.",
+        effort: "Medium",
+        impact: "High",
         serviceKey: "tracking_pixels",
       }),
       createCheck({
@@ -870,6 +1172,74 @@ export async function GET(request: NextRequest) {
         serviceKey: "default",
       }),
       createCheck({
+        id: "big-rig-readiness",
+        name: "Big rig readiness",
+        category: "Outdoor Hospitality Essentials",
+        status: hasMaxLengthInfo && hasSiteTypeInfo ? "pass" : industry === "campground" ? "fail" : "unknown",
+        finding: hasMaxLengthInfo && hasSiteTypeInfo
+          ? "Max-length and pull-through/back-in signals were found."
+          : industry === "campground"
+            ? "Big-rig details are incomplete (max length and/or site type)."
+            : "Big-rig readiness is less critical for this property type.",
+        details: hasMaxLengthInfo && hasSiteTypeInfo
+          ? "Large RV owners can quickly self-qualify before booking."
+          : "Add max rig length and pull-through/back-in details where guests choose sites.",
+        effort: "Low",
+        impact: industry === "campground" ? "High" : "Medium",
+        serviceKey: "default",
+      }),
+      createCheck({
+        id: "wifi-quality-claims",
+        name: "Wi-Fi quality clarity",
+        category: "Outdoor Hospitality Essentials",
+        status: wifiMentioned && wifiQualityMentioned ? "pass" : wifiMentioned ? "unknown" : "fail",
+        finding: wifiMentioned && wifiQualityMentioned
+          ? "Wi-Fi is mentioned with quality/speed context."
+          : wifiMentioned
+            ? "Wi-Fi is mentioned, but quality details are unclear."
+            : "No clear Wi-Fi quality claim was found.",
+        details: wifiMentioned && wifiQualityMentioned
+          ? "Guests can better judge if your internet fits their stay needs."
+          : "Say whether Wi-Fi is streaming-friendly, remote-work ready, or provide a typical speed range.",
+        effort: "Low",
+        impact: "High",
+        serviceKey: "default",
+      }),
+      createCheck({
+        id: "arrival-directions-clarity",
+        name: "Arrival & directions clarity",
+        category: "Outdoor Hospitality Essentials",
+        status: hasArrivalSection && gpsPitfallWarning ? "pass" : hasArrivalSection ? "unknown" : "fail",
+        finding: hasArrivalSection && gpsPitfallWarning
+          ? "Arrival instructions include route cautions."
+          : hasArrivalSection
+            ? "Arrival info exists, but GPS pitfall guidance is unclear."
+            : "No clear arrival directions section was found.",
+        details: hasArrivalSection && gpsPitfallWarning
+          ? "Guests are less likely to arrive frustrated or lost."
+          : "Add a short 'Getting Here' section with GPS warnings, entrance tips, and big-rig-safe routing.",
+        effort: "Low",
+        impact: "Medium",
+        serviceKey: "default",
+      }),
+      createCheck({
+        id: "ev-extra-vehicle-policy",
+        name: "EV + extra-vehicle policy",
+        category: "Outdoor Hospitality Essentials",
+        status: hasEvChargingPolicy && hasExtraVehiclePolicy ? "pass" : hasEvChargingPolicy || hasExtraVehiclePolicy ? "unknown" : "fail",
+        finding: hasEvChargingPolicy && hasExtraVehiclePolicy
+          ? "EV charging and extra-vehicle rules were found."
+          : hasEvChargingPolicy || hasExtraVehiclePolicy
+            ? "Only part of the modern vehicle policy is visible."
+            : "No clear EV charging or extra-vehicle policy was found.",
+        details: hasEvChargingPolicy && hasExtraVehiclePolicy
+          ? "Guests can plan vehicle logistics without calling first."
+          : "Publish clear rules for EV charging and extra vehicles to reduce pre-booking uncertainty.",
+        effort: "Low",
+        impact: "Medium",
+        serviceKey: "default",
+      }),
+      createCheck({
         id: "amenities-page",
         name: "Amenities visibility",
         category: "Outdoor Hospitality Essentials",
@@ -884,22 +1254,6 @@ export async function GET(request: NextRequest) {
         effort: "Low",
         impact: "Medium",
         serviceKey: "photos",
-      }),
-      createCheck({
-        id: "rate-page",
-        name: "Rates or pricing visibility",
-        category: "Outdoor Hospitality Essentials",
-        status: ratesFound ? "pass" : "fail",
-        finding: ratesFound
-          ? "Pricing or rates signals were found."
-          : "No visible pricing or rates signals were found.",
-        details:
-          ratesFound
-            ? "Guests can self-qualify before entering the reservation flow."
-            : "When pricing is hidden, many guests abandon rather than inquire.",
-        effort: "Low",
-        impact: "High",
-        serviceKey: "booking_cta",
       }),
       createCheck({
         id: "cancellation-policy",
@@ -918,18 +1272,18 @@ export async function GET(request: NextRequest) {
         serviceKey: "default",
       }),
       createCheck({
-        id: "photo-gallery-quality",
-        name: "Photo gallery quality",
+        id: "visual-trust",
+        name: "Visual trust",
         category: "Outdoor Hospitality Essentials",
-        status: highQualityImageCount >= 6 ? "pass" : "fail",
-        finding:
-          highQualityImageCount >= 6
-            ? `${highQualityImageCount} strong visual assets were found.`
-            : `Only ${highQualityImageCount} strong visual assets were found.`,
-        details:
-          highQualityImageCount >= 6
-            ? "Your digital presence has enough visual content to support conversion."
-            : "Guests make up their minds in seconds. Without enough photos, you're asking them to imagine what they're paying for — and most won't take that chance.",
+        status: stockImageCount === 0 && highQualityImageCount >= 6 ? "pass" : stockImageCount > 2 || highQualityImageCount < 4 ? "fail" : "unknown",
+        finding: stockImageCount === 0 && highQualityImageCount >= 6
+          ? "Photos appear strong and mostly authentic."
+          : stockImageCount > 2 || highQualityImageCount < 4
+            ? "Visual quality and/or authenticity may be limiting trust."
+            : "Visual trust is decent but could be stronger.",
+        details: stockImageCount === 0 && highQualityImageCount >= 6
+          ? "Guests can picture the real stay with confidence."
+          : "Use more real, property-specific photos of sites, facilities, and amenities in good light.",
         weight: photoWeight,
         effort: "Medium",
         impact: "High",
@@ -1006,6 +1360,23 @@ export async function GET(request: NextRequest) {
         serviceKey: "google_business",
       }),
       createCheck({
+        id: "local-review-competitiveness",
+        name: "Local review competitiveness",
+        category: "Local & Online Visibility",
+        status: reviewCount === null ? "unknown" : reviewCount >= 40 ? "pass" : reviewCount >= 20 ? "unknown" : "fail",
+        finding: reviewCount === null
+          ? "Review count could not be read from this scan."
+          : `Detected about ${reviewCount} Google reviews; benchmark target is 40+ for strong local competitiveness.`,
+        details: reviewCount === null
+          ? "To compare against nearby parks directly, connect a Places API source. This check currently uses an internal benchmark."
+          : reviewCount >= 40
+            ? "Your review volume is likely competitive in many local markets."
+            : "Build fresh Google reviews consistently to improve local trust and map click-through.",
+        effort: "Medium",
+        impact: "High",
+        serviceKey: "google_business",
+      }),
+      createCheck({
         id: "social-presence",
         name: "Social media presence",
         category: "Local & Online Visibility",
@@ -1024,6 +1395,40 @@ export async function GET(request: NextRequest) {
         serviceKey: "social",
       }),
       createCheck({
+        id: "onsite-guest-proof",
+        name: "On-site guest proof",
+        category: "Local & Online Visibility",
+        status: onsiteGuestProofVisible ? "pass" : "fail",
+        finding: onsiteGuestProofVisible
+          ? `Found ${onsiteGuestProofCount} testimonial/review signals on the site.`
+          : "No meaningful on-site guest proof was detected.",
+        details: onsiteGuestProofVisible
+          ? "Guests can see proof from other guests without leaving your site."
+          : "Testimonials, visible reviews, and guest quotes reduce uncertainty before visitors leave for Google or OTAs.",
+        effort: "Low",
+        impact: "High",
+        serviceKey: "social",
+      }),
+      createCheck({
+        id: "facebook-link",
+        name: "Facebook profile reachability",
+        category: "Local & Online Visibility",
+        status: !facebookLink ? "unknown" : facebookReachable ? "pass" : "fail",
+        finding: !facebookLink
+          ? "No Facebook link found to validate."
+          : facebookReachable
+            ? "Facebook profile link is reachable."
+            : "Facebook profile link appears broken or unreachable.",
+        details: !facebookLink
+          ? "Add a working Facebook link to support social trust."
+          : facebookReachable
+            ? "Guests clicking through to your Facebook page will land successfully."
+            : "A broken Facebook link signals neglect. Verify the URL points to your active page.",
+        effort: "Low",
+        impact: "Medium",
+        serviceKey: "social",
+      }),
+      createCheck({
         id: "listing-signals",
         name: "Marketplace listing signals",
         category: "Local & Online Visibility",
@@ -1034,32 +1439,11 @@ export async function GET(request: NextRequest) {
             : "No strong outbound marketplace signals were found.",
         details:
           listingHits > 0
-            ? "Third-party listing presence appears to support discovery."
-            : "If you are not visible where guests browse, your online experience starts behind competitors.",
+            ? "Your site shows signals that suggest marketplace or directory visibility may support discovery."
+            : "We did not find strong directory signals on your site. This does not confirm you are missing from those platforms, but it is worth checking The Dyrt, Campendium, Hipcamp, and similar directories manually.",
         effort: "Low",
         impact: "Medium",
         serviceKey: "google_business",
-      }),
-      createCheck({
-        id: "facebook-link",
-        name: "Facebook link health",
-        category: "Local & Online Visibility",
-        status: facebookLink ? (facebookReachable ? "pass" : "fail") : "unknown",
-        finding:
-          !facebookLink
-            ? "Unable to verify Facebook link health because no Facebook link was found."
-            : facebookReachable
-              ? "Facebook link is reachable."
-              : "Facebook link appears broken.",
-        details:
-          !facebookLink
-            ? "This is informational only and does not count against the score."
-            : facebookReachable
-              ? "Your social profile destination is working."
-              : "Broken social links undermine trust and create dead ends.",
-        effort: "Low",
-        impact: "Low",
-        serviceKey: "social",
       }),
       createCheck({
         id: "mobile-viewport",
@@ -1076,51 +1460,34 @@ export async function GET(request: NextRequest) {
         serviceKey: "mobile",
       }),
       createCheck({
-        id: "header-phone",
-        name: "Clickable header phone",
+        id: "mobile-tap-targets",
+        name: "Mobile tap-target readiness",
         category: "Mobile Experience",
-        status: phoneMatch ? (hasClickableHeaderPhone ? "pass" : "fail") : "fail",
-        finding:
-          !phoneMatch
-            ? "No header phone number was found."
-            : hasClickableHeaderPhone
-              ? "Tap-to-call phone link found in header."
-              : "Header phone number is not tap-to-call.",
-        details:
-          phoneMatch && hasClickableHeaderPhone
-            ? "Guests on mobile can contact you instantly."
-            : "A mobile visitor should never need to copy and paste a phone number to call.",
-        effort: "Low",
+        status: hasTapFriendlyBookingSignal && hasTapFriendlyCallSignal ? "pass" : hasViewport ? "unknown" : "fail",
+        finding: hasTapFriendlyBookingSignal && hasTapFriendlyCallSignal
+          ? "Phone users have tap-friendly booking and call actions."
+          : hasViewport
+            ? "Some key phone actions are present, but tap readiness is incomplete."
+            : "Phone layout issues likely make tapping core actions harder.",
+        details: hasTapFriendlyBookingSignal && hasTapFriendlyCallSignal
+          ? "Guests on phones can act quickly without zooming around."
+          : "Make your Book and Call actions large, clear, and easy to tap on phones, especially near the top of the page.",
+        effort: "Medium",
         impact: "High",
         serviceKey: "mobile",
       }),
       createCheck({
-        id: "image-count",
-        name: "Homepage image count",
+        id: "phone-conversion-readiness",
+        name: "Phone conversion readiness",
         category: "Mobile Experience",
-        status: imageCount >= 3 ? "pass" : "fail",
-        finding: `Homepage includes ${imageCount} images.`,
-        details:
-          imageCount >= 3
-            ? "There is at least a baseline amount of visual content."
-            : "Too little visual content can make the online experience feel thin and unconvincing.",
-        effort: "Medium",
-        impact: "Medium",
-        serviceKey: "photos",
-      }),
-      createCheck({
-        id: "listing-completeness",
-        name: "Listing completeness score",
-        category: "Booking Psychology",
-        status: listingCompletenessScore >= 4 ? "pass" : listingCompletenessScore >= 2 ? "unknown" : "fail",
-        finding: `${listingCompletenessScore} of 6 signals detected (GBP + 3 platforms).`,
-        details: 
-          listingCompletenessScore >= 4
-            ? "Strong presence across booking platforms means ready-to-book guests can easily find you."
-            : "List on Hipcamp, Campendium, and The Dyrt in addition to your Google Business Profile for maximum visibility.",
+        status: [Boolean(phoneMatch), hasClickableHeaderPhone, callIntentSignal].filter(Boolean).length >= 2 ? "pass" : [Boolean(phoneMatch), hasClickableHeaderPhone, callIntentSignal].filter(Boolean).length === 1 ? "unknown" : "fail",
+        finding: `${[Boolean(phoneMatch), hasClickableHeaderPhone, callIntentSignal].filter(Boolean).length} of 3 phone-conversion signals detected.`,
+        details: [Boolean(phoneMatch), hasClickableHeaderPhone, callIntentSignal].filter(Boolean).length >= 2
+          ? "Guests who prefer calling have a clear and easy path to contact you."
+          : "Place a tap-to-call number high on the page and add clear call language like 'Call now for same-day availability.'",
         effort: "Low",
         impact: "High",
-        serviceKey: "listing_signals",
+        serviceKey: "mobile",
       }),
       createCheck({
         id: "rate-transparency",
@@ -1150,21 +1517,17 @@ export async function GET(request: NextRequest) {
         serviceKey: "booking_cta",
       }),
       createCheck({
-        id: "communication-warmth",
-        name: "Communication warmth",
+        id: "trust-stack-completeness",
+        name: "Trust stack completeness",
         category: "Booking Psychology",
-        status: warmthStatus,
-        finding: warmthStatus === "pass" 
-          ? "Homepage copy feels personal and welcoming."
-          : warmthStatus === "fail"
-            ? "Homepage copy feels corporate or generic."
-            : "Homepage copy tone could not be determined — review for warmth.",
-        details: warmthStatus === "pass"
-          ? "Personal, warm copy makes guests feel like they'll belong at your property."
-          : "Swap generic boilerplate for stories, guest testimonials, or personal touches from your team.",
-        effort: "Medium",
-        impact: "Medium",
-        serviceKey: "meta_description",
+        status: trustStackScore >= 3 ? "pass" : trustStackScore === 2 ? "unknown" : "fail",
+        finding: `${trustStackScore} of 4 trust signals detected (SSL, secure redirect, cancellation policy, guest proof).`,
+        details: trustStackScore >= 3
+          ? "Guests can see enough trust cues to feel safer booking."
+          : "Add trust basics in visible spots: secure site setup, clear cancellation policy, and recent guest proof.",
+        effort: "Low",
+        impact: "High",
+        serviceKey: "booking_cta",
       }),
       createCheck({
         id: "seasonal-visibility",
@@ -1180,15 +1543,14 @@ export async function GET(request: NextRequest) {
         serviceKey: "rates",
       }),
       createCheck({
-        id: "visual-storytelling",
-        name: "Visual storytelling",
+        id: "visual-proof-relevance",
+        name: "Visual coverage",
         category: "Booking Psychology",
-        status: visualAssmtScore >= 5 ? "pass" : visualAssmtScore >= 3 ? "unknown" : "fail",
-        finding: `${imageCount} images and ${videoEmbeds} video(s) found.`,
-        details: 
-          visualAssmtScore >= 5
-            ? "Strong visual content helps guests imagine their stay and feel confident booking."
-            : "Add more photography and video. Guests book on emotion—great photos of sites and amenities make the biggest difference.",
+        status: visualProofCategoryScore >= 3 ? "pass" : visualProofCategoryScore === 2 ? "unknown" : "fail",
+        finding: `${visualProofCategoryScore} of 4 core proof-photo categories detected (sites, facilities, amenities, arrival/location).`,
+        details: visualProofCategoryScore >= 3
+          ? "Guests can see the key photos they need to trust what they are booking."
+          : "Add real photos for your sites/units, restrooms or bathhouse, amenities, and entrance/location so guests know what to expect.",
         effort: "Medium",
         impact: "High",
         serviceKey: "photos",
@@ -1205,6 +1567,40 @@ export async function GET(request: NextRequest) {
         effort: "Low",
         impact: "Medium",
         serviceKey: "booking_platform",
+      }),
+      createCheck({
+        id: "structured-data",
+        name: "Structured data (Schema.org)",
+        category: "Local & Online Visibility",
+        status: structuredDataScore >= 2 ? "pass" : structuredDataScore === 1 ? "unknown" : "fail",
+        finding: structuredDataScore >= 2
+          ? `${structuredDataScore} of 3 structured data signals found (business type, ratings, pricing).`
+          : structuredDataScore === 1
+            ? "Partial structured data detected, but key signals are missing."
+            : "No structured data (Schema.org) was detected.",
+        details: structuredDataScore >= 2
+          ? "Google can show rich results like star ratings, price ranges, and business details for your property."
+          : "Add JSON-LD structured data for your business type (LodgingBusiness or LocalBusiness), aggregate ratings, and price ranges. This helps Google display rich search results that increase click-through.",
+        effort: "Medium",
+        impact: "High",
+        serviceKey: "meta_tags",
+      }),
+      createCheck({
+        id: "accessibility-score",
+        name: "Accessibility score",
+        category: "Mobile Experience",
+        status: accessibilityScore === null ? "unknown" : accessibilityScore >= 80 ? "pass" : accessibilityScore >= 60 ? "unknown" : "fail",
+        finding: accessibilityScore !== null
+          ? `Lighthouse accessibility score is ${accessibilityScore}/100.`
+          : "Accessibility score could not be measured on this scan.",
+        details: accessibilityScore === null
+          ? "Run the audit again in a moment to get an accessibility score."
+          : accessibilityScore >= 80
+            ? "Your site meets a strong baseline for guests using screen readers and assistive tools."
+            : "Improving color contrast, alt text, form labels, and heading structure helps guests with disabilities and boosts search rankings.",
+        effort: "Medium",
+        impact: "Medium",
+        serviceKey: "mobile",
       }),
     ];
 
@@ -1263,6 +1659,12 @@ export async function GET(request: NextRequest) {
     }
     lostBookingsEstimate = Math.min(35, lostBookingsEstimate);
 
+    const enrichedChecks = checks.map((check) => ({
+      ...check,
+      estimatedImpact: getEstimatedImpactForCheck(check),
+      benchmark: getDifficultyForCheck(check),
+    }));
+
     const topFails = checks
       .filter((check) => check.status === "fail")
       .sort((left, right) => {
@@ -1278,7 +1680,7 @@ export async function GET(request: NextRequest) {
       console.info(
         "[scan-timing]",
         JSON.stringify({
-          host: websiteUrl.hostname,
+          host: canonicalHost,
           totalMs,
           responseTimeMs,
           phaseTimings,
@@ -1287,7 +1689,9 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      url: websiteUrl.toString(),
+      url: canonicalHost,
+      pageSpeedReportUrl,
+      accessibilityScore,
       industry,
       industryLabel: config.label,
       unitLabel: config.unitLabel,
@@ -1298,7 +1702,7 @@ export async function GET(request: NextRequest) {
       lostRevenueDrivers,
       topFails,
       categories: categoryScores,
-      checks,
+      checks: enrichedChecks,
     });
   } catch (error) {
     const message = normalizeScanError(error);
