@@ -578,6 +578,74 @@ export async function GET(request: NextRequest) {
 
     const pageSpeedPromise = pageSpeedApiKey
       ? (async () => {
+          // --- CrUX fast-path: try Chrome UX Report first (~0.3s) ---
+          try {
+            const cruxController = new AbortController();
+            const cruxTimeout = setTimeout(() => cruxController.abort(), 4000);
+            const cruxEndpoint = `https://chromeuxreport.googleapis.com/v1/records:queryRecord?key=${pageSpeedApiKey}`;
+            const cruxHeaders = { "Content-Type": "application/json" };
+
+            // CrUX is origin-sensitive (www vs non-www), so try the canonical origin first,
+            // then the alternate (with/without www), then without formFactor filter as last resort.
+            const primaryOrigin = websiteUrl.origin;
+            const host = websiteUrl.hostname;
+            const altOrigin = host.startsWith("www.")
+              ? `${websiteUrl.protocol}//${host.slice(4)}`
+              : `${websiteUrl.protocol}//www.${host}`;
+
+            const originVariants = [
+              { origin: primaryOrigin, formFactor: "PHONE" },
+              { origin: altOrigin, formFactor: "PHONE" },
+              { origin: primaryOrigin, formFactor: undefined },
+              { origin: altOrigin, formFactor: undefined },
+            ];
+
+            let lcp: number | undefined;
+            for (const variant of originVariants) {
+              const body: Record<string, string> = { origin: variant.origin };
+              if (variant.formFactor) body.formFactor = variant.formFactor;
+
+              const resp = await fetch(cruxEndpoint, {
+                method: "POST",
+                headers: cruxHeaders,
+                body: JSON.stringify(body),
+                signal: cruxController.signal,
+              });
+              if (resp.ok) {
+                const cruxData = (await resp.json()) as {
+                  record?: {
+                    metrics?: {
+                      largest_contentful_paint?: { percentiles?: { p75?: number } };
+                    };
+                  };
+                };
+                const val = cruxData.record?.metrics?.largest_contentful_paint?.percentiles?.p75;
+                if (typeof val === "number") {
+                  lcp = val;
+                  console.log(`[crux] Hit: ${variant.origin} formFactor=${variant.formFactor ?? "ALL"} LCP=${lcp}ms`);
+                  break;
+                }
+              }
+            }
+            clearTimeout(cruxTimeout);
+
+            if (typeof lcp === "number") {
+              // Derive a 0-100 score from LCP p75 (mobile thresholds: ≤2500ms = good, ≤4000ms = needs improvement)
+              let derivedScore: number;
+              if (lcp <= 1200) derivedScore = 99;
+              else if (lcp <= 2500) derivedScore = Math.round(90 - ((lcp - 1200) / 1300) * 30); // 90→60
+              else if (lcp <= 4000) derivedScore = Math.round(59 - ((lcp - 2500) / 1500) * 30); // 59→29
+              else derivedScore = Math.max(5, Math.round(28 - ((lcp - 4000) / 4000) * 23)); // 28→5
+
+              console.log(`[crux] Fast-path score: LCP p75=${lcp}ms → score=${derivedScore}`);
+              return { score: derivedScore, accessibilityScore: null, error: null, source: "crux" as const };
+            }
+            // No CrUX data for any variant — fall through to Lighthouse
+          } catch {
+            // CrUX failed or timed out — fall through to Lighthouse
+          }
+
+          // --- Lighthouse fallback ---
           try {
             const pageSpeedUrl = new URL("https://www.googleapis.com/pagespeedonline/v5/runPagespeed");
             pageSpeedUrl.searchParams.set("url", websiteUrl.toString());
@@ -603,7 +671,7 @@ export async function GET(request: NextRequest) {
                 payload.error?.message ?? `PageSpeed API returned ${pageSpeedResponse.status}.`,
                 pageSpeedResponse.status,
               );
-              return { score: null, accessibilityScore: null, error: normalizedError.message };
+              return { score: null, accessibilityScore: null, error: normalizedError.message, source: "lighthouse" as const };
             }
 
             const runtimeError = payload.lighthouseResult?.runtimeError?.message;
@@ -614,7 +682,7 @@ export async function GET(request: NextRequest) {
             const a11yScore = typeof rawA11yScore === "number" && !Number.isNaN(rawA11yScore) ? Math.round(rawA11yScore * 100) : null;
 
             if (perfScore !== null) {
-              return { score: perfScore, accessibilityScore: a11yScore, error: null };
+              return { score: perfScore, accessibilityScore: a11yScore, error: null, source: "lighthouse" as const };
             }
 
             return {
@@ -623,9 +691,10 @@ export async function GET(request: NextRequest) {
               error: runtimeError
                 ? `Lighthouse returned error: ${runtimeError}`
                 : "PageSpeed API did not return a usable performance score.",
+              source: "lighthouse" as const,
             };
           } catch {
-            return { score: null, accessibilityScore: null, error: "PageSpeed check is taking longer than expected right now." };
+            return { score: null, accessibilityScore: null, error: "PageSpeed check is taking longer than expected right now.", source: "lighthouse" as const };
           }
         })()
       : Promise.resolve(null);
