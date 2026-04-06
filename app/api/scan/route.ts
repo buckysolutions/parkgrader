@@ -800,8 +800,8 @@ export async function GET(request: NextRequest) {
     const runFacebookCheck = async (): Promise<boolean> => {
       if (!facebookLink) return false;
       try {
-        const response = await fetchWithTimeout(new URL(facebookLink, websiteUrl).toString(), 6000);
-        return response.ok;
+        new URL(facebookLink, websiteUrl); // validate URL structure only; Facebook blocks server-side fetches
+        return true;
       } catch {
         return false;
       }
@@ -1415,15 +1415,15 @@ export async function GET(request: NextRequest) {
         category: "Local & Online Visibility",
         status: !facebookLink ? "unknown" : facebookReachable ? "pass" : "fail",
         finding: !facebookLink
-          ? "No Facebook link found to validate."
+          ? "No Facebook link found."
           : facebookReachable
-            ? "Facebook profile link is reachable."
-            : "Facebook profile link appears broken or unreachable.",
+            ? "Facebook profile link detected on your site."
+            : "Facebook link found but the URL appears malformed.",
         details: !facebookLink
           ? "Add a working Facebook link to support social trust."
           : facebookReachable
-            ? "Guests clicking through to your Facebook page will land successfully."
-            : "A broken Facebook link signals neglect. Verify the URL points to your active page.",
+            ? "Guests can click through to your Facebook page directly from your site."
+            : "The Facebook URL on your site appears malformed. Double-check it points to your active page.",
         effort: "Low",
         impact: "Medium",
         serviceKey: "social",
