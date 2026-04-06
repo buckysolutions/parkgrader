@@ -579,6 +579,7 @@ export async function GET(request: NextRequest) {
     const pageSpeedPromise = pageSpeedApiKey
       ? (async () => {
           // --- CrUX fast-path: try Chrome UX Report first (~0.3s) ---
+          let cruxMobileTrafficPercent: number | null = null;
           try {
             const cruxController = new AbortController();
             const cruxTimeout = setTimeout(() => cruxController.abort(), 4000);
@@ -586,52 +587,56 @@ export async function GET(request: NextRequest) {
             const cruxHeaders = { "Content-Type": "application/json" };
 
             // CrUX is origin-sensitive (www vs non-www), so try the canonical origin first,
-            // then the alternate (with/without www), then without formFactor filter as last resort.
+            // then the alternate (with/without www).
             const primaryOrigin = websiteUrl.origin;
             const host = websiteUrl.hostname;
             const altOrigin = host.startsWith("www.")
               ? `${websiteUrl.protocol}//${host.slice(4)}`
               : `${websiteUrl.protocol}//www.${host}`;
+            const origins = [primaryOrigin, altOrigin];
 
-            // Try ALL-devices first (gives form_factors breakdown), then PHONE-only as fallback.
-            const originVariants = [
-              { origin: primaryOrigin, formFactor: undefined },
-              { origin: altOrigin, formFactor: undefined },
-              { origin: primaryOrigin, formFactor: "PHONE" },
-              { origin: altOrigin, formFactor: "PHONE" },
-            ];
-
+            // Phase 1: Try PHONE-only CrUX for mobile LCP (this is a mobile speed check).
+            // ALL-devices data includes desktop traffic which inflates the score.
             let lcp: number | undefined;
-            let mobileTrafficPercent: number | null = null;
-            for (const variant of originVariants) {
-              const body: Record<string, string> = { origin: variant.origin };
-              if (variant.formFactor) body.formFactor = variant.formFactor;
-
+            for (const origin of origins) {
               const resp = await fetch(cruxEndpoint, {
                 method: "POST",
                 headers: cruxHeaders,
-                body: JSON.stringify(body),
+                body: JSON.stringify({ origin, formFactor: "PHONE" }),
                 signal: cruxController.signal,
               });
               if (resp.ok) {
                 const cruxData = (await resp.json()) as {
-                  record?: {
-                    metrics?: {
-                      largest_contentful_paint?: { percentiles?: { p75?: number } };
-                      form_factors?: { fractions?: { phone?: number; desktop?: number; tablet?: number } };
-                    };
-                  };
+                  record?: { metrics?: { largest_contentful_paint?: { percentiles?: { p75?: number } } } };
                 };
                 const val = cruxData.record?.metrics?.largest_contentful_paint?.percentiles?.p75;
-                // form_factors only present in ALL-devices responses (no formFactor filter)
-                const phoneFraction = cruxData.record?.metrics?.form_factors?.fractions?.phone;
-                if (typeof phoneFraction === "number") {
-                  mobileTrafficPercent = Math.round(phoneFraction * 100);
-                }
                 if (typeof val === "number") {
                   lcp = val;
-                  console.log(`[crux] Hit: ${variant.origin} formFactor=${variant.formFactor ?? "ALL"} LCP=${lcp}ms mobile=${mobileTrafficPercent ?? "n/a"}%`);
+                  console.log(`[crux] PHONE hit: ${origin} LCP=${lcp}ms`);
                   break;
+                }
+              }
+            }
+
+            // Phase 2: Grab form_factors from ALL-devices (only available without formFactor filter).
+            // This is lightweight data for the "X% browse on phone" stat — not used for scoring.
+            if (!cruxController.signal.aborted) {
+              for (const origin of origins) {
+                const resp = await fetch(cruxEndpoint, {
+                  method: "POST",
+                  headers: cruxHeaders,
+                  body: JSON.stringify({ origin }),
+                  signal: cruxController.signal,
+                });
+                if (resp.ok) {
+                  const cruxData = (await resp.json()) as {
+                    record?: { metrics?: { form_factors?: { fractions?: { phone?: number } } } };
+                  };
+                  const phoneFraction = cruxData.record?.metrics?.form_factors?.fractions?.phone;
+                  if (typeof phoneFraction === "number") {
+                    cruxMobileTrafficPercent = Math.round(phoneFraction * 100);
+                    break;
+                  }
                 }
               }
             }
@@ -646,9 +651,9 @@ export async function GET(request: NextRequest) {
               else derivedScore = Math.max(5, Math.round(28 - ((lcp - 4000) / 4000) * 23)); // 28→5
 
               console.log(`[crux] Fast-path score: LCP p75=${lcp}ms → score=${derivedScore}`);
-              return { score: derivedScore, accessibilityScore: null, error: null, source: "crux" as const, mobileTrafficPercent };
+              return { score: derivedScore, accessibilityScore: null, error: null, source: "crux" as const, mobileTrafficPercent: cruxMobileTrafficPercent };
             }
-            // No CrUX data for any variant — fall through to Lighthouse
+            // No PHONE CrUX data — fall through to Lighthouse (but keep mobileTrafficPercent if found)
           } catch {
             // CrUX failed or timed out — fall through to Lighthouse
           }
@@ -679,7 +684,7 @@ export async function GET(request: NextRequest) {
                 payload.error?.message ?? `PageSpeed API returned ${pageSpeedResponse.status}.`,
                 pageSpeedResponse.status,
               );
-              return { score: null, accessibilityScore: null, error: normalizedError.message, source: "lighthouse" as const, mobileTrafficPercent: null };
+              return { score: null, accessibilityScore: null, error: normalizedError.message, source: "lighthouse" as const, mobileTrafficPercent: cruxMobileTrafficPercent };
             }
 
             const runtimeError = payload.lighthouseResult?.runtimeError?.message;
@@ -690,7 +695,7 @@ export async function GET(request: NextRequest) {
             const a11yScore = typeof rawA11yScore === "number" && !Number.isNaN(rawA11yScore) ? Math.round(rawA11yScore * 100) : null;
 
             if (perfScore !== null) {
-              return { score: perfScore, accessibilityScore: a11yScore, error: null, source: "lighthouse" as const, mobileTrafficPercent: null };
+              return { score: perfScore, accessibilityScore: a11yScore, error: null, source: "lighthouse" as const, mobileTrafficPercent: cruxMobileTrafficPercent };
             }
 
             return {
@@ -700,10 +705,10 @@ export async function GET(request: NextRequest) {
                 ? `Lighthouse returned error: ${runtimeError}`
                 : "PageSpeed API did not return a usable performance score.",
               source: "lighthouse" as const,
-              mobileTrafficPercent: null,
+              mobileTrafficPercent: cruxMobileTrafficPercent,
             };
           } catch {
-            return { score: null, accessibilityScore: null, error: "PageSpeed check is taking longer than expected right now.", source: "lighthouse" as const, mobileTrafficPercent: null };
+            return { score: null, accessibilityScore: null, error: "PageSpeed check is taking longer than expected right now.", source: "lighthouse" as const, mobileTrafficPercent: cruxMobileTrafficPercent };
           }
         })()
       : Promise.resolve(null);
