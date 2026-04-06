@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import tls from "node:tls";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 type IndustryKey = "campground" | "marina" | "glamping" | "cabins";
 type CheckCategory =
@@ -582,7 +583,7 @@ export async function GET(request: NextRequest) {
             pageSpeedUrl.searchParams.set("url", websiteUrl.toString());
             pageSpeedUrl.searchParams.set("strategy", "mobile");
             pageSpeedUrl.searchParams.set("category", "performance");
-            pageSpeedUrl.searchParams.set("category", "accessibility");
+            pageSpeedUrl.searchParams.append("category", "accessibility");
             pageSpeedUrl.searchParams.set("key", pageSpeedApiKey);
 
             const pageSpeedResponse = await fetchWithTimeout(pageSpeedUrl.toString(), 45000);
