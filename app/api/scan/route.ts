@@ -672,7 +672,7 @@ export async function GET(request: NextRequest) {
 
     const hasViewport = /<meta[^>]*name=["']viewport["'][^>]*>/i.test(html);
     const detectedPlatform = platformCatalog.find((platform) => loweredHtml.includes(platform.toLowerCase())) ?? null;
-    const bookingCallToAction = /book now|reserve now|book your stay|check availability|reserve/i.test(html);
+    const bookingCallToAction = /book now|reserve now|book your stay|check availability|reserve|book online|make a reservation|find a site|search availability|book a site|book a cabin|book a slip/i.test(html);
 
     const facebookLink = links.find((href) => href.toLowerCase().includes("facebook.com")) ?? null;
     const instagramLink = links.find((href) => href.toLowerCase().includes("instagram.com")) ?? null;
@@ -693,7 +693,12 @@ export async function GET(request: NextRequest) {
       .map((href) => new URL(href, websiteUrl).toString());
     const uniqueInternalLinks = Array.from(new Set(internalLinks)).slice(0, 6);
 
-    const highQualityImageCount = images.filter((image) => image.width === null || image.width >= 400).length;
+    // Only count images with an explicit large width OR no width attribute but a src that looks like a real photo (not icon/logo).
+    const highQualityImageCount = images.filter((image) => {
+      if (image.width !== null) return image.width >= 400;
+      // No width attr: exclude likely icons/logos/tiny assets
+      return !/icon|logo|badge|sprite|favicon|pixel|spacer|arrow|button/i.test(image.src);
+    }).length;
     const listingHits = config.listingKeywords.filter((keyword) => loweredHtml.includes(keyword)).length;
 
     const hrefContains = (parts: string[]) => links.some((href) => parts.some((part) => href.toLowerCase().includes(part)));
@@ -705,8 +710,10 @@ export async function GET(request: NextRequest) {
     const ratesFound = hrefContains(["/rates", "/pricing", "/reservations"]) || keywordContains(["rates", "pricing", "$", "nightly"]);
     const cancellationFound = keywordContains(["cancel", "refund", "cancellation policy", "cancellation"]);
     const accessibilityFound = hrefContains(["/accessibility"]) || keywordContains(["accessibility statement", "accessibility"]);
-    const newsletterFound = /<input[^>]*type=["']email["']/i.test(html);
-    const bookingLinks = links.filter((href) => /book|reserve|availability|campspot|hipcamp|reserveamerica|roverpass|dockwa|resnexus|newbook|lodgify/i.test(href));
+    const newsletterFound = /<input[^>]*type=["']email["']/i.test(html) || /mailchimp|klaviyo|convertkit|mailerlite|constantcontact|newsletter|signup|sign-up|subscribe/i.test(loweredHtml);
+    const bookingLinks = links.filter((href) => /book|reserve|availability|campspot|hipcamp|reserveamerica|roverpass|dockwa|resnexus|newbook|lodgify|streamline|rezfusion|roverpass|staylist/i.test(href));
+    // Also detect inline booking forms (date-picker widgets with no outbound <a> link).
+    const hasInlineBookingForm = /<form[^>]*>[\s\S]*?(?:arrival|departure|check[ -]?in|check[ -]?out|select dates|adults|children|guests)[\s\S]*?<\/form>/i.test(html);
     const primaryBookingLink = bookingLinks[0] ? new URL(bookingLinks[0], websiteUrl).toString() : null;
     const canonicalMatch =
       html.match(/<link[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["'][^>]*>/i) ??
@@ -746,8 +753,9 @@ export async function GET(request: NextRequest) {
     const runMapCheck = async (): Promise<boolean> => {
       if (!mapLink) return false;
       try {
-        const response = await fetchWithTimeout(new URL(mapLink, websiteUrl).toString(), 6000);
-        return response.ok;
+        // Google Maps redirects/blocks bot fetches — any HTTP response means the link is structurally valid.
+        await fetchWithTimeout(new URL(mapLink, websiteUrl).toString(), 6000);
+        return true;
       } catch {
         return false;
       }
@@ -811,7 +819,8 @@ export async function GET(request: NextRequest) {
         uniqueInternalLinks.map(async (link) => {
           try {
             const response = await fetchWithTimeout(link, 3000);
-            if (!response.ok) broken += 1;
+            // 403 often means bot-blocking, not a real broken link. Only count 404/410/5xx as broken.
+            if (!response.ok && response.status !== 403 && response.status !== 401) broken += 1;
           } catch {
             broken += 1;
           }
@@ -993,11 +1002,13 @@ export async function GET(request: NextRequest) {
         id: "booking-platform",
         name: "Booking platform",
         category: "Booking & Conversion",
-        status: detectedPlatform ? "pass" : "fail",
+        status: detectedPlatform || hasInlineBookingForm ? "pass" : "fail",
         finding: detectedPlatform
           ? `Detected ${detectedPlatform}.`
-          : "No major booking platform was detected.",
-        details: detectedPlatform
+          : hasInlineBookingForm
+            ? "An inline booking widget was detected on the homepage."
+            : "No major booking platform was detected.",
+        details: detectedPlatform || hasInlineBookingForm
           ? "A recognizable booking platform is present for direct reservations."
           : "Guests want to reserve online — especially at night or on weekends when you're not near the phone. Without a booking system, those reservations go to a competitor who has one.",
         effort: "High",
