@@ -585,7 +585,7 @@ function PolicyFooter({ fixed }: { fixed?: boolean }) {
         </a>
         <span>·</span>
         <a className="hover:text-[#0A1628]" href="https://www.buckysolutions.com/terms-and-conditions/" target="_blank" rel="noreferrer">
-          Terms
+          Terms and Conditions
         </a>
       </div>
     </footer>
