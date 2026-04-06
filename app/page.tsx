@@ -75,6 +75,7 @@ type ScanResponse = {
   pageSpeedReportUrl?: string;
   overallBenchmarkText?: string;
   accessibilityScore?: number | null;
+  mobileTrafficPercent?: number | null;
   industry: IndustryKey;
   industryLabel: string;
   unitLabel: string;
@@ -3453,6 +3454,17 @@ export default function Home() {
                                 {activeCheck.status === "pass" ? activeCheckBenefit : activeCheckDirectFix}
                               </p>
                 
+                              {activeCheck.id === "pagespeed-mobile" && scanResult?.mobileTrafficPercent ? (
+                                <div className="mt-5 flex items-center gap-3 rounded-lg bg-[#F0F9FA] px-4 py-3">
+                                  <svg className="h-5 w-5 flex-shrink-0 text-[#2DA4A9]" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
+                                  </svg>
+                                  <p className="text-sm leading-5 text-[#0A1628]">
+                                    <span className="font-semibold">{scanResult.mobileTrafficPercent}%</span> of your visitors browse on a phone
+                                  </p>
+                                </div>
+                              ) : null}
+
                               {activeCheck.id === "pagespeed-mobile" && scanResult?.pageSpeedReportUrl ? (
                                 <a
                                   href={scanResult.pageSpeedReportUrl}

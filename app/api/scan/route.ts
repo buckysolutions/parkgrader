@@ -593,14 +593,16 @@ export async function GET(request: NextRequest) {
               ? `${websiteUrl.protocol}//${host.slice(4)}`
               : `${websiteUrl.protocol}//www.${host}`;
 
+            // Try ALL-devices first (gives form_factors breakdown), then PHONE-only as fallback.
             const originVariants = [
-              { origin: primaryOrigin, formFactor: "PHONE" },
-              { origin: altOrigin, formFactor: "PHONE" },
               { origin: primaryOrigin, formFactor: undefined },
               { origin: altOrigin, formFactor: undefined },
+              { origin: primaryOrigin, formFactor: "PHONE" },
+              { origin: altOrigin, formFactor: "PHONE" },
             ];
 
             let lcp: number | undefined;
+            let mobileTrafficPercent: number | null = null;
             for (const variant of originVariants) {
               const body: Record<string, string> = { origin: variant.origin };
               if (variant.formFactor) body.formFactor = variant.formFactor;
@@ -616,13 +618,19 @@ export async function GET(request: NextRequest) {
                   record?: {
                     metrics?: {
                       largest_contentful_paint?: { percentiles?: { p75?: number } };
+                      form_factors?: { fractions?: { phone?: number; desktop?: number; tablet?: number } };
                     };
                   };
                 };
                 const val = cruxData.record?.metrics?.largest_contentful_paint?.percentiles?.p75;
+                // form_factors only present in ALL-devices responses (no formFactor filter)
+                const phoneFraction = cruxData.record?.metrics?.form_factors?.fractions?.phone;
+                if (typeof phoneFraction === "number") {
+                  mobileTrafficPercent = Math.round(phoneFraction * 100);
+                }
                 if (typeof val === "number") {
                   lcp = val;
-                  console.log(`[crux] Hit: ${variant.origin} formFactor=${variant.formFactor ?? "ALL"} LCP=${lcp}ms`);
+                  console.log(`[crux] Hit: ${variant.origin} formFactor=${variant.formFactor ?? "ALL"} LCP=${lcp}ms mobile=${mobileTrafficPercent ?? "n/a"}%`);
                   break;
                 }
               }
@@ -638,7 +646,7 @@ export async function GET(request: NextRequest) {
               else derivedScore = Math.max(5, Math.round(28 - ((lcp - 4000) / 4000) * 23)); // 28→5
 
               console.log(`[crux] Fast-path score: LCP p75=${lcp}ms → score=${derivedScore}`);
-              return { score: derivedScore, accessibilityScore: null, error: null, source: "crux" as const };
+              return { score: derivedScore, accessibilityScore: null, error: null, source: "crux" as const, mobileTrafficPercent };
             }
             // No CrUX data for any variant — fall through to Lighthouse
           } catch {
@@ -671,7 +679,7 @@ export async function GET(request: NextRequest) {
                 payload.error?.message ?? `PageSpeed API returned ${pageSpeedResponse.status}.`,
                 pageSpeedResponse.status,
               );
-              return { score: null, accessibilityScore: null, error: normalizedError.message, source: "lighthouse" as const };
+              return { score: null, accessibilityScore: null, error: normalizedError.message, source: "lighthouse" as const, mobileTrafficPercent: null };
             }
 
             const runtimeError = payload.lighthouseResult?.runtimeError?.message;
@@ -682,7 +690,7 @@ export async function GET(request: NextRequest) {
             const a11yScore = typeof rawA11yScore === "number" && !Number.isNaN(rawA11yScore) ? Math.round(rawA11yScore * 100) : null;
 
             if (perfScore !== null) {
-              return { score: perfScore, accessibilityScore: a11yScore, error: null, source: "lighthouse" as const };
+              return { score: perfScore, accessibilityScore: a11yScore, error: null, source: "lighthouse" as const, mobileTrafficPercent: null };
             }
 
             return {
@@ -692,9 +700,10 @@ export async function GET(request: NextRequest) {
                 ? `Lighthouse returned error: ${runtimeError}`
                 : "PageSpeed API did not return a usable performance score.",
               source: "lighthouse" as const,
+              mobileTrafficPercent: null,
             };
           } catch {
-            return { score: null, accessibilityScore: null, error: "PageSpeed check is taking longer than expected right now.", source: "lighthouse" as const };
+            return { score: null, accessibilityScore: null, error: "PageSpeed check is taking longer than expected right now.", source: "lighthouse" as const, mobileTrafficPercent: null };
           }
         })()
       : Promise.resolve(null);
@@ -920,9 +929,11 @@ export async function GET(request: NextRequest) {
     const bookingHealth = { reachable: bookingLandingResult.reachable, responseTimeMs: bookingLandingResult.responseTimeMs, statusCode: bookingLandingResult.statusCode };
 
     let accessibilityScore: number | null = null;
+    let mobileTrafficPercent: number | null = null;
     if (pageSpeedResult && pageSpeedResult.score !== null) {
       pageSpeedScore = pageSpeedResult.score;
       accessibilityScore = pageSpeedResult.accessibilityScore ?? null;
+      mobileTrafficPercent = pageSpeedResult.mobileTrafficPercent ?? null;
       pageSpeedStatus = pageSpeedScore >= 60 ? "pass" : "fail";
       pageSpeedFinding =
         pageSpeedStatus === "pass"
@@ -934,6 +945,7 @@ export async function GET(request: NextRequest) {
           : "A slow mobile experience is one of the fastest ways to lose high-intent guests.";
     } else if (pageSpeedApiKey) {
       accessibilityScore = pageSpeedResult?.accessibilityScore ?? null;
+      mobileTrafficPercent = pageSpeedResult?.mobileTrafficPercent ?? null;
       pageSpeedStatus = "unknown";
       pageSpeedFinding = "We could not confirm phone loading speed on this scan.";
       pageSpeedDetails = pageSpeedResult?.error ?? "PageSpeed check is still warming up. Please run again in a minute for a fresh score.";
@@ -1796,6 +1808,7 @@ export async function GET(request: NextRequest) {
       url: canonicalHost,
       pageSpeedReportUrl,
       accessibilityScore,
+      mobileTrafficPercent,
       industry,
       industryLabel: config.label,
       unitLabel: config.unitLabel,
