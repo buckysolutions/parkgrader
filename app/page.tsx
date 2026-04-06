@@ -215,14 +215,15 @@ const CATEGORY_ORDER: CheckCategory[] = [
   "Booking Psychology",
 ];
 
-const PARTIAL_LOADING_MESSAGES = [
-  "Fetching your homepage...",
-  "Checking SSL certificate and redirect chain...",
-  "Scanning internal links for broken pages...",
-  "Running Google PageSpeed Lighthouse audit...",
-  "Analyzing booking flow and trust signals...",
-  "Checking maps, social, and Facebook links...",
-  "Finalizing your ParkGrader score...",
+const PARTIAL_LOADING_PHASES = [
+  { message: "Connecting to your website...", delay: 0 },
+  { message: "Checking SSL certificate and redirect chain...", delay: 2000 },
+  { message: "Scanning homepage content and links...", delay: 4500 },
+  { message: "Analyzing booking flow and trust signals...", delay: 7000 },
+  { message: "Checking maps, social profiles, and internal pages...", delay: 10000 },
+  { message: "Running Google PageSpeed Lighthouse audit...", delay: 13000 },
+  { message: "Still waiting on Google PageSpeed — this is the slow part...", delay: 25000 },
+  { message: "Almost there — Google is finishing up...", delay: 40000 },
 ];
 
 type HeroIcon = ComponentType<SVGProps<SVGSVGElement>>;
@@ -2310,12 +2311,12 @@ export default function Home() {
       return;
     }
 
-    const interval = window.setInterval(() => {
-      setPartialLoadingMessageIndex((value) => (value + 1) % PARTIAL_LOADING_MESSAGES.length);
-    }, 3500);
+    const timers = PARTIAL_LOADING_PHASES.map((phase, index) =>
+      window.setTimeout(() => setPartialLoadingMessageIndex(index), phase.delay),
+    );
 
     return () => {
-      window.clearInterval(interval);
+      timers.forEach((t) => window.clearTimeout(t));
     };
   }, [step]);
 
@@ -2637,6 +2638,7 @@ export default function Home() {
                   alt="ParkGrader"
                   width={181}
                   height={32}
+                  style={{ width: "auto", height: "auto" }}
                   className="pointer-events-none absolute left-6 top-6 z-20 h-8 w-auto sm:left-10 sm:top-8"
                 />
                 <div className="print-hidden absolute right-6 top-6 z-20 flex items-center gap-3 sm:right-10 sm:top-8">
@@ -2913,7 +2915,7 @@ export default function Home() {
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.2, ease: "easeOut" }}
                 >
-                  {PARTIAL_LOADING_MESSAGES[partialLoadingMessageIndex]}
+                  {PARTIAL_LOADING_PHASES[partialLoadingMessageIndex]?.message}
                 </motion.p>
               </AnimatePresence>
             </div>
@@ -2928,7 +2930,7 @@ export default function Home() {
               <div className="mx-auto max-w-[760px]">
                 <div className="flex items-center justify-between gap-4">
                   <button type="button" onClick={resetToLandingPage} className="inline-flex cursor-pointer items-center" aria-label="Back to ParkGrader start page">
-                    <Image src={PARKGRADER_LOGO} alt="ParkGrader" width={181} height={32} className="h-8 w-auto" />
+                    <Image src={PARKGRADER_LOGO} alt="ParkGrader" width={181} height={32} style={{ width: "auto", height: "auto" }} className="h-8 w-auto" />
                   </button>
                   <div className={`print-hidden flex flex-wrap items-center justify-end gap-1 text-right text-[#0A1628] ${isReportUnlocked ? "" : "opacity-80"}`}>
                     <button
@@ -3308,7 +3310,7 @@ export default function Home() {
 
                         {tradeshowEmailSent ? (
                           <motion.div className="mx-auto w-full max-w-[680px]" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-                            <Image src={PARKGRADER_LOGO} alt="ParkGrader" width={181} height={32} className="mx-auto h-8 w-auto" />
+                            <Image src={PARKGRADER_LOGO} alt="ParkGrader" width={181} height={32} style={{ width: "auto", height: "auto" }} className="mx-auto h-8 w-auto" />
                             <div className="mt-8 border border-[#E6EBF0] bg-[linear-gradient(180deg,#ffffff_0%,#f6f9fc_100%)] p-5 sm:p-6">
                               <TradeshowEmailConfirm
                                 email={email}
@@ -3321,7 +3323,7 @@ export default function Home() {
                           </motion.div>
                         ) : (
                           <motion.div className="mx-auto w-full max-w-[680px]" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-                            <Image src={PARKGRADER_LOGO} alt="ParkGrader" width={181} height={32} className="mx-auto h-8 w-auto" />
+                            <Image src={PARKGRADER_LOGO} alt="ParkGrader" width={181} height={32} style={{ width: "auto", height: "auto" }} className="mx-auto h-8 w-auto" />
                             <h2 className="mt-10 text-center text-2xl leading-tight text-[#0A1628] sm:text-[2.2rem]">Email this report?</h2>
                             <p className="mt-4 text-center text-base text-[#5B6776]">Update the contact email if needed, then choose an option.</p>
 
