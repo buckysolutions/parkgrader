@@ -3619,8 +3619,8 @@ export default function Home() {
                         </div>
 
                         {showFixContent ? (
-                          <div className="flex items-center justify-between border-t border-[#E6EBF0] px-6 py-4 sm:px-8">
-                            <p className="text-base text-[#5B6776]">
+                          <div className="flex flex-col gap-3 border-t border-[#E6EBF0] px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+                            <p className="hidden text-base text-[#5B6776] sm:block">
                               {activeCheck.status === "fail"
                                 ? "Need this fixed for you?"
                                 : activeCheck.status === "pass"
@@ -3632,7 +3632,7 @@ export default function Home() {
                               target="_blank"
                               rel="noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center justify-center bg-[#2DA4A9] px-4 py-2 text-base text-white transition-opacity hover:opacity-90"
+                              className="inline-flex w-full items-center justify-center bg-[#2DA4A9] px-4 py-2 text-base text-white transition-opacity hover:opacity-90 sm:w-auto"
                             >
                               {activeCheckCta.buttonLabel}
                             </a>
