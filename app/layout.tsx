@@ -36,12 +36,21 @@ export const metadata: Metadata = {
     title: "ParkGrader | Free Campground Website Audit",
     description:
       "See what is costing your property bookings with a fast website audit tailored for outdoor hospitality businesses.",
+    images: [
+      {
+        url: "https://assets.buckysolutions.com/website-assets/camper-van-on-mountain-road-and-picturesque-view-o-2026-01-09-08-42-00-utc.webp",
+        width: 1200,
+        height: 630,
+        alt: "ParkGrader — Free Campground Website Audit",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "ParkGrader | Free Campground Website Audit",
     description:
       "Get a clear report on booking flow, mobile experience, trust signals, and online visibility.",
+    images: ["https://assets.buckysolutions.com/website-assets/camper-van-on-mountain-road-and-picturesque-view-o-2026-01-09-08-42-00-utc.webp"],
   },
   robots: {
     index: true,
