@@ -578,87 +578,45 @@ export async function GET(request: NextRequest) {
 
     const pageSpeedPromise = pageSpeedApiKey
       ? (async () => {
-          // --- CrUX fast-path: try Chrome UX Report first (~0.3s) ---
+          // --- CrUX: grab mobile traffic % (informational only, not used for scoring) ---
           let cruxMobileTrafficPercent: number | null = null;
           try {
             const cruxController = new AbortController();
-            const cruxTimeout = setTimeout(() => cruxController.abort(), 4000);
+            const cruxTimeout = setTimeout(() => cruxController.abort(), 3000);
             const cruxEndpoint = `https://chromeuxreport.googleapis.com/v1/records:queryRecord?key=${pageSpeedApiKey}`;
             const cruxHeaders = { "Content-Type": "application/json" };
 
-            // CrUX is origin-sensitive (www vs non-www), so try the canonical origin first,
-            // then the alternate (with/without www).
             const primaryOrigin = websiteUrl.origin;
             const host = websiteUrl.hostname;
             const altOrigin = host.startsWith("www.")
               ? `${websiteUrl.protocol}//${host.slice(4)}`
               : `${websiteUrl.protocol}//www.${host}`;
-            const origins = [primaryOrigin, altOrigin];
 
-            // Phase 1: Try PHONE-only CrUX for mobile LCP (this is a mobile speed check).
-            // ALL-devices data includes desktop traffic which inflates the score.
-            let lcp: number | undefined;
-            for (const origin of origins) {
+            for (const origin of [primaryOrigin, altOrigin]) {
               const resp = await fetch(cruxEndpoint, {
                 method: "POST",
                 headers: cruxHeaders,
-                body: JSON.stringify({ origin, formFactor: "PHONE" }),
+                body: JSON.stringify({ origin }),
                 signal: cruxController.signal,
               });
               if (resp.ok) {
                 const cruxData = (await resp.json()) as {
-                  record?: { metrics?: { largest_contentful_paint?: { percentiles?: { p75?: number } } } };
+                  record?: { metrics?: { form_factors?: { fractions?: { phone?: number } } } };
                 };
-                const val = cruxData.record?.metrics?.largest_contentful_paint?.percentiles?.p75;
-                if (typeof val === "number") {
-                  lcp = val;
-                  console.log(`[crux] PHONE hit: ${origin} LCP=${lcp}ms`);
+                const phoneFraction = cruxData.record?.metrics?.form_factors?.fractions?.phone;
+                if (typeof phoneFraction === "number") {
+                  cruxMobileTrafficPercent = Math.round(phoneFraction * 100);
+                  console.log(`[crux] Mobile traffic: ${cruxMobileTrafficPercent}% for ${origin}`);
                   break;
                 }
               }
             }
-
-            // Phase 2: Grab form_factors from ALL-devices (only available without formFactor filter).
-            // This is lightweight data for the "X% browse on phone" stat — not used for scoring.
-            if (!cruxController.signal.aborted) {
-              for (const origin of origins) {
-                const resp = await fetch(cruxEndpoint, {
-                  method: "POST",
-                  headers: cruxHeaders,
-                  body: JSON.stringify({ origin }),
-                  signal: cruxController.signal,
-                });
-                if (resp.ok) {
-                  const cruxData = (await resp.json()) as {
-                    record?: { metrics?: { form_factors?: { fractions?: { phone?: number } } } };
-                  };
-                  const phoneFraction = cruxData.record?.metrics?.form_factors?.fractions?.phone;
-                  if (typeof phoneFraction === "number") {
-                    cruxMobileTrafficPercent = Math.round(phoneFraction * 100);
-                    break;
-                  }
-                }
-              }
-            }
             clearTimeout(cruxTimeout);
-
-            if (typeof lcp === "number") {
-              // Derive a 0-100 score from LCP p75 (mobile thresholds: ≤2500ms = good, ≤4000ms = needs improvement)
-              let derivedScore: number;
-              if (lcp <= 1200) derivedScore = 99;
-              else if (lcp <= 2500) derivedScore = Math.round(90 - ((lcp - 1200) / 1300) * 30); // 90→60
-              else if (lcp <= 4000) derivedScore = Math.round(59 - ((lcp - 2500) / 1500) * 30); // 59→29
-              else derivedScore = Math.max(5, Math.round(28 - ((lcp - 4000) / 4000) * 23)); // 28→5
-
-              console.log(`[crux] Fast-path score: LCP p75=${lcp}ms → score=${derivedScore}`);
-              return { score: derivedScore, accessibilityScore: null, error: null, source: "crux" as const, mobileTrafficPercent: cruxMobileTrafficPercent };
-            }
-            // No PHONE CrUX data — fall through to Lighthouse (but keep mobileTrafficPercent if found)
           } catch {
-            // CrUX failed or timed out — fall through to Lighthouse
+            // CrUX failed or timed out — no mobile traffic stat, that's fine
           }
 
-          // --- Lighthouse fallback ---
+          // --- Lighthouse: authoritative mobile speed score ---
           try {
             const pageSpeedUrl = new URL("https://www.googleapis.com/pagespeedonline/v5/runPagespeed");
             pageSpeedUrl.searchParams.set("url", websiteUrl.toString());
@@ -684,7 +642,7 @@ export async function GET(request: NextRequest) {
                 payload.error?.message ?? `PageSpeed API returned ${pageSpeedResponse.status}.`,
                 pageSpeedResponse.status,
               );
-              return { score: null, accessibilityScore: null, error: normalizedError.message, source: "lighthouse" as const, mobileTrafficPercent: cruxMobileTrafficPercent };
+              return { score: null, accessibilityScore: null, error: normalizedError.message, mobileTrafficPercent: cruxMobileTrafficPercent };
             }
 
             const runtimeError = payload.lighthouseResult?.runtimeError?.message;
@@ -695,7 +653,7 @@ export async function GET(request: NextRequest) {
             const a11yScore = typeof rawA11yScore === "number" && !Number.isNaN(rawA11yScore) ? Math.round(rawA11yScore * 100) : null;
 
             if (perfScore !== null) {
-              return { score: perfScore, accessibilityScore: a11yScore, error: null, source: "lighthouse" as const, mobileTrafficPercent: cruxMobileTrafficPercent };
+              return { score: perfScore, accessibilityScore: a11yScore, error: null, mobileTrafficPercent: cruxMobileTrafficPercent };
             }
 
             return {
@@ -704,11 +662,10 @@ export async function GET(request: NextRequest) {
               error: runtimeError
                 ? `Lighthouse returned error: ${runtimeError}`
                 : "PageSpeed API did not return a usable performance score.",
-              source: "lighthouse" as const,
               mobileTrafficPercent: cruxMobileTrafficPercent,
             };
           } catch {
-            return { score: null, accessibilityScore: null, error: "PageSpeed check is taking longer than expected right now.", source: "lighthouse" as const, mobileTrafficPercent: cruxMobileTrafficPercent };
+            return { score: null, accessibilityScore: null, error: "PageSpeed check is taking longer than expected right now.", mobileTrafficPercent: cruxMobileTrafficPercent };
           }
         })()
       : Promise.resolve(null);
