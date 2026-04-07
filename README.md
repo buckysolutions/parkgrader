@@ -1,5 +1,50 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Review Coach V1 API
+
+Use this endpoint to analyze recent reviews and get:
+
+- top recurring issues to fix first
+- prioritized reviews that need owner replies now
+- draft public replies (Gemini-enhanced when configured)
+
+`POST /api/review-coach`
+
+Example request body:
+
+```json
+{
+	"propertyName": "Pine Ridge RV Resort",
+	"tone": "friendly",
+	"reviews": [
+		{
+			"id": "r-1",
+			"rating": 2,
+			"text": "Bathrooms were dirty and wifi was unreliable.",
+			"createdAt": "2026-04-01T10:00:00.000Z",
+			"hasOwnerReply": false
+		},
+		{
+			"id": "r-2",
+			"rating": 5,
+			"text": "Great staff and easy check-in.",
+			"hasOwnerReply": false
+		}
+	]
+}
+```
+
+Enable better reply phrasing by setting `GEMINI_API_KEY` (and optional `GEMINI_MODEL`).
+
+## Review Coach V1 UI
+
+Open `/review-coach` in the app to use the full in-app workflow:
+
+- paste a JSON array of your real reviews
+- run analysis
+- copy draft replies
+- prioritize recurring issues by frequency
+
 ## Getting Started
 
 First, run the development server:
