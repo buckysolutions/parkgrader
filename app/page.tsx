@@ -1959,7 +1959,18 @@ export default function Home() {
         tradeshow_consent_marketing: isTradeshowMode ? tradeshowConsentMarketing : undefined,
       };
 
-      const response = await fetch("/api/lead", {
+      let leadEndpoint = "/api/lead";
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const bypassEnabled = hasEnabledQueryFlag(params, "bypass");
+        const key = (params.get("tsk") ?? "").trim();
+
+        if (bypassEnabled && key) {
+          leadEndpoint = `/api/lead?bypass=true&key=${encodeURIComponent(key)}`;
+        }
+      }
+
+      const response = await fetch(leadEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
