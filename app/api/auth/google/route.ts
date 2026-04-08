@@ -1,11 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim() ?? "";
   const baseUrl = (process.env.APP_BASE_URL ?? "http://localhost:3000").trim().replace(/\/$/, "");
+  const popupMode = request.nextUrl.searchParams.get("popup") === "1";
 
   if (!clientId) {
     return NextResponse.redirect(`${baseUrl}/review-coach?auth=not-configured`);
@@ -29,6 +30,14 @@ export async function GET() {
   );
 
   response.cookies.set("gbp_oauth_state", state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 600,
+    path: "/",
+  });
+
+  response.cookies.set("gbp_oauth_popup", popupMode ? "1" : "0", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

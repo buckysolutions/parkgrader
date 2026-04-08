@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
 
   const cookieStore = await cookies();
   const storedState = cookieStore.get("gbp_oauth_state")?.value ?? "";
+  const popupMode = cookieStore.get("gbp_oauth_popup")?.value === "1";
 
   errorRedirect.cookies.delete("gbp_oauth_state");
 
@@ -56,8 +57,21 @@ export async function GET(request: NextRequest) {
     return errorRedirect;
   }
 
-  const response = NextResponse.redirect(`${baseUrl}/review-coach?auth=success`);
+  const response = popupMode
+    ? new NextResponse(
+      `<!doctype html><html><body><script>
+        try {
+          if (window.opener) {
+            window.opener.postMessage({ type: "GBP_AUTH_SUCCESS" }, window.location.origin);
+          }
+        } catch (_) {}
+        window.close();
+      </script></body></html>`,
+      { headers: { "content-type": "text/html; charset=utf-8" } },
+    )
+    : NextResponse.redirect(`${baseUrl}/review-coach?auth=success`);
   response.cookies.delete("gbp_oauth_state");
+  response.cookies.delete("gbp_oauth_popup");
 
   response.cookies.set("gbp_access_token", tokens.access_token, {
     httpOnly: true,

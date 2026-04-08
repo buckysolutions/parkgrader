@@ -53,12 +53,16 @@ export async function GET(request: NextRequest) {
   if (!reviewsRes.ok) {
     const status = reviewsRes.status === 401 ? 401 : 502;
     const payload = (await reviewsRes.json().catch(() => ({}))) as ReviewsPayload;
+    const baseMessage = payload.error?.message ?? "Failed to fetch reviews from Google.";
+    const hint = baseMessage.includes("SERVICE_DISABLED") || baseMessage.includes("not been used")
+      ? " Enable Business Profile APIs in Google Cloud and ensure this Google account has access to a location."
+      : "";
     return NextResponse.json(
       {
         message:
           status === 401
             ? "Google session expired. Please reconnect."
-            : (payload.error?.message ?? "Failed to fetch reviews from Google."),
+            : `${baseMessage}${hint}`,
       },
       { status },
     );

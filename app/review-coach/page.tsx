@@ -94,6 +94,8 @@ const sampleReviews = JSON.stringify(
   2,
 );
 
+const IS_REVIEW_COACH_ENABLED = process.env.NEXT_PUBLIC_ENABLE_REVIEW_COACH === "true";
+
 const parseReviewInput = (raw: string): { reviews: ParsedReview[]; error: string } => {
   const trimmed = raw.trim();
   if (!trimmed) {
@@ -116,6 +118,26 @@ const parseReviewInput = (raw: string): { reviews: ParsedReview[]; error: string
 };
 
 export default function ReviewCoachPage() {
+  if (!IS_REVIEW_COACH_ENABLED) {
+    return (
+      <main className="min-h-screen bg-[#f7fafc] text-[#0A1628]">
+        <section className="mx-auto w-full max-w-4xl px-6 py-16 text-center sm:px-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-[#2DA4A9]">Review Coach</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Temporarily Unavailable</h1>
+          <p className="mt-3 text-sm text-[#5B6776]">
+            Review Coach is hidden until Google Business Profile API access is approved.
+          </p>
+          <Link
+            href="/"
+            className="mt-6 inline-flex items-center border border-[#D4DEE7] bg-white px-4 py-2 text-sm font-medium text-[#0A1628] hover:bg-[#f2f6f9]"
+          >
+            Back to audit
+          </Link>
+        </section>
+      </main>
+    );
+  }
+
   const [propertyName, setPropertyName] = useState("Pine Ridge RV Resort");
   const [tone, setTone] = useState<Tone>("friendly");
   const [reviewInput, setReviewInput] = useState(sampleReviews);

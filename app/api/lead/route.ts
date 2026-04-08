@@ -37,6 +37,22 @@ type ExistingAuditRow = {
   report_snapshot?: unknown;
 };
 
+type SnapshotCheck = {
+  id?: string;
+  name?: string;
+  status?: "pass" | "fail" | "unknown";
+  pass?: boolean;
+  effort?: "Low" | "Medium" | "High";
+};
+
+type SnapshotLike = {
+  propertyName?: string;
+  scanResult?: {
+    checks?: SnapshotCheck[];
+    topFails?: string[];
+  };
+};
+
 const INTERNAL_TEST_DOMAIN = "buckysolutions.com";
 
 type HubSpotSearchResponse = {
@@ -139,6 +155,153 @@ const removeMissingProperties = (
 };
 
 const normalizeText = (value: string): string => value.trim().toLowerCase();
+
+const toTitleCase = (value: string): string =>
+  value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+
+const inferCompanyNameFromDomain = (domain: string): string => {
+  const root = domain
+    .split(".")
+    .filter(Boolean)
+    .slice(0, -1)
+    .join(" ")
+    .replace(/[-_]+/g, " ")
+    .trim();
+
+  return toTitleCase(root || domain.replace(/\.[a-z]{2,}$/i, ""));
+};
+
+const toSnapshotLike = (value: unknown): SnapshotLike | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  return value as SnapshotLike;
+};
+
+const getWebhookCompanyName = (payload: Required<LeadPayload>): string => {
+  if (payload.property_name.trim()) {
+    return payload.property_name.trim();
+  }
+
+  const snapshot = toSnapshotLike(payload.report_snapshot);
+  const snapshotName = snapshot?.propertyName?.trim() ?? "";
+  if (snapshotName) {
+    return snapshotName;
+  }
+
+  const domain = normalizeDomain(payload.url);
+  if (domain) {
+    return inferCompanyNameFromDomain(domain);
+  }
+
+  return "Unknown Company";
+};
+
+const getTopFixes = (payload: Required<LeadPayload>): { labels: string[]; minutes: number } => {
+  const snapshot = toSnapshotLike(payload.report_snapshot);
+  const checks = snapshot?.scanResult?.checks ?? [];
+  const topFails = snapshot?.scanResult?.topFails ?? [];
+
+  const checkById = new Map(
+    checks
+      .filter((check) => check.id)
+      .map((check) => [check.id as string, check]),
+  );
+
+  const labels: string[] = [];
+  const effortByLabel = new Map<string, "Low" | "Medium" | "High">();
+
+  for (const failId of topFails) {
+    const check = checkById.get(failId);
+    const label = check?.name?.trim();
+    if (!label || labels.includes(label)) {
+      continue;
+    }
+    labels.push(label);
+    if (check?.effort) {
+      effortByLabel.set(label, check.effort);
+    }
+    if (labels.length >= 2) {
+      break;
+    }
+  }
+
+  if (labels.length < 2) {
+    for (const check of checks) {
+      const isFail = check.status === "fail" || check.pass === false;
+      const label = check.name?.trim() ?? "";
+      if (!isFail || !label || labels.includes(label)) {
+        continue;
+      }
+      labels.push(label);
+      if (check.effort) {
+        effortByLabel.set(label, check.effort);
+      }
+      if (labels.length >= 2) {
+        break;
+      }
+    }
+  }
+
+  const completed = labels.concat(["booking clarity", "mobile speed"]).slice(0, 2);
+  const effortToMinutes: Record<"Low" | "Medium" | "High", number> = {
+    Low: 15,
+    Medium: 30,
+    High: 45,
+  };
+  const minutes = Math.max(
+    ...completed.map((label) => effortToMinutes[effortByLabel.get(label) ?? "Medium"]),
+  );
+
+  return { labels: completed, minutes };
+};
+
+const sendLeadCaptureWebhook = async (payload: Required<LeadPayload>): Promise<boolean> => {
+  const webhookUrl = process.env.LEAD_CAPTURE_WEBHOOK_URL?.trim() ?? "";
+  if (!webhookUrl || !payload.email || !isValidEmail(payload.email) || isInternalTestEmail(payload.email)) {
+    return false;
+  }
+
+  const domain = normalizeDomain(payload.url);
+  if (domain && isInternalTestDomain(domain)) {
+    return false;
+  }
+
+  const companyName = getWebhookCompanyName(payload);
+  const { labels, minutes } = getTopFixes(payload);
+  const topFix1 = labels[0];
+  const topFix2 = labels[1];
+
+  const webhookBody = {
+    email: payload.email,
+    url: payload.url,
+    company_name: companyName,
+    top_fix_1: topFix1,
+    top_fix_2: topFix2,
+    quick_fix_minutes: minutes,
+    top_fixes_sentence: `The good news is that most of these, like ${topFix1} and ${topFix2}, are actually ${minutes}-minute fixes.`,
+    report_id: payload.report_id,
+    scan_date: payload.scan_date,
+  };
+
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(webhookBody),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getHubSpotErrorMessage(response, "Lead capture webhook failed."));
+  }
+
+  return true;
+};
 
 const escapeHtml = (value: string): string =>
   value
@@ -979,6 +1142,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let webhookSent = false;
+    try {
+      webhookSent = await sendLeadCaptureWebhook(payload);
+    } catch (error) {
+      console.error(error);
+    }
+
     const result = await upsertHubSpotLead(payload);
 
     return NextResponse.json({
@@ -989,6 +1159,7 @@ export async function POST(request: NextRequest) {
       database_stored: supabase.stored,
       email_attempted: emailCopy.attempted,
       email_sent: emailCopy.sent,
+      webhook_sent: webhookSent,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Lead capture failed.";

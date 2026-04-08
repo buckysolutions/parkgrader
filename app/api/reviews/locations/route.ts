@@ -28,6 +28,22 @@ type LocationsPayload = {
   error?: { message?: string };
 };
 
+const toReviewLocationName = (accountName: string, rawLocationName: string): string => {
+  if (!rawLocationName) {
+    return "";
+  }
+
+  if (rawLocationName.startsWith("accounts/")) {
+    return rawLocationName;
+  }
+
+  if (rawLocationName.startsWith("locations/")) {
+    return `${accountName}/${rawLocationName}`;
+  }
+
+  return `${accountName}/locations/${rawLocationName}`;
+};
+
 export async function GET() {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get("gbp_access_token")?.value ?? "";
@@ -65,35 +81,52 @@ export async function GET() {
     return NextResponse.json({ locations: [] });
   }
 
-  const accountName = accounts[0].name ?? "";
+  const allLocations: Array<{ name: string; title: string; address: string }> = [];
+  const fetchErrors: string[] = [];
 
-  const locationsRes = await fetch(
-    `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations?readMask=name,title,storefrontAddress`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  );
+  for (const account of accounts) {
+    const accountName = account.name ?? "";
+    if (!accountName) {
+      continue;
+    }
 
-  if (!locationsRes.ok) {
-    const payload = (await locationsRes.json().catch(() => ({}))) as LocationsPayload;
+    const locationsRes = await fetch(
+      `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations?readMask=name,title,storefrontAddress`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+
+    if (!locationsRes.ok) {
+      const payload = (await locationsRes.json().catch(() => ({}))) as LocationsPayload;
+      fetchErrors.push(payload.error?.message ?? `Failed to fetch locations for ${accountName}.`);
+      continue;
+    }
+
+    const locationsPayload = (await locationsRes.json()) as LocationsPayload;
+    const locations = (locationsPayload.locations ?? []).map((loc) => {
+      const parts = [
+        ...(loc.storefrontAddress?.addressLines ?? []),
+        loc.storefrontAddress?.locality,
+        loc.storefrontAddress?.administrativeArea,
+      ].filter(Boolean);
+
+      const locationName = toReviewLocationName(accountName, loc.name ?? "");
+
+      return {
+        name: locationName,
+        title: loc.title ?? loc.name ?? "",
+        address: parts.join(", "),
+      };
+    });
+
+    allLocations.push(...locations.filter((loc) => Boolean(loc.name)));
+  }
+
+  if (!allLocations.length && fetchErrors.length) {
     return NextResponse.json(
-      { message: payload.error?.message ?? "Failed to fetch locations." },
+      { message: fetchErrors[0] ?? "Failed to fetch locations." },
       { status: 502 },
     );
   }
 
-  const locationsPayload = (await locationsRes.json()) as LocationsPayload;
-  const locations = (locationsPayload.locations ?? []).map((loc) => {
-    const parts = [
-      ...(loc.storefrontAddress?.addressLines ?? []),
-      loc.storefrontAddress?.locality,
-      loc.storefrontAddress?.administrativeArea,
-    ].filter(Boolean);
-
-    return {
-      name: loc.name ?? "",
-      title: loc.title ?? loc.name ?? "",
-      address: parts.join(", "),
-    };
-  });
-
-  return NextResponse.json({ locations });
+  return NextResponse.json({ locations: allLocations });
 }

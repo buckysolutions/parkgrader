@@ -3,6 +3,8 @@ import { DM_Sans } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 
+const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID?.trim();
+
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
   subsets: ["latin"],
@@ -81,7 +83,31 @@ export default function RootLayout({
           </Script>
         </>
       ) : null}
-      <body className="min-h-full flex flex-col">{children}</body>
+      {META_PIXEL_ID ? (
+        <>
+          <Script
+            src="https://connect.facebook.net/en_US/fbevents.js"
+            strategy="lazyOnload"
+          />
+          <Script id="meta-pixel-init" strategy="lazyOnload">
+            {`window.fbq=window.fbq||function(){(window.fbq.q=window.fbq.q||[]).push(arguments)};window._fbq=window.fbq;window.fbq.loaded=true;window.fbq.version='2.0';window.fbq('init','${META_PIXEL_ID}');window.fbq('track','PageView');`}
+          </Script>
+        </>
+      ) : null}
+      <body className="min-h-full flex flex-col">
+        {children}
+        {META_PIXEL_ID ? (
+          <noscript>
+            <img
+              height="1"
+              width="1"
+              style={{ display: "none" }}
+              src={`https://www.facebook.com/tr?id=${encodeURIComponent(META_PIXEL_ID)}&ev=PageView&noscript=1`}
+              alt=""
+            />
+          </noscript>
+        ) : null}
+      </body>
     </html>
   );
 }

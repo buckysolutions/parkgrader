@@ -338,6 +338,7 @@ const hasEnabledQueryFlag = (params: URLSearchParams, key: string): boolean => {
 };
 
 const INTERNAL_TEST_DOMAIN = "buckysolutions.com";
+const IS_REVIEW_COACH_ENABLED = process.env.NEXT_PUBLIC_ENABLE_REVIEW_COACH === "true";
 
 const isInternalTestDomain = (raw: string): boolean => {
   return formatDisplayUrl(raw).toLowerCase() === INTERNAL_TEST_DOMAIN;
@@ -550,6 +551,315 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
   };
 };
 
+type ReviewCoachTone = "friendly" | "professional" | "premium";
+
+type ReviewCoachSummary = {
+  totalReviews: number;
+  averageRating: number;
+  unansweredReviews: number;
+  needsReplyNow: number;
+  sentimentBreakdown: { positive: number; mixed: number; negative: number };
+};
+
+type ReviewCoachTopIssue = {
+  key: string;
+  label: string;
+  count: number;
+  frequencyPercent: number;
+  recommendedUpdate: string;
+  replyStrategy: string;
+};
+
+type ReviewCoachReply = {
+  reviewId: string;
+  rating: number;
+  reviewSnippet: string;
+  reason: string;
+  draftReply: string;
+};
+
+type ReviewCoachResult = {
+  summary: ReviewCoachSummary;
+  insights: { topIssues: ReviewCoachTopIssue[]; repliesToPostNow: ReviewCoachReply[]; nextBestUpdates: string[] };
+  meta: { tone: ReviewCoachTone; modelUsed: string };
+  message?: string;
+};
+
+const STAR_COLORS: Record<number, string> = { 1: "#DC2626", 2: "#EA580C", 3: "#D97706", 4: "#2DA4A9", 5: "#16A34A" };
+
+function ReviewCoachPanel({ propertyName, isVisible }: { propertyName: string; isVisible: boolean }) {
+  const [tone, setTone] = useState<ReviewCoachTone>("friendly");
+  const [result, setResult] = useState<ReviewCoachResult | null>(null);
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState("");
+  const [authStatus, setAuthStatus] = useState<"checking" | "connected" | "disconnected">("checking");
+  const [locations, setLocations] = useState<{ name: string; title: string; address: string }[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState("");
+  const [isFetching, setIsFetching] = useState(false);
+
+  const refreshLocations = async () => {
+    try {
+      const res = await fetch("/api/reviews/locations");
+      const payload = (await res.json().catch(() => ({}))) as {
+        locations?: { name: string; title: string; address: string }[];
+        message?: string;
+      };
+
+      if (!res.ok) {
+        setAuthStatus("disconnected");
+        setError(payload.message ?? "Could not load Google Business locations.");
+        return;
+      }
+
+      const locs = payload.locations ?? [];
+      setLocations(locs);
+      setAuthStatus("connected");
+      setError("");
+      if (locs.length) {
+        setSelectedLocation(locs[0].name);
+      }
+    } catch {
+      setAuthStatus("disconnected");
+      setError("Could not reach Google Business location service.");
+    }
+  };
+
+  useEffect(() => {
+    if (!isVisible) return;
+    void refreshLocations();
+  }, [isVisible]);
+
+  useEffect(() => {
+    if (!isVisible) {
+      return;
+    }
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) {
+        return;
+      }
+
+      if ((event.data as { type?: string })?.type !== "GBP_AUTH_SUCCESS") {
+        return;
+      }
+
+      void refreshLocations();
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [isVisible]);
+
+  const openGoogleAuth = () => {
+    const w = window.open("/api/auth/google?popup=1", "GoogleAuth", "width=600,height=700");
+    const checkClosed = setInterval(() => {
+      if (!w || w.closed) {
+        clearInterval(checkClosed);
+        void refreshLocations();
+      }
+    }, 500);
+  };
+
+  const fetchAndAnalyze = async () => {
+    if (!selectedLocation) return;
+    setIsFetching(true);
+    setError("");
+    setResult(null);
+    try {
+      const res = await fetch(`/api/reviews/fetch?location=${encodeURIComponent(selectedLocation)}`);
+      const payload = (await res.json()) as { reviews?: unknown[]; message?: string };
+      if (!res.ok) { if (res.status === 401) setAuthStatus("disconnected"); throw new Error(payload.message ?? "Fetch failed."); }
+      const fetchedReviews = payload.reviews ?? [];
+      if (!fetchedReviews.length) { setError("No reviews found."); setIsFetching(false); return; }
+      setIsLoading(true);
+      const selectedLoc = locations.find((l) => l.name === selectedLocation);
+      const res2 = await fetch("/api/review-coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ propertyName: selectedLoc?.title || propertyName, tone, reviews: fetchedReviews }),
+      });
+      const payload2 = (await res2.json()) as ReviewCoachResult;
+      if (!res2.ok) throw new Error(payload2.message ?? "Analysis failed.");
+      setResult(payload2);
+    } catch (e) { setError(e instanceof Error ? e.message : "Error fetching or analyzing reviews."); }
+    finally { setIsFetching(false); setIsLoading(false); }
+  };
+
+  const copy = async (id: string, text: string) => {
+    try { await navigator.clipboard.writeText(text); setCopiedId(id); window.setTimeout(() => setCopiedId(""), 1800); } catch { /* silent */ }
+  };
+
+  if (!isVisible) return null;
+
+  return (
+    <aside className="print-hidden fixed right-0 top-0 z-40 flex h-full w-full max-w-sm flex-col overflow-hidden border-l border-[#E2E9EF] bg-white shadow-[-8px_0_48px_rgba(10,22,40,0.16)]">
+      {/* header */}
+      <div className="border-b border-[#E2E9EF] px-4 py-3">
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#2DA4A9]">Review Coach</p>
+        <p className="mt-1 text-sm font-semibold text-[#0A1628]">Analyze &amp; Reply</p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {/* connection status */}
+        {authStatus === "checking" && (
+          <div className="space-y-3 text-center py-6">
+            <div className="animate-spin h-5 w-5 border-2 border-[#2DA4A9] border-t-transparent rounded-full mx-auto"></div>
+            <p className="text-xs text-[#5B6776]">Checking connection…</p>
+          </div>
+        )}
+
+        {authStatus === "disconnected" && (
+          <div className="space-y-3">
+            <p className="text-sm text-[#314154]">Connect your Google Business Profile to fetch and analyze your reviews.</p>
+            <button
+              type="button"
+              onClick={openGoogleAuth}
+              className="w-full flex items-center justify-center gap-2 border border-[#D4DEE7] bg-white hover:bg-[#F9FAFB] px-4 py-3 text-sm font-medium text-[#0A1628] transition-colors"
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              Sign in with Google
+            </button>
+            <p className="text-[10px] text-[#9AA9B5] text-center">We only access your reviews and location info</p>
+          </div>
+        )}
+
+        {authStatus === "connected" && (
+          <div className="space-y-3">
+            {/* location selector */}
+            <div>
+              <label className="text-xs font-medium text-[#314154]">Your location</label>
+              <select
+                value={selectedLocation}
+                onChange={(e) => setSelectedLocation(e.target.value)}
+                className="mt-1 w-full border border-[#D4DEE7] bg-white px-3 py-2 text-xs outline-none focus:border-[#2DA4A9]"
+              >
+                <option value="">— Select a location —</option>
+                {locations.map((l) => (
+                  <option key={l.name} value={l.name}>
+                    {l.title}{l.address ? ` (${l.address})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* reply tone */}
+            <div>
+              <label className="text-xs font-medium text-[#314154]">Reply tone</label>
+              <select
+                value={tone}
+                onChange={(e) => setTone(e.target.value as ReviewCoachTone)}
+                className="mt-1 w-full border border-[#D4DEE7] bg-white px-3 py-2 text-xs outline-none focus:border-[#2DA4A9]"
+              >
+                <option value="friendly">Friendly</option>
+                <option value="professional">Professional</option>
+                <option value="premium">Premium</option>
+              </select>
+            </div>
+
+            {/* fetch & analyze button */}
+            <button
+              type="button"
+              onClick={fetchAndAnalyze}
+              disabled={isFetching || isLoading || !selectedLocation}
+              className="w-full bg-[#0A1628] hover:bg-[#1a2a4a] disabled:opacity-50 px-4 py-2 text-xs font-semibold text-white transition-colors"
+            >
+              {isFetching ? "Fetching reviews…" : isLoading ? "Analyzing…" : "Fetch & Analyze"}
+            </button>
+
+            <a
+              href="/api/auth/google/disconnect"
+              className="text-[10px] text-[#5B6776] hover:text-[#0A1628] flex items-center justify-end gap-1 transition-colors"
+            >
+              Disconnect
+              <span>→</span>
+            </a>
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-4 border border-[#FEE2E2] bg-[#FEF2F2] p-3 text-xs text-[#A10F2B]">
+            {error}
+          </div>
+        )}
+
+        {/* results */}
+        {result && (
+          <div className="mt-4 space-y-4 pb-4">
+            {/* summary bar */}
+            <div className="grid grid-cols-3 gap-1.5">
+              {[
+                { label: "Reviews", value: result.summary.totalReviews },
+                { label: "Avg ★", value: result.summary.averageRating },
+                { label: "Need reply", value: result.summary.needsReplyNow },
+              ].map((stat) => (
+                <div key={stat.label} className="border border-[#E2E9EF] bg-[#F8FAFB] p-2 text-center">
+                  <p className="text-[9px] text-[#5B6776]">{stat.label}</p>
+                  <p className="mt-0.5 text-base font-bold text-[#0A1628]">{stat.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* top issues */}
+            {result.insights.topIssues.length > 0 && (
+              <section>
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#5B6776]">Top Issues</p>
+                <div className="space-y-2">
+                  {result.insights.topIssues.slice(0, 3).map((issue) => (
+                    <div key={issue.key} className="border border-[#E2E9EF] bg-[#F8FAFB] p-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-semibold text-[#0A1628]">{issue.label}</p>
+                        <span className="text-[9px] text-[#5B6776]">{issue.frequencyPercent}%</span>
+                      </div>
+                      <p className="mt-1 text-[10px] leading-3 text-[#314154]">{issue.recommendedUpdate}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* replies */}
+            {result.insights.repliesToPostNow.length > 0 && (
+              <section>
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[#5B6776]">Draft Replies</p>
+                <div className="space-y-2">
+                  {result.insights.repliesToPostNow.slice(0, 3).map((reply) => (
+                    <div key={reply.reviewId} className="border border-[#E2E9EF] bg-[#F8FAFB] p-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-semibold" style={{ color: STAR_COLORS[reply.rating] ?? "#5B6776" }}>★{reply.rating}</span>
+                        <span className="text-[9px] text-[#5B6776]">Review {reply.reviewId.slice(0, 8)}…</span>
+                      </div>
+                      <p className="mt-1 text-[10px] leading-3 text-[#314154] line-clamp-2">{reply.reviewSnippet}</p>
+                      <div className="mt-1.5 border-l-2 border-[#2DA4A9] bg-[#F0F9FA] px-2 py-1">
+                        <p className="text-[10px] leading-3 text-[#0A1628] line-clamp-3">{reply.draftReply}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void copy(reply.reviewId, reply.draftReply)}
+                        className="mt-1 text-[10px] text-[#2DA4A9] hover:font-semibold transition-all"
+                      >
+                        {copiedId === reply.reviewId ? "Copied ✓" : "Copy"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-[#E2E9EF] bg-[#F8FAFB] px-4 py-2.5 text-[9px] text-[#5B6776]">
+        AI requires GEMINI_API_KEY · Always review before posting
+      </div>
+    </aside>
+  );
+}
 function TradeshowEmailConfirm({ email, onClose }: { email: string; onClose: () => void }) {
   return (
     <div className="px-6 pb-6 pt-6 text-center">
@@ -1498,6 +1808,7 @@ export default function Home() {
   const [collapsedPainGroups, setCollapsedPainGroups] = useState<Partial<Record<PainLevel, boolean>>>({});
   const [isHydratingSharedReport, setIsHydratingSharedReport] = useState(() => Boolean(getReportIdFromPathname(pathname ?? "")));
   const [engagementIssueClicks, setEngagementIssueClicks] = useState(0);
+  const [isReviewCoachOpen, setIsReviewCoachOpen] = useState(false);
   const [hasShownEngagementPrompt, setHasShownEngagementPrompt] = useState(false);
   const [hasClosedSecondIssue, setHasClosedSecondIssue] = useState(false);
   const [secondIssueCloseScrollY, setSecondIssueCloseScrollY] = useState<number | null>(null);
@@ -2945,6 +3256,18 @@ export default function Home() {
                     <Image src={PARKGRADER_LOGO} alt="ParkGrader" width={181} height={32} style={{ height: "2rem", width: "auto" }} />
                   </button>
                   <div className={`print-hidden flex flex-wrap items-center justify-end gap-1 text-right text-[#0A1628] ${isReportUnlocked ? "" : "opacity-80"}`}>
+                    {IS_REVIEW_COACH_ENABLED ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsReviewCoachOpen(!isReviewCoachOpen)}
+                        aria-label="View Review Coach"
+                        title="Review Coach — Analyze reviews & draft replies"
+                        className="inline-flex h-10 items-center gap-1.5 border border-[#DCE5EC] bg-white px-3 text-xs font-semibold text-[#0A1628] transition-colors hover:border-[#2DA4A9] hover:text-[#2DA4A9]"
+                      >
+                        <SparklesIcon className="h-4 w-4" aria-hidden="true" />
+                        Reviews
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => requestProtectedAction("share")}
@@ -3652,6 +3975,14 @@ export default function Home() {
                       </motion.div>
                     </motion.div>
                   ) : null}
+                </AnimatePresence>
+
+                <AnimatePresence>
+                  {IS_REVIEW_COACH_ENABLED && isReviewCoachOpen && (
+                    <motion.div key="review-coach" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ duration: 0.22, ease: "easeOut" }}>
+                      <ReviewCoachPanel propertyName={propertyName || reportUrl} isVisible={isReviewCoachOpen} />
+                    </motion.div>
+                  )}
                 </AnimatePresence>
 
                 <a
