@@ -44,12 +44,11 @@ import QRCode from "qrcode";
 type IndustryKey = "campground" | "marina" | "glamping" | "cabins";
 type AppStep = "landing" | "guided" | "partial" | "report";
 type CheckCategory =
-  | "Technical Performance"
-  | "Booking & Conversion"
-  | "Outdoor Hospitality Essentials"
-  | "Local & Online Visibility"
-  | "Mobile Experience"
-  | "Booking Psychology";
+  | "Does Your Website Work?"
+  | "Can Guests Book Online?"
+  | "What Info Are You Missing?"
+  | "Can Guests Find You?"
+  | "Are You Losing Guests?";
 type CheckStatus = "pass" | "fail" | "unknown";
 type Effort = "Low" | "Medium" | "High";
 type Impact = "Low" | "Medium" | "High";
@@ -208,12 +207,11 @@ const GUIDED_QUESTIONS: GuidedQuestion[] = [
   },
 ];
 const CATEGORY_ORDER: CheckCategory[] = [
-  "Technical Performance",
-  "Booking & Conversion",
-  "Outdoor Hospitality Essentials",
-  "Local & Online Visibility",
-  "Mobile Experience",
-  "Booking Psychology",
+  "Does Your Website Work?",
+  "Can Guests Book Online?",
+  "What Info Are You Missing?",
+  "Can Guests Find You?",
+  "Are You Losing Guests?",
 ];
 
 const PARTIAL_LOADING_PHASES = [
@@ -230,12 +228,11 @@ const PARTIAL_LOADING_PHASES = [
 type HeroIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
 const CATEGORY_ICON_BY_CHECK_CATEGORY: Record<CheckCategory, HeroIcon> = {
-  "Technical Performance": BoltIcon,
-  "Booking & Conversion": CalendarDaysIcon,
-  "Outdoor Hospitality Essentials": HomeModernIcon,
-  "Local & Online Visibility": MagnifyingGlassIcon,
-  "Mobile Experience": DevicePhoneMobileIcon,
-  "Booking Psychology": SparklesIcon,
+  "Does Your Website Work?": BoltIcon,
+  "Can Guests Book Online?": CalendarDaysIcon,
+  "What Info Are You Missing?": HomeModernIcon,
+  "Can Guests Find You?": MagnifyingGlassIcon,
+  "Are You Losing Guests?": DevicePhoneMobileIcon,
 };
 
 const PAIN_LEVEL_ICON_BY_KEY: Record<PainLevel, HeroIcon> = {
@@ -247,54 +244,41 @@ const PAIN_LEVEL_ICON_BY_KEY: Record<PainLevel, HeroIcon> = {
 
 const CHECK_ICON_BY_ID: Record<string, HeroIcon> = {
   "technical-trust-security": ShieldCheckIcon,
-  "ssl-valid": ShieldCheckIcon,
-  "https-redirect": ShieldCheckIcon,
   "response-time": BoltIcon,
   "broken-links": LinkIcon,
   "pagespeed-mobile": DevicePhoneMobileIcon,
-  "canonical-redirect-hygiene": GlobeAltIcon,
+  "human-written-content": DocumentTextIcon,
+  "website-technology": BoltIcon,
+  "copyright-freshness": CalendarDaysIcon,
   "booking-platform": CalendarDaysIcon,
-  "booking-engine-health": BoltIcon,
   "booking-cta": ArrowRightIcon,
   "date-picker-discoverability": CalendarDaysIcon,
+  "fee-transparency": ReceiptPercentIcon,
   "tracking-pixels": ChartBarSquareIcon,
-  "abandonment-recovery-readiness": ChartBarSquareIcon,
-  "newsletter-capture": EnvelopeIcon,
   "pet-policy": QueueListIcon,
   "rv-hookup-specs": TruckIcon,
   "big-rig-readiness": TruckIcon,
-  "wifi-quality-claims": BoltIcon,
   "arrival-directions-clarity": MapPinIcon,
   "ev-extra-vehicle-policy": CreditCardIcon,
   "amenities-page": HomeModernIcon,
-  "rate-page": ReceiptPercentIcon,
   "cancellation-policy": DocumentTextIcon,
-  "photo-gallery-quality": PhotoIcon,
   "accessibility-statement": UserCircleIcon,
   "meta-title": TagIcon,
   "meta-description": NewspaperIcon,
   "gbp-sync": MapPinIcon,
   "local-review-competitiveness": MapPinIcon,
   "social-presence": UsersIcon,
-  "listing-signals": ClipboardDocumentListIcon,
-  "facebook-link": LinkIcon,
+  "structured-data": GlobeAltIcon,
+  "sitemap-presence": DocumentTextIcon,
   "mobile-viewport": DevicePhoneMobileIcon,
-  "header-phone": PhoneIcon,
-  "mobile-tap-targets": DevicePhoneMobileIcon,
   "phone-conversion-readiness": PhoneIcon,
-  "image-count": PhotoIcon,
-  "listing-completeness": ClipboardDocumentListIcon,
+  "accessibility-score": UserCircleIcon,
   "rate-transparency": ReceiptPercentIcon,
   "contact-friction": PhoneIcon,
   "trust-stack-completeness": ShieldCheckIcon,
-  "local-search-intent-coverage": MagnifyingGlassIcon,
-  "visual-proof-relevance": PhotoIcon,
-  "visual-trust": PhotoIcon,
   "seasonal-visibility": SunIcon,
-  "visual-storytelling": PhotoIcon,
-  "payment-flexibility": CreditCardIcon,
-  "structured-data": GlobeAltIcon,
-  "accessibility-score": UserCircleIcon,
+  "professional-email": EnvelopeIcon,
+  "checkin-checkout-times": ClockIcon,
 };
 
 const normalizeUrl = (raw: string): string => {
@@ -388,13 +372,13 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
   const good = mode === "good";
   const checks: ScanCheck[] = [
     {
-      id: "ssl-valid",
-      name: "SSL certificate",
-      category: "Technical Performance",
+      id: "technical-trust-security",
+      name: "Technical trust & security",
+      category: "Does Your Website Work?",
       status: "pass",
       pass: true,
-      finding: "Certificate is valid and secure.",
-      details: "Guests can trust the booking flow from the first click.",
+      finding: "SSL, HTTPS redirect, and canonical tags are aligned.",
+      details: "Your technical trust stack is solid — browsers show the padlock and search engines index one clean version of your site.",
       weight: 1,
       effort: "Low",
       impact: "High",
@@ -403,13 +387,13 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
     {
       id: "pagespeed-mobile",
       name: "Mobile performance",
-      category: "Technical Performance",
+      category: "Does Your Website Work?",
       status: good ? "pass" : "fail",
       pass: good,
       finding: good ? "Mobile performance score 84." : "Mobile performance score 39.",
       details: good
-        ? "The experience loads quickly enough to support direct bookings."
-        : "A slow mobile experience is pushing high-intent guests away before they inquire.",
+        ? "Your site loads fast enough on phones to keep guests engaged."
+        : "Your site is loading slower than it should on phones. Guests will leave before they ever see your booking button.",
       weight: 1,
       effort: "Medium",
       impact: "High",
@@ -417,8 +401,8 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
     },
     {
       id: "booking-cta",
-      name: "Primary booking CTA",
-      category: "Booking & Conversion",
+      name: "Book now button",
+      category: "Can Guests Book Online?",
       status: good ? "pass" : "fail",
       pass: good,
       finding: good ? "Clear booking path found." : "No clear booking button found.",
@@ -433,7 +417,7 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
     {
       id: "tracking-pixels",
       name: "Tracking pixels",
-      category: "Booking & Conversion",
+      category: "Can Guests Book Online?",
       status: good ? "pass" : "fail",
       pass: good,
       finding: good ? "Facebook Pixel and GTM detected." : "No Facebook Pixel or GTM detected.",
@@ -446,39 +430,39 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
       serviceKey: "tracking_pixels",
     },
     {
-      id: "photo-gallery-quality",
-      name: "Photo gallery quality",
-      category: "Outdoor Hospitality Essentials",
+      id: "cancellation-policy",
+      name: "Cancellation policy",
+      category: "What Info Are You Missing?",
       status: good ? "pass" : "fail",
       pass: good,
-      finding: good ? "9 strong visual assets found." : "Only 3 strong visual assets found.",
+      finding: good ? "Cancellation policy found." : "No cancellation policy found.",
       details: good
-        ? "The stay is well merchandised visually."
-        : "Guests cannot picture the experience well enough to feel confident booking.",
+        ? "Guests can understand the rules before committing money."
+        : "Families book months ahead and worry about 'what if something comes up.' A clear cancellation policy often tips someone from 'thinking about it' to clicking 'Reserve.'",
       weight: 1,
-      effort: "Medium",
-      impact: "High",
-      serviceKey: "photos",
+      effort: "Low",
+      impact: "Medium",
+      serviceKey: "default",
     },
     {
-      id: "rate-page",
-      name: "Rates or pricing visibility",
-      category: "Outdoor Hospitality Essentials",
+      id: "rate-transparency",
+      name: "Pricing visible",
+      category: "Are You Losing Guests?",
       status: good ? "pass" : "fail",
       pass: good,
-      finding: good ? "Pricing information is visible." : "No visible pricing information found.",
+      finding: good ? "Pricing is visible on your site." : "No clear pricing found.",
       details: good
-        ? "Guests can self-qualify quickly."
-        : "Hiding pricing often increases bounce and inquiry fatigue.",
+        ? "Guests can see if they can afford you before investing time in the booking process."
+        : "Hidden pricing forces guests to call or fill out a form just to find out if they can afford your park. Most will just leave.",
       weight: 1,
       effort: "Low",
       impact: "High",
-      serviceKey: "booking_cta",
+      serviceKey: "rate_page",
     },
     {
       id: "gbp-sync",
-      name: "Google Business Profile",
-      category: "Local & Online Visibility",
+      name: "Google listing",
+      category: "Can Guests Find You?",
       status: good ? "pass" : "fail",
       pass: good,
       finding: good ? "Google map and strong review signals found." : "Google Business Profile link appears weak or missing.",
@@ -492,14 +476,14 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
     },
     {
       id: "mobile-viewport",
-      name: "Mobile viewport meta",
-      category: "Mobile Experience",
+      name: "Phone layout",
+      category: "Are You Losing Guests?",
       status: good ? "pass" : "fail",
       pass: good,
-      finding: good ? "Viewport meta tag detected." : "Viewport meta tag is missing.",
+      finding: good ? "Phone layout settings detected." : "Your site is missing phone layout settings.",
       details: good
         ? "Phones are receiving proper responsive layout instructions."
-        : "Mobile visitors are likely dealing with zoom and layout issues.",
+        : "Without this, your site shows up tiny and zoomed out on smartphones — text too small to read, buttons too small to tap.",
       weight: 1,
       effort: "Low",
       impact: "High",
@@ -513,12 +497,11 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
     const passed = categoryChecks.reduce((sum, check) => sum + (check.pass ? check.weight : 0), 0);
     const score = total === 0 ? 0 : Math.round((passed / total) * 100);
     const weights: Record<CheckCategory, number> = {
-      "Technical Performance": 15,
-      "Booking & Conversion": 25,
-      "Outdoor Hospitality Essentials": 25,
-      "Local & Online Visibility": 20,
-      "Mobile Experience": 15,
-      "Booking Psychology": 10,
+      "Does Your Website Work?": 15,
+      "Can Guests Book Online?": 25,
+      "What Info Are You Missing?": 30,
+      "Can Guests Find You?": 15,
+      "Are You Losing Guests?": 15,
     };
     return { name, score, passed, total, categoryWeight: weights[name] };
   }).filter((category) => category.total > 0);
@@ -542,10 +525,10 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
           "Your online experience is slower than ideal.",
           "Guests are not seeing a clear booking path.",
           "You are missing remarketing data.",
-          "Your visual storytelling is not doing enough work.",
+          "No cancellation policy is making guests hesitate.",
           "Hidden pricing is forcing visitors to bounce.",
         ],
-    topFails: good ? ["tracking-pixels"] : ["pagespeed-mobile", "booking-cta", "photo-gallery-quality"],
+    topFails: good ? ["tracking-pixels"] : ["pagespeed-mobile", "booking-cta", "rate-transparency"],
     categories,
     checks,
   };
@@ -1021,14 +1004,6 @@ const getServiceCta = (serviceKey?: string | null): ServiceCta => {
 };
 
 const CHECK_CTA_BY_ID: Record<string, Pick<ServiceCta, "buttonLabel" | "href">> = {
-  "ssl-valid": {
-    buttonLabel: "Harden site security",
-    href: "https://www.buckysolutions.com/services/cybersecurity/",
-  },
-  "https-redirect": {
-    buttonLabel: "Fix secure redirects",
-    href: "https://www.buckysolutions.com/services/cybersecurity/",
-  },
   "response-time": {
     buttonLabel: "Speed up load time",
     href: "https://www.buckysolutions.com/services/website-management/",
@@ -1041,20 +1016,20 @@ const CHECK_CTA_BY_ID: Record<string, Pick<ServiceCta, "buttonLabel" | "href">> 
     buttonLabel: "Improve mobile score",
     href: "https://www.buckysolutions.com/services/website-management/",
   },
-  "canonical-redirect-hygiene": {
-    buttonLabel: "Fix URL setup",
-    href: "https://www.buckysolutions.com/services/website-management/",
-  },
   "technical-trust-security": {
     buttonLabel: "Fix trust + security setup",
     href: "https://www.buckysolutions.com/services/cybersecurity/",
   },
+  "website-technology": {
+    buttonLabel: "Get a website assessment",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
+  "human-written-content": {
+    buttonLabel: "Improve website copy",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
   "booking-platform": {
     buttonLabel: "Upgrade booking stack",
-    href: "https://www.buckysolutions.com/services/booking-automation/",
-  },
-  "booking-engine-health": {
-    buttonLabel: "Fix booking uptime",
     href: "https://www.buckysolutions.com/services/booking-automation/",
   },
   "booking-cta": {
@@ -1065,16 +1040,16 @@ const CHECK_CTA_BY_ID: Record<string, Pick<ServiceCta, "buttonLabel" | "href">> 
     buttonLabel: "Show date options sooner",
     href: "https://www.buckysolutions.com/services/booking-automation/",
   },
+  "fee-transparency": {
+    buttonLabel: "Fix fee display",
+    href: "https://www.buckysolutions.com/services/booking-automation/",
+  },
+  "rate-transparency": {
+    buttonLabel: "Improve rate transparency",
+    href: "https://www.buckysolutions.com/services/booking-automation/",
+  },
   "tracking-pixels": {
     buttonLabel: "Set up tracking",
-    href: "https://www.buckysolutions.com/services/vendor-management/",
-  },
-  "abandonment-recovery-readiness": {
-    buttonLabel: "Set up recovery tracking",
-    href: "https://www.buckysolutions.com/services/vendor-management/",
-  },
-  "newsletter-capture": {
-    buttonLabel: "Add email capture",
     href: "https://www.buckysolutions.com/services/vendor-management/",
   },
   "pet-policy": {
@@ -1089,10 +1064,6 @@ const CHECK_CTA_BY_ID: Record<string, Pick<ServiceCta, "buttonLabel" | "href">> 
     buttonLabel: "Add big-rig details",
     href: "https://www.buckysolutions.com/services/website-management/",
   },
-  "wifi-quality-claims": {
-    buttonLabel: "Clarify Wi-Fi quality",
-    href: "https://www.buckysolutions.com/services/website-management/",
-  },
   "arrival-directions-clarity": {
     buttonLabel: "Improve arrival directions",
     href: "https://www.buckysolutions.com/services/website-management/",
@@ -1105,16 +1076,12 @@ const CHECK_CTA_BY_ID: Record<string, Pick<ServiceCta, "buttonLabel" | "href">> 
     buttonLabel: "Build amenities page",
     href: "https://www.buckysolutions.com/services/website-management/",
   },
-  "rate-page": {
-    buttonLabel: "Improve pricing visibility",
-    href: "https://www.buckysolutions.com/services/booking-automation/",
-  },
   "cancellation-policy": {
     buttonLabel: "Add clear policy",
     href: "https://www.buckysolutions.com/services/website-management/",
   },
-  "photo-gallery-quality": {
-    buttonLabel: "Upgrade photos",
+  "checkin-checkout-times": {
+    buttonLabel: "Add check-in/out times",
     href: "https://www.buckysolutions.com/services/website-management/",
   },
   "accessibility-statement": {
@@ -1141,41 +1108,21 @@ const CHECK_CTA_BY_ID: Record<string, Pick<ServiceCta, "buttonLabel" | "href">> 
     buttonLabel: "Improve social presence",
     href: "https://www.buckysolutions.com/services/vendor-management/",
   },
-  "listing-signals": {
-    buttonLabel: "Strengthen listings",
+  "structured-data": {
+    buttonLabel: "Add structured data",
     href: "https://www.buckysolutions.com/services/local-seo/",
-  },
-  "facebook-link": {
-    buttonLabel: "Fix social links",
-    href: "https://www.buckysolutions.com/services/vendor-management/",
   },
   "mobile-viewport": {
     buttonLabel: "Improve mobile rendering",
-    href: "https://www.buckysolutions.com/services/website-management/",
-  },
-  "header-phone": {
-    buttonLabel: "Improve call conversion",
-    href: "https://www.buckysolutions.com/services/website-management/",
-  },
-  "mobile-tap-targets": {
-    buttonLabel: "Improve mobile tap targets",
     href: "https://www.buckysolutions.com/services/website-management/",
   },
   "phone-conversion-readiness": {
     buttonLabel: "Improve phone booking path",
     href: "https://www.buckysolutions.com/services/website-management/",
   },
-  "image-count": {
-    buttonLabel: "Improve visual content",
+  "accessibility-score": {
+    buttonLabel: "Improve accessibility",
     href: "https://www.buckysolutions.com/services/website-management/",
-  },
-  "listing-completeness": {
-    buttonLabel: "Complete listing profile",
-    href: "https://www.buckysolutions.com/services/local-seo/",
-  },
-  "rate-transparency": {
-    buttonLabel: "Improve rate transparency",
-    href: "https://www.buckysolutions.com/services/booking-automation/",
   },
   "contact-friction": {
     buttonLabel: "Reduce contact friction",
@@ -1185,148 +1132,100 @@ const CHECK_CTA_BY_ID: Record<string, Pick<ServiceCta, "buttonLabel" | "href">> 
     buttonLabel: "Strengthen trust signals",
     href: "https://www.buckysolutions.com/services/website-management/",
   },
-  "local-search-intent-coverage": {
-    buttonLabel: "Improve local search basics",
-    href: "https://www.buckysolutions.com/services/local-seo/",
-  },
-  "visual-proof-relevance": {
-    buttonLabel: "Improve key proof photos",
-    href: "https://www.buckysolutions.com/services/website-management/",
-  },
   "seasonal-visibility": {
     buttonLabel: "Improve offer visibility",
     href: "https://www.buckysolutions.com/services/booking-automation/",
   },
-  "visual-storytelling": {
-    buttonLabel: "Strengthen storytelling",
-    href: "https://www.buckysolutions.com/services/website-management/",
-  },
-  "payment-flexibility": {
-    buttonLabel: "Improve payment options",
-    href: "https://www.buckysolutions.com/services/booking-automation/",
-  },
-  "structured-data": {
-    buttonLabel: "Add structured data",
+  "sitemap-presence": {
+    buttonLabel: "Fix search visibility",
     href: "https://www.buckysolutions.com/services/local-seo/",
   },
-  "accessibility-score": {
-    buttonLabel: "Improve accessibility",
+  "copyright-freshness": {
+    buttonLabel: "Update your website",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
+  "professional-email": {
+    buttonLabel: "Set up business email",
     href: "https://www.buckysolutions.com/services/website-management/",
   },
 };
 
 const PASS_LEARN_CTA_BY_ID: Record<string, string> = {
-  "ssl-valid": "Learn about site security",
-  "https-redirect": "Learn about secure routing",
   "response-time": "Learn about fast load speed",
   "broken-links": "Learn about link health",
   "pagespeed-mobile": "Learn about mobile speed",
-  "canonical-redirect-hygiene": "Learn about URL consistency",
   "technical-trust-security": "Learn about trust signals",
+  "website-technology": "Learn about website technology",
+  "human-written-content": "Learn about website copy",
   "mobile-viewport": "Learn about mobile readiness",
   "meta-title": "Learn about search signage",
   "meta-description": "Learn about search snippets",
   "booking-platform": "Learn about booking systems",
-  "booking-engine-health": "Learn about booking uptime",
   "booking-cta": "Learn about booking visibility",
   "date-picker-discoverability": "Learn about date pickers",
+  "fee-transparency": "Learn about fee clarity",
+  "rate-transparency": "Learn about rate clarity",
   "tracking-pixels": "Learn about guest tracking",
-  "abandonment-recovery-readiness": "Learn about recovery tracking",
-  "newsletter-capture": "Learn about email capture",
   "pet-policy": "Learn about pet policies",
   "rv-hookup-specs": "Learn about hookup specs",
   "big-rig-readiness": "Learn about rig readiness",
-  "wifi-quality-claims": "Learn about Wi-Fi claims",
   "arrival-directions-clarity": "Learn about arrival directions",
   "ev-extra-vehicle-policy": "Learn about vehicle policies",
   "amenities-page": "Learn about amenity pages",
-  "rate-page": "Learn about pricing pages",
   "cancellation-policy": "Learn about cancellation policies",
-  "photo-gallery-quality": "Learn about photo quality",
+  "checkin-checkout-times": "Learn about check-in times",
   "accessibility-statement": "Learn about accessibility",
   "gbp-sync": "Learn about Google listings",
   "local-review-competitiveness": "Learn about review strategy",
   "social-presence": "Learn about social presence",
-  "listing-signals": "Learn about listing strength",
-  "facebook-link": "Learn about social links",
-  "header-phone": "Learn about call conversion",
-  "mobile-tap-targets": "Learn about tap targets",
+  "structured-data": "Learn about structured data",
   "phone-conversion-readiness": "Learn about phone bookings",
-  "image-count": "Learn about visual content",
-  "listing-completeness": "Learn about listing profiles",
-  "rate-transparency": "Learn about rate clarity",
+  "accessibility-score": "Learn about accessibility",
   "contact-friction": "Learn about contact ease",
   "trust-stack-completeness": "Learn about trust signals",
-  "local-search-intent-coverage": "Learn about local search",
-  "visual-proof-relevance": "Learn about proof photos",
   "seasonal-visibility": "Learn about seasonal offers",
-  "visual-storytelling": "Learn about storytelling",
-  "visual-trust": "Learn about visual trust",
-  "payment-flexibility": "Learn about payment options",
-  "booking-click-depth": "Learn about booking depth",
-  "availability-visibility": "Learn about availability",
-  "fee-transparency": "Learn about fee clarity",
-  "onsite-guest-proof": "Learn about guest proof",
-  "authentic-photography": "Learn about authentic photos",
-  "structured-data": "Learn about structured data",
-  "accessibility-score": "Learn about accessibility",
+  "sitemap-presence": "Learn about XML sitemaps",
+  "copyright-freshness": "Learn about copyright years",
+  "professional-email": "Learn about business email",
 };
 
 const PASS_BENEFIT_BY_ID: Record<string, string> = {
-  "ssl-valid": "Security guard active: your site is locked and safe for guest information and card details.",
-  "https-redirect": "Your website automatically sends visitors to a secure connection. This protects guest privacy and avoids trust-breaking unsafe warnings.",
   "response-time": "Fast loading: guests can open your site quickly without frustration, so more high-intent visitors stay on the booking path.",
   "mobile-viewport": "Smartphone ready: your website layout stays readable and easy to use when guests look you up from the road.",
   "meta-title": "Search engine signage: your Google listing label is clear, so the right guests can recognize your park faster.",
   "meta-description": "Your search preview explains the value of your park clearly, improving click quality from potential guests.",
   "broken-links": "All internal links are working correctly. Guests and search engines can navigate your site without hitting dead ends.",
   "pagespeed-mobile": "Your site loads quickly on mobile devices, keeping road-tripping guests engaged instead of bouncing to a competitor.",
-  "canonical-redirect-hygiene": "Your URL structure is clean and consistent, so search engines index one authoritative version of your site.",
   "technical-trust-security": "Your technical trust stack is solid — SSL, HTTPS, and canonical tags are all aligned and working together.",
+  "website-technology": "Your site is built on modern technology that loads fast, works well on phones, and doesn't require workarounds for basic features.",
+  "human-written-content": "Your website copy reads naturally and includes real details about your property, building trust with guests before they arrive.",
   "booking-platform": "You have an online booking system in place. Guests can check dates and reserve without needing to call or email.",
-  "booking-engine-health": "Your booking page loads reliably and responds quickly, so guests aren't blocked when they're ready to pay.",
   "booking-cta": "Your booking button is clearly visible, making it easy for motivated guests to start a reservation right away.",
   "date-picker-discoverability": "Guests can quickly find where to check available dates, reducing friction at the most critical step.",
+  "fee-transparency": "All fees are disclosed before the final payment screen, so guests feel informed and are less likely to abandon checkout.",
+  "rate-transparency": "Rates are clearly displayed before checkout, building trust and reducing abandoned bookings.",
   "tracking-pixels": "Analytics tracking is installed, giving you visibility into how guests find your site and what they do before booking.",
-  "abandonment-recovery-readiness": "Booking-step events are in place so you can follow up with guests who start but don't finish reservations.",
-  "newsletter-capture": "You're collecting guest emails, which means you can fill shoulder-season openings and build repeat bookings over time.",
   "pet-policy": "Your pet policy is published and easy to find. Pet owners can self-qualify before booking, reducing pre-trip calls.",
   "rv-hookup-specs": "Hookup specifications are clearly listed, helping RV travelers confirm compatibility before driving to your property.",
   "big-rig-readiness": "Big-rig details like max length and pull-through availability are visible, so large-rig owners can book with confidence.",
-  "wifi-quality-claims": "Wi-Fi quality claims are clearly stated, helping remote workers and streaming-dependent guests set the right expectations.",
   "arrival-directions-clarity": "Clear arrival directions are published, helping guests navigate confidently and start their stay without stress.",
   "ev-extra-vehicle-policy": "Vehicle and EV policies are visible, reducing checkout hesitation and pre-booking support calls.",
   "amenities-page": "Amenity information is easy to find, giving guests the details they need to picture their stay and commit to booking.",
-  "rate-page": "Pricing is visible and transparent, so guests can evaluate your property without needing to contact you first.",
   "cancellation-policy": "Your cancellation policy is published and clear, building trust and reducing booking hesitation.",
-  "photo-gallery-quality": "Your photos are high quality and representative, helping guests picture the experience before they arrive.",
+  "checkin-checkout-times": "Posted check-in and check-out times prevent confusion, reduce phone calls, and help guests plan their travel schedule.",
   "accessibility-statement": "Accessibility information is available, helping guests with mobility or access needs plan their visit.",
   "gbp-sync": "Your Google Business Profile is active and consistent with your website, strengthening local search visibility.",
   "local-review-competitiveness": "Your review volume and ratings are competitive locally, supporting trust and search ranking in your area.",
   "social-presence": "Active social profiles are linked from your site, giving guests additional proof that your property is real and active.",
-  "listing-signals": "Directory listing signals are healthy, keeping your property visible across the channels where guests discover new parks.",
-  "facebook-link": "Your Facebook link is working and reachable, maintaining a connected social presence that supports guest trust.",
-  "header-phone": "A phone number is prominently displayed, giving guests a direct line when they're ready to book or have questions.",
-  "mobile-tap-targets": "Tap targets on your mobile site are properly sized, making navigation easy for guests browsing on their phones.",
+  "structured-data": "Structured data is present on your site, helping Google display rich search results with stars, pricing, and business details.",
   "phone-conversion-readiness": "Your phone booking path is smooth and accessible, capturing guests who prefer to reserve by phone.",
-  "image-count": "Your site has strong visual content volume, giving guests enough imagery to feel confident about booking.",
-  "listing-completeness": "Your listing profiles are thorough and complete, maximizing your visibility on discovery platforms.",
-  "rate-transparency": "Rates are clearly displayed before checkout, building trust and reducing abandoned bookings.",
+  "accessibility-score": "Your site scores well on accessibility, making it usable for guests with disabilities and improving overall user experience.",
   "contact-friction": "Contacting you is simple and low-friction, so guests with questions can reach you quickly and book faster.",
   "trust-stack-completeness": "Key trust signals — reviews, security, and policies — are visible where guests need them most.",
-  "local-search-intent-coverage": "Your homepage clearly states what you are and where you are, helping local searchers find you faster.",
-  "visual-proof-relevance": "Key proof photos cover the essentials guests care about — sites, bathrooms, amenities, and arrival.",
   "seasonal-visibility": "Current promotions and seasonal offers are prominently displayed, helping convert price-sensitive searchers.",
-  "visual-storytelling": "Your visual content tells the story of the guest experience, helping visitors imagine their stay and commit to booking.",
-  "visual-trust": "Your images look authentic and recent, building trust that what guests see online matches what they'll find on arrival.",
-  "payment-flexibility": "Multiple payment options are available at checkout, reducing the chance guests abandon over payment limitations.",
-  "booking-click-depth": "Guests can go from your homepage to a completed booking in just a few clicks, minimizing drop-off along the way.",
-  "availability-visibility": "Date availability is easy to check, so guests comparing parks can quickly see if you have open sites for their trip.",
-  "fee-transparency": "All fees are disclosed before the final payment screen, so guests feel informed and are less likely to abandon checkout.",
-  "onsite-guest-proof": "Real guest reviews are displayed on your site, building trust faster than anything you could write yourself.",
-  "authentic-photography": "Your photos look genuine and property-specific, giving guests confidence that the real experience matches the website.",
-  "structured-data": "Structured data is present on your site, helping Google display rich search results with stars, pricing, and business details.",
-  "accessibility-score": "Your site scores well on accessibility, making it usable for guests with disabilities and improving overall user experience.",
+  "sitemap-presence": "Your XML sitemap is in place, helping search engines find and index all your important pages.",
+  "copyright-freshness": "Your copyright year is current, signaling to visitors that your site and business are actively maintained.",
+  "professional-email": "A branded business email shows guests they're dealing with a real, established business — not someone's side project.",
 };
 
 const PAIN_LEVEL_ORDER: PainLevel[] = ["money-losers", "maintenance-needed", "working-well"];
@@ -1363,12 +1262,11 @@ const getPainLevelForCheck = (check: ScanCheck): PainLevel => {
 };
 
 const CATEGORY_SORT_ORDER: Record<CheckCategory, number> = {
-  "Technical Performance": 0,
-  "Booking & Conversion": 1,
-  "Outdoor Hospitality Essentials": 2,
-  "Local & Online Visibility": 3,
-  "Mobile Experience": 4,
-  "Booking Psychology": 5,
+  "Does Your Website Work?": 0,
+  "Can Guests Book Online?": 1,
+  "What Info Are You Missing?": 2,
+  "Can Guests Find You?": 3,
+  "Are You Losing Guests?": 4,
 };
 
 function CheckIcon({ check, className = "h-4 w-4" }: { check: ScanCheck; className?: string }) {
@@ -1425,54 +1323,30 @@ const COMPETITOR_COMPARE_INTENT_CHECK_IDS = new Set([
 ]);
 
 const CHECK_DIRECT_FIX_BY_ID: Record<string, string> = {
-  "ssl-valid":
-    "Your hosting company can turn this on for free in most cases — it's often a one-click option in your control panel. Search for \"SSL certificate\" in your hosting dashboard, or call your host and ask them to enable it. Once it's on, your site address will start with https:// and browsers will stop showing the \"Not Secure\" warning to your guests.",
-  "https-redirect":
-    "Even with SSL turned on, your site might still load the old http:// version for some visitors. Ask your web person or host to add a redirect that automatically sends everyone to the secure https:// version. This is usually a one-line change to a file called .htaccess, or a toggle in your hosting settings.",
   "response-time":
     "Large photo files are the #1 cause of slow websites. Compress your images before uploading using a free tool like Squoosh. Ask your host if they offer caching — it's usually free and makes a huge difference for repeat visitors.",
+  "human-written-content":
+    "Go through your homepage and replace any generic phrases like 'unforgettable experience' or 'world-class amenities' with real details about your property. Instead of 'enjoy our beautiful campground,' say something like 'our 12 wooded pull-throughs sit along the creek with direct trail access.' The more specific you are, the more trustworthy your site sounds to real guests.",
+  "website-technology":
+    "If your site was built more than 5 years ago or runs on old technology like jQuery 1.x, Bootstrap 2/3, or an ancient WordPress version, patching it usually isn't worth the cost — a modern rebuild is faster, cheaper in the long run, and will perform dramatically better on phones. Talk to a web professional about options.",
   "broken-links":
     "Broken links often happen when you update a page or rename something and forget to update the links pointing to it. Walk through your main navigation, footer, and any 'Book Now' buttons and click each one to make sure they still work. A free tool like Dead Link Checker (deadlinkchecker.com) can scan your whole site automatically and list every broken link in one report.",
   "pagespeed-mobile":
     "The fastest way to fix this is to share the PageSpeed report below with your web developer or hosting provider. They'll see exactly which files are slowing you down and how to fix them. If you're doing it yourself, focus on compressing photos, removing unused plugins, and turning off auto-play videos.",
-  "canonical-redirect-hygiene":
-    "Ask your web person to pick one official website address (for example, https://www.yourpark.com) and force all other versions to redirect to it. Then set your canonical tag to that same exact address on each page. This keeps Google and guests from seeing multiple versions of the same page.",
-  "technical-trust-security":
-    "Treat this as one cleanup task: make sure your SSL is valid, force all traffic to HTTPS, and set canonical tags to your one preferred host. Ask your web person to confirm all three are aligned so guests always land on one secure version of your site.",
-  "booking-platform":
-    "Guests expect to be able to check dates and reserve online without having to call or email first. If you don't have an online booking system, popular options for campgrounds and RV parks include Campspot, CampLife, and Rezdy. Many connect directly to your website. If you're not sure where to start, contact one of those providers and ask for a demo — setup is usually straightforward.",
-  "booking-engine-health":
-    "Click your main booking link from your homepage on both phone and desktop and make sure it opens fast and works every time. If it fails or hangs, contact your booking provider support and your website host with a screenshot and the exact time it happened. A simple uptime monitor can alert you if the booking page goes down again.",
-  "booking-cta":
-    "Every page on your site should have one clear button that says something like \"Reserve Your Site\" or \"Check Availability\" — and it should be easy to spot without scrolling. Place it near the top of the page in a color that stands out. If your site only has a phone number or a contact form, guests who prefer booking online will leave.",
-  "date-picker-discoverability":
-    "Put a date picker or a clear 'Check Availability' button near the top of your homepage so guests can start right away. Do not hide date search behind multiple clicks or deep menu pages. People comparing parks quickly will leave if they cannot check dates in a few seconds.",
-  "tracking-pixels":
-    "Without tracking in place, you have no way of knowing how guests found your site or what they did before booking. Google Analytics is free and takes about 15 minutes to set up — search \"install Google Analytics\" and follow the step-by-step guide, or have your web person add a small snippet of code to every page. Once it's running, you can see things like how many people visited, where they came from, and which pages they left from.",
-  "abandonment-recovery-readiness":
-    "Set up tracking for key booking steps like 'begin checkout' and 'booking complete' so you can follow up with people who quit halfway. Some booking vendors fire these events in ways that source scans cannot see, so ask your booking vendor or web person to confirm the events in GA4 DebugView and Meta Test Events. Once this is in place, you can run simple reminder ads to bring interested guests back.",
-  "newsletter-capture":
-    "An email list is one of the most reliable ways to fill open sites, especially in shoulder seasons. Add a simple signup form to your homepage with a short reason to join — something like \"Get early access to seasonal deals and local trip ideas.\" If writing that sounds annoying, use AI to draft the headline and signup copy for you, then paste it onto your site. Free tools like Mailchimp or Constant Contact let you collect emails and send newsletters without any technical setup.",
   "pet-policy":
     "Pet owners look for pet-friendly parks before booking, so make it obvious on your site what pets are allowed, any size or breed limits, any extra fees, and leash rules. If you do not want to write that yourself, hit the AI button below and let it draft the policy for you.",
   "rv-hookup-specs":
     "RV travelers need to know if your hookups match their rig before they drive hours to get there. List the details for each site type: 30-amp or 50-amp power, water hookup, sewer connection (full hookup, water and electric only, dry camping, etc.), and max rig length if there's a limit. A simple table or bullet list on your site pages is enough — don't make guests call to find out.",
   "big-rig-readiness":
     "Add two details right next to site selection: maximum rig length and whether each site is pull-through or back-in. Big-rig owners will skip booking if they cannot confirm fit in seconds.",
-  "wifi-quality-claims":
-    "If you offer Wi-Fi, say how good it is in plain language: for example 'Streaming-friendly at main sites' or 'Good for email and browsing.' If you know your speed range, include it so remote workers can self-qualify.",
   "arrival-directions-clarity":
     "Create a short 'Getting Here' section with the exact entrance instructions and any GPS warnings (like low-clearance bridges or roads to avoid). This prevents stressful arrivals and angry first impressions.",
   "ev-extra-vehicle-policy":
     "Publish a simple vehicle policy page that answers two common questions: EV charging rules and extra vehicle fees/limits. Clear rules reduce pre-booking calls and checkout hesitation.",
   "amenities-page":
     "A clear amenities page helps guests picture their stay and decide to book. List everything you offer — pool, bathhouses, laundry, fire pits, store, dog park, playground, Wi-Fi — and for each one, add a photo and a short note like the hours or location. Guests who can visualize the experience are much more likely to book.",
-  "rate-page":
-    "Guests who can't find your prices often don't call to ask — they just leave. Show your nightly or weekly rates on the site with a basic breakdown by site type (tent, RV full hookup, cabin, etc.) and note any seasonal changes. You don't need to list every fee, but showing a starting price helps guests know whether they're in the right place before they spend time trying to book.",
   "cancellation-policy":
     "Guests won't book if they're afraid of losing money on a non-refundable reservation. Put your cancellation policy in plain language on your site: how many days ahead someone needs to cancel, whether they get a full refund or a credit, and whether there are exceptions for weather or emergencies. If needed, use AI to write a plain-English version for you, then paste it onto your site. Link to your policy from the booking page so guests see it before they pay.",
-  "photo-gallery-quality":
-    "Bad photos are one of the biggest reasons guests choose a competitor. Every photo on your site should be taken in good natural light (not at night or on a cloudy day), shot horizontally, and show the best parts of your property. At minimum, you want photos of your best RV sites, cabins or glamping units, the bathhouse, common areas, and your entry or welcome sign. A local real estate or event photographer can shoot a full property set for $200–$500 and the difference is almost always worth it.",
   "accessibility-statement":
     "If your park has accessible routes, restrooms, or campsites, say so on your site — guests with mobility needs will specifically look for this information. List what's available: paved or hard-packed paths, accessible restrooms or shower rooms, ADA-designated sites, and a phone number or email for guests who need to ask questions. If you are not sure how to word it, use AI to draft the statement for you and paste it onto your site. If accessibility is limited, being honest about it is still better than leaving guests to guess.",
   "meta-title":
@@ -1485,50 +1359,28 @@ const CHECK_DIRECT_FIX_BY_ID: Record<string, string> = {
     "To improve local win-rate, ask for fresh Google reviews weekly and reply to every review quickly. Review volume and recency often decide who gets the click when guests compare nearby parks.",
   "social-presence":
     "An active social media presence reassures guests that your park is open and well-maintained. Post a photo or short video at least once or twice a week — it doesn't need to be professional. A quick shot of a sunset, a fire pit, or happy guests goes a long way. Make sure the links on your website point to your real active pages, not an old or unused account.",
-  "listing-signals":
-    "This check looks for directory signals on your site, not a live scan of The Dyrt, Campendium, Hipcamp, or RV Life. If you are not listed on those platforms yet, claim or create profiles there, keep your address, phone, and website consistent, and add real photos so guests can find you more easily.",
-  "facebook-link":
-    "The Facebook link on your site is pointing to a page that no longer works or doesn't exist. Log in to Facebook and find your official business page URL, then update the link on your website to match. If you don't have an active Facebook page for your park, either remove the icon from your site or create a page — a broken social link makes your site look abandoned.",
   "mobile-viewport":
     "When a site doesn't display correctly on phones, text appears tiny, buttons are too small to tap, and guests have to pinch and zoom just to read anything. This is usually a settings issue rather than a big redesign. If your site is on a platform like Squarespace, Wix, or WordPress, open the mobile preview and check how each page looks. Ask your web person to confirm that the mobile viewport tag is set correctly — it's a quick fix.",
-  "header-phone":
-    "When guests are looking up your park on their phone, they often want to call right away. Make sure your phone number is visible at the top of the page on mobile — ideally as a tappable link that opens the dialer automatically. On most website platforms, you can add a click-to-call link by formatting your phone number like this: tel:+18005551234. Your web person can also add a sticky header bar with a call button that follows guests as they scroll.",
-  "mobile-tap-targets":
-    "On phones, make your main 'Book' and 'Call' buttons large enough to tap easily with one thumb. Keep space around them so guests do not hit the wrong link by mistake. Preview your site on a real phone and make sure booking actions are easy to tap without zooming.",
   "phone-conversion-readiness":
     "Put your phone number at the top of mobile pages and make it tap-to-call. Add simple wording like 'Call now for same-day availability' near the number so guests know what to do. If people have to search for your number or copy-paste it, you lose calls.",
-  "image-count":
-    "Your homepage doesn't have enough photos to give guests a feel for the experience. Most guests want to see the actual sites, the bathhouse, any recreation areas, and the general vibe of the property before booking. Aim for at least 6–10 photos on your homepage or gallery. You don't need a professional shoot — a recent smartphone photo in good daylight is much better than no photo.",
-  "listing-completeness":
-    "Empty sections in your online listings signal to guests (and to booking platforms) that your park is incomplete or undermanaged. Log in to each platform where you have a listing — your booking engine, Google, The Dyrt, Hipcamp, etc. — and fill in every section: description, photos, amenities, rules, cancellation policy, and rates. Platforms reward complete listings with better visibility in search results.",
   "rate-transparency":
     "Guests often abandon a booking when the price jumps unexpectedly at checkout. To avoid this, show your nightly rate early — before guests click into the booking flow. If there's a cleaning fee, reservation fee, or tax, mention the approximate total somewhere visible so the final number isn't a surprise. Even a line like \"Sites from $45/night, fees apply\" builds more trust than showing a price for the first time at payment.",
   "contact-friction":
     "If the only way to contact you is a long form with 8 fields, many guests won't bother. Simplify your contact page to just the basics — name, email, and message. Better yet, also show a phone number, your typical response time, and a link to your booking page for guests who just want to reserve. The easier you make it to reach you, the more inquiries you'll get.",
   "trust-stack-completeness":
     "Show your key trust signals in obvious places: secure site (https), clear cancellation policy, and real guest reviews. Guests should not need to dig for these basics before paying. A few trust signals in the booking path can make the difference between hesitation and reservation.",
-  "local-search-intent-coverage":
-    "Make sure your homepage and Google listing clearly say what you are and where you are. Include your property type and location in your page title and main intro text, and keep your map listing active with fresh photos and reviews. This helps nearby searchers find you faster.",
   "seasonal-visibility":
     "If you're running a summer special or a fall deal, make sure guests can actually see it. Put your current promotion near the top of your homepage where it's impossible to miss — not buried in a blog post or a footer banner. Something as simple as a bold headline that says \"Book by July 4th and save 15%\" with a direct link to availability is enough to move reservations. If you need help writing the offer, use AI to generate the promo text and paste it onto your homepage.",
-  "visual-storytelling":
-    "Guests book the experience, not just the site. Beyond showing photos of your RV hookups, show what it feels like to stay there: a campfire at dusk, kids at the playground, people relaxing by the pool, the view from your best site. A short video walk-through or a photo series that follows the journey from arrival to evening can do more for bookings than a dozen spec photos.",
-  "visual-proof-relevance":
-    "Make sure your photos prove the essentials guests care about: where they will stay, bathroom quality, amenities, and what arrival looks like. If one of those is missing, add 2-3 clear real photos for that section. Real proof photos reduce doubt and help people book with confidence.",
-  "visual-trust":
-    "Replace generic or stock-looking images with real, recent photos of your actual sites, bathhouse, amenities, and entrance. Real visuals build trust much faster than polished but generic imagery.",
-  "payment-flexibility":
-    "If your booking system only accepts one or two payment types, some guests will abandon checkout when their preferred method isn't available. Check your booking settings and enable credit card, debit card, and if possible PayPal or Apple Pay. If you accept checks or cash for walk-ins, mention that on your site too. The more options you offer, the fewer guests you lose at the final step.",
-  "booking-click-depth":
-    "Count how many clicks it takes from your homepage to actually completing a reservation — if it's more than 3 or 4, you're losing guests along the way. Simplify by putting a \"Check Availability\" button on your homepage that links directly into your booking calendar. Remove any unnecessary intermediate pages or steps that add friction before a guest can select their dates.",
-  "availability-visibility":
-    "Guests who can't quickly see whether you have open dates for their trip will move on to the next park. Put a date picker or an availability calendar near the top of your homepage so guests can check right away without hunting for it. Even a simple \"Check Availability\" button that links to your booking calendar is better than burying it under multiple menu levels.",
+  "sitemap-presence":
+    "Most website platforms (WordPress, Squarespace, Wix) can generate a sitemap automatically — search your platform's help docs for 'XML sitemap.' If yours doesn't have one, ask your web person to add a sitemap plugin or generate one with a free tool like XML-Sitemaps.com. Once it exists at yoursite.com/sitemap.xml, submit it to Google Search Console so Google knows about all your pages.",
+  "copyright-freshness":
+    "Scroll to the bottom of your website and update the year in your copyright notice to the current year. On most platforms, this is a quick edit in your footer settings. Some platforms let you use a dynamic year that updates automatically so you never have to think about it again.",
+  "professional-email":
+    "Get a branded email address like info@yourpark.com or reservations@yourpark.com. Most hosting providers include email with your domain for free or a few dollars a month. Google Workspace and Microsoft 365 both offer professional email starting at about $6/month. Once you have it, update the email address on your website, Google Business Profile, and booking confirmations.",
+  "checkin-checkout-times":
+    "Add your check-in and check-out times to your FAQ page, booking confirmation page, and ideally your homepage too. Something like 'Check-in: 3:00 PM / Check-out: 11:00 AM' is all it takes. If you have early check-in or late check-out available for an extra fee, mention that too — it's an easy upsell.",
   "fee-transparency":
     "Guests don't mind paying fees — they mind being surprised by them. Show your cleaning fee, reservation fee, or any other mandatory charges on your rates page or booking page before the final payment screen. A simple line like \"A $15 reservation fee applies\" is all it takes. When guests feel informed, they're more likely to complete the booking instead of abandoning it.",
-  "onsite-guest-proof":
-    "Real guest reviews build trust faster than anything you can write yourself. The easiest fix is to copy a handful of your best Google or TripAdvisor reviews and display them on your homepage with the guest's first name and star rating. You can also embed a Google Reviews widget directly into your site. Guests who see recent positive reviews from real people are far more likely to book.",
-  "authentic-photography":
-    "Stock-looking photos — perfect sunsets, models by a fire — make guests wonder if your park actually looks that way. Replace them with real photos of your actual property: your specific sites, your real bathhouse, your actual view. Even a well-lit smartphone photo of the real thing is more convincing than a polished stock image. Guests book based on what they expect to find when they arrive.",
   "structured-data":
     "Ask your web developer to add JSON-LD structured data to your homepage. Use LodgingBusiness or LocalBusiness as the type, include your address, phone, price range, and aggregate ratings if available. Google's Structured Data Markup Helper can generate the code — then paste it into your site's HTML head. This helps Google show rich results with stars and pricing for your property.",
   "accessibility-score":
@@ -1553,59 +1405,41 @@ const condenseFixCopy = (copy: string): string => {
 
 const CHECK_DISPLAY_LABEL_BY_ID: Record<string, string> = {
   "technical-trust-security": "Technical trust & security",
-  "ssl-valid": "Site security",
-  "https-redirect": "Secure website routing",
   "response-time": "Fast loading",
   "broken-links": "Working website links",
   "pagespeed-mobile": "Phone loading speed",
-  "canonical-redirect-hygiene": "Website URL consistency",
+  "human-written-content": "Human-written content",
+  "website-technology": "Website technology",
+  "copyright-freshness": "Copyright year",
   "booking-platform": "Online booking system",
-  "booking-engine-health": "Booking page health",
   "booking-cta": "Book now visibility",
   "date-picker-discoverability": "Date picker visibility",
+  "fee-transparency": "Fee transparency",
   "tracking-pixels": "Guest follow-up tracking",
-  "abandonment-recovery-readiness": "Booking recovery tracking",
-  "newsletter-capture": "Guest email signup",
   "pet-policy": "Pet policy visibility",
   "rv-hookup-specs": "RV hookup details",
   "big-rig-readiness": "Big-rig readiness",
-  "wifi-quality-claims": "Wi-Fi quality clarity",
   "arrival-directions-clarity": "Arrival directions clarity",
   "ev-extra-vehicle-policy": "EV and extra-vehicle policy",
   "amenities-page": "Amenities visibility",
-  "rate-page": "Pricing visibility",
   "cancellation-policy": "Cancellation policy visibility",
-  "photo-gallery-quality": "Photo quality",
   "accessibility-statement": "Accessibility information",
   "meta-title": "Search engine signage",
   "meta-description": "Search result description",
   "gbp-sync": "Google listing strength",
   "local-review-competitiveness": "Local review competitiveness",
   "social-presence": "Social media presence",
-  "listing-signals": "Directory listing signals",
-  "facebook-link": "Facebook link health",
+  "structured-data": "Structured data for search",
+  "sitemap-presence": "XML sitemap",
   "mobile-viewport": "Smartphone readiness",
-  "header-phone": "Tap-to-call phone number",
-  "mobile-tap-targets": "Phone tap button size",
   "phone-conversion-readiness": "Phone booking readiness",
-  "image-count": "Homepage photos",
-  "listing-completeness": "Listing coverage",
+  "accessibility-score": "Accessibility score",
   "rate-transparency": "Price clarity",
   "contact-friction": "Contact convenience",
   "trust-stack-completeness": "Booking trust signals",
-  "local-search-intent-coverage": "Local search basics",
-  "visual-proof-relevance": "Proof photo coverage",
-  "visual-trust": "Visual trust",
   "seasonal-visibility": "Seasonal offer visibility",
-  "visual-storytelling": "Visual sales strength",
-  "payment-flexibility": "Payment flexibility",
-  "booking-click-depth": "Booking click count",
-  "availability-visibility": "Availability visible early",
-  "fee-transparency": "Fee transparency",
-  "onsite-guest-proof": "On-site guest proof",
-  "authentic-photography": "Authentic photography",
-  "structured-data": "Structured data for search",
-  "accessibility-score": "Accessibility score",
+  "professional-email": "Business email",
+  "checkin-checkout-times": "Check-in / check-out times",
 };
 
 const getCheckDisplayLabel = (check?: ScanCheck | null): string => {
@@ -1640,65 +1474,44 @@ const getCheckHeadline = (check?: ScanCheck | null): string => {
       return p ? "Technical trust and security are solid" : f ? "Technical trust and security need cleanup" : "Technical trust setup needs one more step";
     case "pagespeed-mobile":
       return p ? "Site loads fast on phones" : f ? "Site loads slowly on phones" : "Phone load speed is borderline";
-    case "canonical-redirect-hygiene":
-      return p ? "Website URL setup is clean" : f ? "Website URL setup needs cleanup" : "Website URL setup needs review";
+    case "human-written-content":
+      return p ? "Content feels human and trustworthy" : f ? "Content feels over-templated" : "Content authenticity needs review";
+    case "website-technology":
+      return p ? "Website technology is up to date" : f ? "Website is built on outdated technology" : "Website technology could use an update";
+    case "copyright-freshness":
+      return p ? "Copyright year is current" : f ? "Copyright year is outdated" : "No copyright year found";
     case "response-time":
       return p ? "Website responds quickly" : f ? "Website is slow to respond" : "Website response is borderline";
-    case "booking-engine-health":
-      return p ? "Booking page is up and running" : f ? "Booking page may be down" : "Booking page health needs review";
+    case "broken-links":
+      return p ? "No broken links found" : f ? "Some links on the site are broken" : "One or more links may be broken";
     case "date-picker-discoverability":
       return p ? "Guests can start date search quickly" : f ? "Date search is hard to find" : "Date search visibility needs review";
     case "big-rig-readiness":
       return p ? "Big-rig details are clearly posted" : f ? "Big-rig details are missing" : "Big-rig details are partially visible";
-    case "wifi-quality-claims":
-      return p ? "Wi-Fi quality is clearly explained" : f ? "Wi-Fi quality is unclear" : "Wi-Fi is mentioned but not qualified";
     case "arrival-directions-clarity":
       return p ? "Arrival directions are clear" : f ? "Arrival directions are hard to find" : "Arrival instructions need more detail";
     case "ev-extra-vehicle-policy":
-      return p ? "Vehicle policies are clearly posted" : f ? "Vehicle policies are missing" : "Vehicle policies are only partially posted";
-    case "abandonment-recovery-readiness":
-      return p ? "Can recover unfinished bookings" : f ? "Can't recover unfinished bookings" : "Booking recovery events are unverified";
+      return p ? "Vehicle policies are clearly posted" : f ? "Vehicle policies are missing" : "Vehicle policies are partial";
     case "booking-cta":
       return p ? "Book now button is easy to find" : f ? "Book now button is hard to find" : "Book now button could be clearer";
-    case "booking-click-depth":
-      return p ? "Guests can book in just a few clicks" : f ? "Too many clicks required to book" : "Booking takes a few too many clicks";
     case "booking-platform":
       return p ? "Guests can book online" : f ? "No online booking found" : "Online booking needs review";
     case "local-review-competitiveness":
       return p ? "Review strength looks competitive" : f ? "Review strength trails local competition" : "Review competitiveness is borderline";
-    case "availability-visibility":
-      return p ? "Guests can see open dates easily" : f ? "Open dates are hard to find" : "Availability could be more visible";
     case "fee-transparency":
       return p ? "All fees are shown up front" : f ? "Guests see surprise fees" : "Fee timing could be clearer";
-    case "onsite-guest-proof":
-      return p ? "Guest reviews are showing" : f ? "No guest reviews found on the site" : "Guest reviews could be more visible";
-    case "visual-trust":
-      return p ? "Photos build strong trust" : f ? "Photos may be hurting trust" : "Photos are decent but not fully convincing";
-    case "authentic-photography":
-      return p ? "Photos look real and personal" : f ? "Photos look too stock or generic" : "Photos could feel more personal";
-    case "rate-page":
     case "rate-transparency":
       return p ? "Nightly rates are easy to find" : f ? "Nightly rates are hard to find" : "Pricing could be easier to find";
     case "cancellation-policy":
       return p ? "Cancellation policy is easy to find" : f ? "No cancellation policy found" : "Cancellation policy is hard to find";
-    case "ssl-valid":
-      return p ? "Site has a valid security certificate" : f ? "Site is missing a security certificate" : "Security certificate needs attention";
-    case "https-redirect":
-      return p ? "Site loads securely by default" : f ? "Site doesn't always load securely" : "Secure site routing needs attention";
-    case "broken-links":
-      return p ? "No broken links found" : f ? "Some links on the site are broken" : "One or more links may be broken";
     case "tracking-pixels":
       return p ? "Ad retargeting is active" : f ? "Ad retargeting isn't set up" : "Ad retargeting needs attention";
-    case "newsletter-capture":
-      return p ? "Email signup form is present" : f ? "No email signup form found" : "Email signup could be more visible";
     case "pet-policy":
       return p ? "Pet policy is clearly posted" : f ? "Pet policy is missing or unclear" : "Pet policy could be clearer";
     case "rv-hookup-specs":
       return p ? "RV hookup details are listed" : f ? "RV hookup details are missing" : "RV hookup info could be clearer";
     case "amenities-page":
       return p ? "Amenities are clearly listed" : f ? "Amenities aren't listed anywhere" : "Amenities page could be improved";
-    case "photo-gallery-quality":
-      return p ? "Photo gallery looks inviting" : f ? "Photo gallery needs better photos" : "Photo gallery could be stronger";
     case "accessibility-statement":
       return p ? "ADA accessibility info is posted" : f ? "No ADA accessibility info found" : "Accessibility statement needs attention";
     case "meta-title":
@@ -1709,38 +1522,24 @@ const getCheckHeadline = (check?: ScanCheck | null): string => {
       return p ? "Google listing looks complete" : f ? "Google listing looks incomplete" : "Google listing needs attention";
     case "social-presence":
       return p ? "Active on social media" : f ? "Hard to find on social media" : "Social media presence is limited";
-    case "listing-signals":
-      return p ? "Directory signals found on site" : f ? "No directory signals found on site" : "Directory signals need attention";
-    case "facebook-link":
-      return p ? "Facebook page link is working" : f ? "Facebook page link is broken" : "Facebook link needs attention";
     case "mobile-viewport":
       return p ? "Site looks good on phones" : f ? "Site doesn't display well on phones" : "Phone display needs attention";
-    case "header-phone":
-      return p ? "Phone number is easy to tap" : f ? "Phone number is hard to tap on mobile" : "Clickable phone number needs attention";
-    case "mobile-tap-targets":
-      return p ? "Phone buttons are easy to tap" : f ? "Phone buttons are hard to tap" : "Phone button tap size needs work";
     case "phone-conversion-readiness":
       return p ? "Phone call path is conversion-ready" : f ? "Phone call path is weak" : "Phone call path needs tuning";
-    case "image-count":
-      return p ? "Homepage has plenty of photos" : f ? "Homepage doesn't have enough photos" : "More homepage photos would help";
-    case "listing-completeness":
-      return p ? "Online listings look complete" : f ? "Online listings are incomplete" : "Online listings need more detail";
     case "contact-friction":
       return p ? "Easy to get in touch" : f ? "Hard to get in touch" : "Contact info could be easier to find";
     case "trust-stack-completeness":
       return p ? "Trust signals are strong" : f ? "Trust signals are too weak" : "Trust signals are incomplete";
-    case "local-search-intent-coverage":
-      return p ? "Local search basics are covered" : f ? "Local search basics are missing" : "Local search basics need review";
-    case "visual-proof-relevance":
-      return p ? "Photos cover what guests care about" : f ? "Important proof photos are missing" : "Proof photo coverage is partial";
     case "seasonal-visibility":
       return p ? "Seasonal deals are easy to spot" : f ? "No seasonal deals visible to guests" : "Seasonal offers could be more visible";
-    case "visual-storytelling":
-      return p ? "Photos and visuals sell the experience" : f ? "Photos and visuals don't sell the experience" : "Visuals could do more to attract guests";
-    case "payment-flexibility":
-      return p ? "Multiple payment options available" : f ? "Very few payment options available" : "Payment options could be expanded";
+    case "professional-email":
+      return p ? "Business email looks professional" : f ? "Personal email used for business" : "Email setup could be stronger";
+    case "checkin-checkout-times":
+      return p ? "Check-in and check-out times are posted" : f ? "Check-in and check-out times are missing" : "Check-in/check-out times need review";
     case "structured-data":
-      return p ? "Rich search data is in place" : f ? "No structured data found for search engines" : "Structured data is partially set up";
+      return p ? "Rich search data is in place" : f ? "No structured data for search engines" : "Structured data is partial";
+    case "sitemap-presence":
+      return p ? "XML sitemap is in place" : f ? "No XML sitemap found" : "Sitemap needs review";
     case "accessibility-score":
       return p ? "Accessibility score is strong" : f ? "Accessibility needs improvement" : "Accessibility score is borderline";
     default: {
@@ -1872,7 +1671,7 @@ export default function Home() {
 
     return condenseFixCopy(
       CHECK_DIRECT_FIX_BY_ID[activeCheck.id] ??
-      "Prioritize this issue in your next sprint, implement the smallest high-impact change first, then re-run the audit."
+      "Start with the simplest fix first: read the details above, make the change on your website, then re-run this audit to confirm it's resolved."
     );
   }, [activeCheck]);
   const activeCheckBenefit = useMemo(() => {
