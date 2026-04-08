@@ -470,6 +470,36 @@ const getExistingAuditFromSupabase = async (
   return rows[0] ?? null;
 };
 
+const hasExistingEmailInSupabase = async (
+  supabaseUrl: string,
+  serviceRoleKey: string,
+  email: string,
+): Promise<boolean> => {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
+    return false;
+  }
+
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/parkgrader_audits?select=report_id&email=eq.${encodeURIComponent(normalizedEmail)}&limit=1`,
+    {
+      method: "GET",
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        "Content-Type": "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await getHubSpotErrorMessage(response, "Supabase email lookup failed."));
+  }
+
+  const rows = (await response.json()) as Array<{ report_id?: string }>;
+  return rows.length > 0;
+};
+
 const storeAuditInSupabase = async (payload: Required<LeadPayload>): Promise<SupabaseStoreResult> => {
   const supabaseUrl = process.env.SUPABASE_URL?.trim() ?? "";
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
@@ -1114,8 +1144,24 @@ export async function POST(request: NextRequest) {
         database_stored: false,
         email_attempted: false,
         email_sent: false,
+        webhook_sent: false,
+        webhook_skipped_existing_email: false,
         bypass_mode: true,
       });
+    }
+
+    let emailAlreadyInDatabase = false;
+    if (payload.email && isValidEmail(payload.email)) {
+      const supabaseUrl = process.env.SUPABASE_URL?.trim() ?? "";
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
+
+      if (supabaseUrl && serviceRoleKey) {
+        try {
+          emailAlreadyInDatabase = await hasExistingEmailInSupabase(supabaseUrl, serviceRoleKey, payload.email);
+        } catch (error) {
+          console.error(error);
+        }
+      }
     }
 
     let supabase = {
@@ -1143,10 +1189,12 @@ export async function POST(request: NextRequest) {
     }
 
     let webhookSent = false;
-    try {
-      webhookSent = await sendLeadCaptureWebhook(payload);
-    } catch (error) {
-      console.error(error);
+    if (!emailAlreadyInDatabase) {
+      try {
+        webhookSent = await sendLeadCaptureWebhook(payload);
+      } catch (error) {
+        console.error(error);
+      }
     }
 
     const result = await upsertHubSpotLead(payload);
@@ -1160,6 +1208,7 @@ export async function POST(request: NextRequest) {
       email_attempted: emailCopy.attempted,
       email_sent: emailCopy.sent,
       webhook_sent: webhookSent,
+      webhook_skipped_existing_email: emailAlreadyInDatabase,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Lead capture failed.";
