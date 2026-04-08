@@ -1477,7 +1477,7 @@ const getCheckHeadline = (check?: ScanCheck | null): string => {
     case "human-written-content":
       return p ? "Content feels human and trustworthy" : f ? "Content feels over-templated" : "Content authenticity needs review";
     case "website-technology":
-      return p ? "Website technology is up to date" : f ? "Website is built on outdated technology" : "Website technology could use an update";
+      return p ? "Website technology is up to date" : f ? "Outdated website technology" : "Website technology could use an update";
     case "copyright-freshness":
       return p ? "Copyright year is current" : f ? "Copyright year is outdated" : "No copyright year found";
     case "response-time":
