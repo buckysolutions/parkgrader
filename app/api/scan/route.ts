@@ -229,6 +229,8 @@ const platformCatalog = [
   "VRScheduler",
   "BookingSync",
   "BookingPal",
+  "Firefly",
+  "fireflyreservations",
 ];
 
 const normalizeUrl = (raw: string): string | null => {
@@ -954,10 +956,22 @@ export async function GET(request: NextRequest) {
     const uniqueInternalLinks = Array.from(new Set(internalLinks)).slice(0, 6);
 
     // Fetch key subpages so content checks can look beyond the homepage.
-    const contentSubpagePatterns = /\/(rv|site|amenities|activities|recreation|directions|getting-?here|arrival|pet|faq|policies|about|contact|hookup|camp-?site|cabin|accommodation|rate|pricing)/i;
+    // Priority tiers ensure policy-critical pages are fetched before informational ones.
+    const subpagePriority: [RegExp, number][] = [
+      [/\/(rules|policies|faq|support)/i, 1],         // Most likely to contain cancellation, check-in/out, vehicle rules
+      [/\/(rates?|pricing|amenities|activities|recreation)/i, 2], // Pricing and feature info
+      [/\/(pet|hookup|camp-?site|cabin|accommodation)/i, 3],     // Property-specific details
+      [/\/(directions|getting-?here|arrival)/i, 4],               // Arrival info
+      [/\/(about|contact)/i, 5],                                  // Least policy-relevant
+    ];
     const contentSubpageUrls = internalLinks
-      .filter((href) => contentSubpagePatterns.test(href))
-      .slice(0, 4);
+      .filter((href) => subpagePriority.some(([pattern]) => pattern.test(href)))
+      .sort((a, b) => {
+        const aPriority = subpagePriority.find(([p]) => p.test(a))?.[1] ?? 99;
+        const bPriority = subpagePriority.find(([p]) => p.test(b))?.[1] ?? 99;
+        return aPriority - bPriority;
+      })
+      .slice(0, 6);
     const uniqueContentSubpageUrls = Array.from(new Set(contentSubpageUrls));
 
     const runContentSubpageFetch = async (): Promise<string> => {
@@ -991,6 +1005,24 @@ export async function GET(request: NextRequest) {
     // Also detect inline booking forms (date-picker widgets with no outbound <a> link).
     const hasInlineBookingForm = /<form[^>]*>[\s\S]*?(?:arrival|departure|check[ -]?in|check[ -]?out|select dates|adults|children|guests)[\s\S]*?<\/form>/i.test(html);
     const primaryBookingLink = bookingLinks[0] ? new URL(bookingLinks[0], websiteUrl).toString() : null;
+    const hasExternalBookingLink = (() => {
+      if (!primaryBookingLink) return false;
+      try {
+        const bookingHost = new URL(primaryBookingLink).hostname.replace(/^www\./, "").toLowerCase();
+        const siteHost = new URL(websiteUrl).hostname.replace(/^www\./, "").toLowerCase();
+        if (bookingHost === siteHost) return false;
+        // Exclude generic form/doc/social platforms that aren't real booking engines.
+        const nonBookingDomains = [
+          "google.com", "docs.google.com", "forms.google.com", "drive.google.com",
+          "facebook.com", "instagram.com", "twitter.com", "x.com", "youtube.com",
+          "typeform.com", "jotform.com", "wufoo.com", "surveymonkey.com",
+          "mailchimp.com", "constantcontact.com", "hubspot.com",
+          "paypal.com", "venmo.com", "cashapp.com", "zelle.com",
+          "linkedin.com", "tiktok.com", "pinterest.com",
+        ];
+        return !nonBookingDomains.some((d) => bookingHost === d || bookingHost.endsWith(`.${d}`));
+      } catch { return false; }
+    })();
     const canonicalMatch =
       html.match(/<link[^>]*rel=["']canonical["'][^>]*href=["']([^"']+)["'][^>]*>/i) ??
       html.match(/<link[^>]*href=["']([^"']+)["'][^>]*rel=["']canonical["'][^>]*>/i);
@@ -1356,13 +1388,15 @@ export async function GET(request: NextRequest) {
         id: "booking-platform",
         name: "Online booking system",
         category: "Can Guests Book Online?",
-        status: detectedPlatform || hasInlineBookingForm ? "pass" : "fail",
+        status: detectedPlatform || hasInlineBookingForm || hasExternalBookingLink ? "pass" : "fail",
         finding: detectedPlatform
           ? `Detected ${detectedPlatform}.`
           : hasInlineBookingForm
             ? "A booking widget was found on your homepage."
-            : "No online booking system found.",
-        details: detectedPlatform || hasInlineBookingForm
+            : hasExternalBookingLink
+              ? "Online booking link found (external reservation system)."
+              : "No online booking system found.",
+        details: detectedPlatform || hasInlineBookingForm || hasExternalBookingLink
           ? "Guests can reserve online. That's table stakes in 2026."
           : "Guests want to book at 10pm on a Sunday when you're not by the phone. Without online booking, those reservations go to a competitor who has one.",
         effort: "High",
