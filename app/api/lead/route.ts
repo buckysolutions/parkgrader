@@ -326,7 +326,7 @@ const buildAuditEmailHtml = (details: {
                       <tbody>
                         <tr>
                           <td align="left" style="-webkit-font-smoothing: antialiased; color: #444444; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-                            <img src="https://assets.buckysolutions.com/bucky_logo_parkgrader.svg" alt="ParkGrader Logo" width="170" style="display: block; border: 0;" />
+                            <img src="https://assets.buckysolutions.com/parkgrader_logo.svg" alt="ParkGrader Logo" width="170" style="display: block; border: 0;" />
                           </td>
                         </tr>
                       </tbody>

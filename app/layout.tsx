@@ -59,9 +59,9 @@ export const metadata: Metadata = {
     follow: true,
   },
   icons: {
-    icon: "https://assets.buckysolutions.com/bucky%2Bfavicon%2Bdark.png",
-    shortcut: "https://assets.buckysolutions.com/bucky%2Bfavicon%2Bdark.png",
-    apple: "https://assets.buckysolutions.com/bucky%2Bfavicon%2Bdark.png",
+    icon: "https://assets.buckysolutions.com/parkgrader_favicon_64x64.png",
+    shortcut: "https://assets.buckysolutions.com/parkgrader_favicon_64x64.png",
+    apple: "https://assets.buckysolutions.com/parkgrader_favicon_64x64.png",
   },
 };
 

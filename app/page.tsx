@@ -169,7 +169,7 @@ type LocalReviewCompareResult = {
 
 type DemoMode = null | "needs-work" | "good";
 
-const PARKGRADER_LOGO = "https://assets.buckysolutions.com/bucky_logo_parkgrader.svg";
+const PARKGRADER_LOGO = "https://assets.buckysolutions.com/parkgrader_logo.svg";
 
 const PROPERTY_TYPE_OPTIONS: Array<AnswerOption & { industry: IndustryKey; unitLabel: string }> = [
   { value: "campground", label: "Campground / RV Park", industry: "campground", unitLabel: "sites" },
