@@ -415,21 +415,6 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
       serviceKey: "booking_cta",
     },
     {
-      id: "tracking-pixels",
-      name: "Tracking pixels",
-      category: "Can Guests Book Online?",
-      status: good ? "pass" : "fail",
-      pass: good,
-      finding: good ? "Facebook Pixel and GTM detected." : "No Facebook Pixel or GTM detected.",
-      details: good
-        ? "Retargeting and attribution are set up."
-        : "You are missing remarketing data on visitors who leave before booking.",
-      weight: 1,
-      effort: "Low",
-      impact: "Medium",
-      serviceKey: "tracking_pixels",
-    },
-    {
       id: "cancellation-policy",
       name: "Cancellation policy",
       category: "What Info Are You Missing?",
@@ -524,11 +509,10 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
       : [
           "Your online experience is slower than ideal.",
           "Guests are not seeing a clear booking path.",
-          "You are missing remarketing data.",
           "No cancellation policy is making guests hesitate.",
           "Hidden pricing is forcing visitors to bounce.",
         ],
-    topFails: good ? ["tracking-pixels"] : ["pagespeed-mobile", "booking-cta", "rate-transparency"],
+    topFails: good ? ["copyright-freshness"] : ["pagespeed-mobile", "booking-cta", "rate-transparency"],
     categories,
     checks,
   };

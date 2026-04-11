@@ -101,8 +101,6 @@ const FAIL_IMPACT_BY_CHECK_ID: Partial<Record<string, string>> = {
   "canonical-redirect-hygiene": "Your site might be accessible at multiple URLs, which confuses Google and splits your search traffic.",
   "booking-platform": "Guests want to book at 10pm on a Sunday. Without an online booking system, those reservations go to a competitor.",
   "booking-cta": "If visitors can't quickly spot a 'Book Now' button, they'll move on to a park where it's obvious.",
-  "date-picker-discoverability": "The first thing guests want to know is whether you have space on their dates. Make that easy to check.",
-  "tracking-pixels": "Without tracking, you have no way to show ads to the people who visited your site but didn't book.",
   "pet-policy": "Pet owners won't book if they can't tell whether Fido is welcome. They'll call — or just go somewhere that says it clearly.",
   "rv-hookup-specs": "RV travelers need to know your amp service and hookup type before they'll commit. They won't guess.",
   "big-rig-readiness": "Big-rig owners skip parks that don't clearly post max length or pull-through availability.",
@@ -111,20 +109,15 @@ const FAIL_IMPACT_BY_CHECK_ID: Partial<Record<string, string>> = {
   "park-map": "Guests want to see the layout before arriving. Without a map, they can't pick the right site or plan their stay.",
   "rate-page": "Hidden pricing forces guests to call or guess. Most just leave and book somewhere that shows rates upfront.",
   "cancellation-policy": "Families planning months ahead worry about 'what if.' A clear cancellation policy turns 'maybe' into 'book.'",
-  "photo-gallery-quality": "Guests are buying an experience they've never seen. Weak photos make that a hard sell.",
   "accessibility-statement": "Guests with mobility needs won't risk a trip without knowing what to expect. A statement shows you care.",
   "meta-title": "This is what shows up as the headline in Google search results. Missing or vague = fewer clicks.",
   "meta-description": "This is the 2-sentence preview under your Google listing. If it's missing, Google picks random text from your page.",
   "gbp-sync": "When someone Googles 'campground near me,' Google shows a map with photos and reviews. You need to be on it.",
-  "local-review-competitiveness": "Guests compare reviews between nearby parks. If yours lag behind, they book the competitor.",
-  "social-presence": "Most guests check Facebook or Instagram before booking. No social presence = less trust.",
   "mobile-viewport": "Without proper phone layout settings, your site shows up tiny and zoomed out on smartphones.",
   "header-phone": "Guests ready to call want a tap-to-call number at the top of the page. Don't make them scroll.",
   "phone-conversion-readiness": "Some guests prefer calling. Make that path easy with a visible number and clear call-to-action.",
   "rate-transparency": "Guests want to know if they can afford you before they invest time filling out forms.",
   "contact-friction": "Every missing contact option (phone, email, chat) is a guest who wanted to reach you but couldn't.",
-  "trust-stack-completeness": "Secure site + cancellation policy + guest reviews = confidence to enter a credit card.",
-  "seasonal-visibility": "Off-season deals drive bookings when you need them most. If they're hidden, they're not working.",
   "professional-email": "A branded email builds credibility. Guests feel more confident reaching out to info@yourpark.com than a personal address.",
   "checkin-checkout-times": "Without posted check-in and check-out times, guests either call to ask or show up at the wrong time — both create unnecessary work for you.",
   "structured-data": "Structured data tells Google to show your star rating, price range, and business details directly in search results.",
@@ -141,7 +134,6 @@ const PASS_IMPACT_BY_CHECK_ID: Partial<Record<string, string>> = {
 
 const UNKNOWN_IMPACT_BY_CHECK_ID: Partial<Record<string, string>> = {
   "contact-friction": "Some contact methods may exist but aren't easy to find. Make sure guests can reach you their preferred way.",
-  "local-review-competitiveness": "We couldn't get a clear picture of your review volume. Check your Google Business Profile directly.",
 };
 
 const getEstimatedImpactForCheck = (check: Check): string => {
@@ -685,10 +677,13 @@ type AiContentResult = {
 const evaluateContentWithAI = async (
   fullSiteText: string,
   geminiApiKey: string,
+  linkUrls?: string[],
 ): Promise<AiContentResult | null> => {
   const geminiModel = process.env.GEMINI_MODEL || "gemini-2.0-flash-lite";
+  // Append link URLs so AI can detect PDF maps, directions pages, etc.
+  const linkSection = linkUrls?.length ? `\n\nLINK URLS FOUND ON SITE:\n${linkUrls.slice(0, 200).join("\n")}` : "";
   // Truncate to ~30k chars to stay within token limits while capturing enough content.
-  const truncated = fullSiteText.slice(0, 30000);
+  const truncated = (fullSiteText + linkSection).slice(0, 30000);
 
   const prompt = `You are an auditor for outdoor hospitality websites (campgrounds, RV parks, glamping, marinas, cabins). Analyze the following website text and answer each question with a JSON object. Be generous — if the content is present in ANY form, mark it as found.
 
@@ -724,7 +719,7 @@ Answer these 9 questions about the website content. Return ONLY valid JSON, no m
     "summary": "one sentence"
   },
   "checkinCheckoutTimes": {
-    "found": true/false (are specific check-in and/or check-out TIMES posted with actual hours like '3pm check-in' or 'check-out by 11am'?),
+    "found": true/false (are specific check-in and/or check-out TIMES posted, OR are office hours / business hours / front desk hours posted with days and times? Office hours like 'Mon-Fri 9am-5pm' count as check-in/check-out guidance.),
     "summary": "one sentence"
   },
   "accessibilityStatement": {
@@ -736,7 +731,7 @@ Answer these 9 questions about the website content. Return ONLY valid JSON, no m
     "summary": "one sentence explaining why"
   },
   "parkMap": {
-    "found": true/false (is there a park map, campground map, site map showing the property layout, interactive map of the grounds, or downloadable PDF map of the property?),
+    "found": true/false (is there a park map, campground map, site map showing the property layout, interactive map of the grounds, or downloadable PDF map of the property? Also check the LINK URLS section for any links containing 'map' and '.pdf'.),
     "summary": "one sentence"
   }
 }`;
@@ -1079,24 +1074,29 @@ export async function GET(request: NextRequest) {
       .map((href) => new URL(href, websiteUrl).toString());
     const uniqueInternalLinks = Array.from(new Set(internalLinks)).slice(0, 6);
 
-    // Fetch key subpages so content checks can look beyond the homepage.
-    // Priority tiers ensure policy-critical pages are fetched before informational ones.
-    const subpagePriority: [RegExp, number][] = [
-      [/\/(rules|policies|faq|support|.*-rules|.*-policies)/i, 1],         // Most likely to contain cancellation, check-in/out, vehicle rules
-      [/\/(rates?|pricing|amenities|activities|recreation)/i, 2], // Pricing and feature info
-      [/\/(pet|hookup|camp-?site|cabin|accommodation|.*-pet)/i, 3],     // Property-specific details
-      [/\/(directions|getting-?here|arrival)/i, 4],               // Arrival info
-      [/\/(about|contact)/i, 5],                                  // Least policy-relevant
-    ];
-    const contentSubpageUrls = internalLinks
-      .filter((href) => subpagePriority.some(([pattern]) => pattern.test(href)))
-      .sort((a, b) => {
-        const aPriority = subpagePriority.find(([p]) => p.test(a))?.[1] ?? 99;
-        const bPriority = subpagePriority.find(([p]) => p.test(b))?.[1] ?? 99;
-        return aPriority - bPriority;
-      })
-      .slice(0, 6);
-    const uniqueContentSubpageUrls = Array.from(new Set(contentSubpageUrls));
+    // Crawl all unique internal content pages — no URL-pattern guessing.
+    // Fetches happen in parallel so the time cost is just the slowest page (~6s).
+    // We filter out non-content URLs (assets, feeds, API endpoints, blog posts)
+    // and deduplicate by path (ignoring fragments) to avoid fetching the same page multiple times.
+    const allUniqueInternalLinks = Array.from(new Set(internalLinks));
+    const seenPaths = new Set<string>();
+    const contentPageLinks = allUniqueInternalLinks.filter((href) => {
+      try {
+        const u = new URL(href);
+        const path = u.pathname.replace(/\/$/, "") || "/";
+        // Skip the homepage (already fetched)
+        if (path === "/" || path === "") return false;
+        // Deduplicate by path (lodging/ and lodging/#cabins are the same page)
+        if (seenPaths.has(path)) return false;
+        seenPaths.add(path);
+        // Skip assets (but keep PDFs — they may be maps, policies, etc.)
+        if (/\.(png|jpe?g|gif|svg|webp|ico|css|js|woff2?|ttf|eot|mp4|mp3|zip)$/i.test(u.pathname)) return false;
+        // Skip WordPress infrastructure, feeds, and API endpoints
+        if (/^\/(?:wp-json|wp-admin|wp-content|feed|xmlrpc|author|tag|category|comments)\b/i.test(u.pathname)) return false;
+        return true;
+      } catch { return false; }
+    }).slice(0, 15);
+    const uniqueContentSubpageUrls = contentPageLinks;
 
     const runContentSubpageFetch = async (): Promise<string> => {
       const results = await Promise.all(
@@ -1104,6 +1104,9 @@ export async function GET(request: NextRequest) {
           try {
             const response = await fetchWithTimeout(link, 6000);
             if (!response.ok) return "";
+            // Skip non-HTML responses (PDFs, images, etc.) — they're detected by link URL instead.
+            const ct = response.headers.get("content-type") ?? "";
+            if (!ct.includes("text/html") && !ct.includes("text/plain")) return "";
             const text = await response.text();
             return text.toLowerCase();
           } catch {
@@ -1283,7 +1286,7 @@ export async function GET(request: NextRequest) {
     // --- AI-powered content evaluation (single Gemini call for 9 content checks) ---
     const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
     const aiContentPromise = geminiApiKey
-      ? measure("aiContentEval", () => evaluateContentWithAI(fullSiteText, geminiApiKey))
+      ? measure("aiContentEval", () => evaluateContentWithAI(fullSiteText, geminiApiKey, links))
       : Promise.resolve(null);
 
     // Re-evaluate content checks with subpage context (regex fallback).
@@ -1298,12 +1301,13 @@ export async function GET(request: NextRequest) {
     // Wait for AI content evaluation to complete.
     const aiContent = await aiContentPromise;
 
-    // Merge AI results with regex fallbacks — AI wins when available, regex is backup.
-    const petPolicyFound = aiContent?.petPolicy?.found ?? regexPetPolicyFound;
+    // Merge AI results with regex fallbacks — pass if EITHER source found it.
+    // Use || so a regex match isn't suppressed when AI returns false.
+    const petPolicyFound = (aiContent?.petPolicy?.found ?? false) || regexPetPolicyFound;
     const noPetsPolicy = aiContent?.petPolicy?.noPets ?? regexNoPetsPolicy;
-    const cancellationFound = aiContent?.cancellationPolicy?.found ?? regexCancellationFound;
-    const rvHookupFound = aiContent?.rvHookupSpecs?.found ?? regexRvHookupFound;
-    const accessibilityFound = aiContent?.accessibilityStatement?.found ?? regexAccessibilityFound;
+    const cancellationFound = (aiContent?.cancellationPolicy?.found ?? false) || regexCancellationFound;
+    const rvHookupFound = (aiContent?.rvHookupSpecs?.found ?? false) || regexRvHookupFound;
+    const accessibilityFound = (aiContent?.accessibilityStatement?.found ?? false) || regexAccessibilityFound;
     const aiHumanContent = aiContent?.humanWrittenContent ?? null;
 
     // Copyright year freshness — detect outdated footer copyright.
@@ -1416,16 +1420,16 @@ export async function GET(request: NextRequest) {
     const regexSiteTypeInfo = /pull[ -]?through|pullthrough|back[ -]?in|backin/i.test(deepSurface);
     const regexArrivalSection = hrefContains(["/directions", "/getting-here", "/arrival"]) || deepKeywordContains(["directions", "getting here", "arrival instructions", "how to get here"]);
     const regexGpsPitfallWarning = /low\s*clearance|bridge\s*clearance|avoid\s+.*road|do not use\s+gps|use\s+main\s+entrance|truck\s*route|rv\s*route/i.test(fullSiteText);
-    const regexCheckInOutTimes = /check[ -]?in\s*(?:time|:|\bat\b|begins|starts|is)\s*\d|check[ -]?out\s*(?:time|:|\bat\b|by|is)\s*\d|\d{1,2}\s*(?:am|pm|a\.m\.|p\.m\.)\s*check[ -]?in|\d{1,2}\s*(?:am|pm|a\.m\.|p\.m\.)\s*check[ -]?out|check[ -]?in.*\d{1,2}.*check[ -]?out.*\d{1,2}/i.test(fullSiteText);
-    const regexParkMap = hrefContains(["/map", "/park-map", "/campground-map", "/site-map", "/property-map"]) || deepKeywordContains(["park map", "campground map", "site map", "property map", "resort map"]);
+    const regexCheckInOutTimes = /check[ -]?in\s*(?:time|:|\bat\b|begins|starts|is)\s*\d|check[ -]?out\s*(?:time|:|\bat\b|by|is)\s*\d|\d{1,2}\s*(?:am|pm|a\.m\.|p\.m\.)\s*check[ -]?in|\d{1,2}\s*(?:am|pm|a\.m\.|p\.m\.)\s*check[ -]?out|check[ -]?in.*\d{1,2}.*check[ -]?out.*\d{1,2}|office\s*hours\s*[:\-]?\s*(?:mon|tue|wed|thu|fri|sat|sun)|hours\s*of\s*operation\s*[:\-]?\s*(?:mon|tue|wed|thu|fri|sat|sun)/i.test(fullSiteText);
+    const regexParkMap = hrefContains(["/map", "/park-map", "/campground-map", "/site-map", "/property-map"]) || deepKeywordContains(["park map", "campground map", "site map", "property map", "resort map"]) || links.some((href) => /map.*\.pdf|\.pdf.*map/i.test(href));
 
-    // Merge AI results with regex fallbacks for remaining content checks.
-    const hasMaxLengthInfo = aiContent?.bigRigReadiness?.maxLength ?? regexMaxLengthInfo;
-    const hasSiteTypeInfo = aiContent?.bigRigReadiness?.siteType ?? regexSiteTypeInfo;
-    const hasArrivalSection = aiContent?.arrivalDirections?.found ?? regexArrivalSection;
+    // Merge AI results with regex fallbacks — pass if EITHER source found it.
+    const hasMaxLengthInfo = (aiContent?.bigRigReadiness?.maxLength ?? false) || regexMaxLengthInfo;
+    const hasSiteTypeInfo = (aiContent?.bigRigReadiness?.siteType ?? false) || regexSiteTypeInfo;
+    const hasArrivalSection = (aiContent?.arrivalDirections?.found ?? false) || regexArrivalSection;
     const gpsPitfallWarning = aiContent?.arrivalDirections?.gpsWarning ?? regexGpsPitfallWarning;
-    const hasCheckInOutTimes = aiContent?.checkinCheckoutTimes?.found ?? regexCheckInOutTimes;
-    const hasParkMap = aiContent?.parkMap?.found ?? regexParkMap;
+    const hasCheckInOutTimes = (aiContent?.checkinCheckoutTimes?.found ?? false) || regexCheckInOutTimes;
+    const hasParkMap = (aiContent?.parkMap?.found ?? false) || regexParkMap;
 
     const checks: Check[] = [
       createCheck({
@@ -1536,15 +1540,15 @@ export async function GET(request: NextRequest) {
         id: "copyright-freshness",
         name: "Copyright year",
         category: "Does Your Website Work?",
-        status: latestCopyrightYear === null ? "fail" : latestCopyrightYear >= currentYear - 1 ? "pass" : "fail",
+        status: latestCopyrightYear === null ? "fail" : latestCopyrightYear >= currentYear ? "pass" : "fail",
         finding: latestCopyrightYear === null
           ? "No copyright year found on the page."
-          : latestCopyrightYear >= currentYear - 1
+          : latestCopyrightYear >= currentYear
             ? `Copyright year is current (${latestCopyrightYear}).`
-            : `Copyright year is ${latestCopyrightYear} — ${currentYear - latestCopyrightYear} years out of date.`,
+            : `Copyright year is ${latestCopyrightYear} — should be ${currentYear}.`,
         details: latestCopyrightYear === null
           ? "A visible copyright year signals your site is actively maintained. Without one, guests may wonder if the park is still operating."
-          : latestCopyrightYear >= currentYear - 1
+          : latestCopyrightYear >= currentYear
             ? "Your footer shows a current year, signaling the site is actively maintained."
             : "When a guest sees an old copyright year, their first thought is 'Is this place still open?' It takes 30 seconds to update and makes a real difference in first impressions.",
         effort: "Low",
@@ -1584,39 +1588,6 @@ export async function GET(request: NextRequest) {
         effort: "Low",
         impact: "High",
         serviceKey: "booking_cta",
-      }),
-      createCheck({
-        id: "date-picker-discoverability",
-        name: "Date picker visibility",
-        category: "Can Guests Book Online?",
-        status: hasDateSignalsOnHomepage ? "pass" : "fail",
-        finding: hasDateSignalsOnHomepage
-          ? "Date or availability selection found on the homepage."
-          : "No date picker found on the homepage.",
-        details: hasDateSignalsOnHomepage
-          ? "Guests can start checking dates right away."
-          : "Put a 'Check Availability' box or date picker near the top of your homepage. The first thing guests want to know is whether you have space on their dates.",
-        effort: "Low",
-        impact: "High",
-        serviceKey: "booking_cta",
-      }),
-
-      createCheck({
-        id: "tracking-pixels",
-        name: "Ad retargeting setup",
-        category: "Can Guests Book Online?",
-        status: trackingPixels.length > 0 ? "pass" : "fail",
-        finding:
-          trackingPixels.length > 0
-            ? `Found ${trackingPixels.join(" and ")}.`
-            : "No Facebook Pixel or Google Tag Manager found.",
-        details:
-          trackingPixels.length > 0
-            ? "You can show ads to people who visited but didn't book."
-            : "Right now, visitors leave your site and you have no way to remind them to come back. Install Facebook Pixel or Google Tag Manager so you can retarget them.",
-        effort: "Low",
-        impact: "Medium",
-        serviceKey: "tracking_pixels",
       }),
       createCheck({
         id: "pet-policy",
@@ -1817,51 +1788,6 @@ export async function GET(request: NextRequest) {
         serviceKey: "google_business",
       }),
       createCheck({
-        id: "local-review-competitiveness",
-        name: "Review strength",
-        category: "Can Guests Find You?",
-        status: reviewCount === null
-          ? "pass"
-          : placesSignals != null && placesSignals.recentReviews30d != null && placesSignals.ownerResponseRate30d != null && placesSignals.recentReviews30d >= 3 && placesSignals.ownerResponseRate30d === 0
-            ? "fail"
-            : reviewCount >= 20
-              ? "pass"
-              : "fail",
-        finding: reviewCount === null
-          ? "Review count could not be read — not penalizing."
-          : placesSignals != null && placesSignals.recentReviews30d != null && placesSignals.ownerResponses30d != null && placesSignals.ownerResponseRate30d != null
-            ? `${reviewCount} total reviews. ${placesSignals.recentReviews30d} in the last 30 days, ${placesSignals.ownerResponseRate30d}% responded to by you.`
-          : `About ${reviewCount} Google reviews. Target: 40+ for strong local competitiveness.`,
-        details: reviewCount === null
-          ? "We couldn't pull your review count from Google on this scan. Check your Google Business Profile directly."
-          : placesSignals != null && placesSignals.ownerResponseRate30d != null && placesSignals.ownerResponseRate30d === 0 && (placesSignals.recentReviews30d ?? 0) > 0
-            ? "You have recent reviews that haven't been responded to. Google rewards parks that respond to reviews — it improves your ranking and shows guests you care."
-            : reviewCount >= 40
-              ? "Your review volume is competitive. Keep asking happy guests to leave reviews."
-              : "Ask every happy guest to leave a Google review. Even a simple 'We'd love a review!' card at checkout makes a difference.",
-        effort: "Medium",
-        impact: "High",
-        serviceKey: "google_business",
-      }),
-      createCheck({
-        id: "social-presence",
-        name: "Social media",
-        category: "Can Guests Find You?",
-        status: facebookLink || instagramLink ? "pass" : "fail",
-        finding:
-          facebookLink || instagramLink
-            ? `Found ${[facebookLink ? "Facebook" : null, instagramLink ? "Instagram" : null].filter(Boolean).join(" and ")} links on your site.`
-            : "No Facebook or Instagram links found.",
-        details:
-          facebookLink || instagramLink
-            ? "Guests can find you on social media and see that you're active."
-            : "Most guests check Facebook or Instagram before booking. A connected social page shows you're real, responsive, and worth the visit.",
-        weight: socialWeight,
-        effort: "Low",
-        impact: industry === "glamping" ? "High" : "Low",
-        serviceKey: "social",
-      }),
-      createCheck({
         id: "structured-data",
         name: "Rich search data",
         category: "Can Guests Find You?",
@@ -1940,23 +1866,6 @@ export async function GET(request: NextRequest) {
         serviceKey: "mobile",
       }),
       createCheck({
-        id: "photo-gallery-quality",
-        name: "Photo gallery",
-        category: "Are You Losing Guests?",
-        status: highQualityImageCount >= 6 ? "pass" : "fail",
-        finding: highQualityImageCount >= 6
-          ? `${highQualityImageCount} quality images found on your site.`
-          : highQualityImageCount > 0
-            ? `Only ${highQualityImageCount} quality image${highQualityImageCount > 1 ? "s" : ""} found — aim for 6+.`
-            : "No quality images found on your homepage.",
-        details: highQualityImageCount >= 6
-          ? "Guests can see what the experience looks like before booking. Good photos sell the stay."
-          : "Guests are buying an experience they've never seen. Parks with 6+ quality photos convert significantly better than those with just a logo and a stock image. Show your best sites, amenities, and scenery.",
-        effort: "Medium",
-        impact: industry === "glamping" ? "High" : "Medium",
-        serviceKey: "photos",
-      }),
-      createCheck({
         id: "rate-transparency",
         name: "Pricing visible",
         category: "Are You Losing Guests?",
@@ -1984,19 +1893,6 @@ export async function GET(request: NextRequest) {
         serviceKey: "booking_cta",
       }),
       createCheck({
-        id: "trust-stack-completeness",
-        name: "Trust signals",
-        category: "Are You Losing Guests?",
-        status: trustStackScore >= 3 ? "pass" : "fail",
-        finding: `${trustStackScore} of 4 trust signals found (secure site, HTTPS, cancellation policy, guest reviews).`,
-        details: trustStackScore >= 3
-          ? "Guests have enough trust cues to feel safe entering credit card info."
-          : "Before someone gives you money online, they need to trust you. Make sure these are visible: secure padlock, cancellation policy, and real guest reviews.",
-        effort: "Low",
-        impact: "High",
-        serviceKey: "booking_cta",
-      }),
-      createCheck({
         id: "professional-email",
         name: "Business email",
         category: "Are You Losing Guests?",
@@ -2014,19 +1910,6 @@ export async function GET(request: NextRequest) {
         effort: "Low",
         impact: "Medium",
         serviceKey: "default",
-      }),
-      createCheck({
-        id: "seasonal-visibility",
-        name: "Seasonal deals",
-        category: "Are You Losing Guests?",
-        status: hasSeasonalPromo ? "pass" : "fail",
-        finding: hasSeasonalPromo ? "Seasonal offers or deals found." : "No seasonal offers or deals found.",
-        details: hasSeasonalPromo
-          ? "Off-season deals and early-bird pricing help fill slow periods."
-          : "Add early-bird discounts, off-season rates, or weekly/monthly specials. These drive bookings during your slowest months when you need them most.",
-        effort: "Medium",
-        impact: "Medium",
-        serviceKey: "rates",
       }),
     ];
 
