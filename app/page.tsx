@@ -2910,7 +2910,6 @@ export default function Home() {
                     </motion.div>
                     {scanError ? <p className="mt-2 text-center text-base text-[#B42318]">{scanError}</p> : null}
                   </div>
-                  <p className="mt-4 text-center text-base text-[#5B6776]">100% free. No credit card required.</p>
                   <motion.button
                     whileHover={{ y: -1 }}
                     whileTap={{ scale: 0.98 }}
@@ -2919,6 +2918,7 @@ export default function Home() {
                   >
                     Get My Free Audit
                   </motion.button>
+                  <p className="mt-4 text-center text-base text-[#5B6776]">100% free. No credit card required.</p>
                 </div>
               </div>
             </motion.div>
