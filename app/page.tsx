@@ -890,18 +890,26 @@ function PolicyFooter({ fixed }: { fixed?: boolean }) {
 function TopographicPanel() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.75),rgba(248,250,252,0.96)_52%,rgba(248,250,252,1)_100%)]" />
-      <svg className="absolute inset-0 h-full w-full opacity-60" viewBox="0 0 800 800" preserveAspectRatio="none">
-        {Array.from({ length: 16 }).map((_, index) => (
-          <path
-            key={index}
-            d={`M -50 ${30 + index * 50} C 100 ${index * 30}, 300 ${100 + index * 24}, 850 ${40 + index * 46}`}
-            stroke="#D8E0EA"
-            strokeWidth="1"
-            fill="none"
-            opacity="0.9"
-          />
-        ))}
+      {/* Mesh glow */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `
+            radial-gradient(circle at 0% 0%, rgba(45,164,169,0.18) 0%, transparent 40%),
+            radial-gradient(circle at 100% 100%, rgba(45,164,169,0.12) 0%, transparent 40%),
+            radial-gradient(circle at 50% 50%, rgba(10,22,40,0.06) 0%, transparent 55%),
+            radial-gradient(ellipse 120% 100% at 30% 80%, rgba(45,164,169,0.10) 0%, transparent 45%)
+          `,
+          filter: "blur(80px)",
+        }}
+      />
+      {/* Noise texture overlay */}
+      <svg className="absolute inset-0 h-full w-full opacity-[0.15]" style={{ mixBlendMode: "overlay" }}>
+        <filter id="pg-noise">
+          <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch" seed="2" />
+          <feColorMatrix type="saturate" values="0" />
+        </filter>
+        <rect width="100%" height="100%" filter="url(#pg-noise)" fill="white" />
       </svg>
     </div>
   );
