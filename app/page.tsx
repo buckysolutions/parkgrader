@@ -868,18 +868,18 @@ function TradeshowEmailConfirm({ email, onClose }: { email: string; onClose: () 
 function PolicyFooter({ fixed }: { fixed?: boolean }) {
   return (
     <footer
-      className={`${fixed ? "fixed" : "relative"} bottom-4 left-1/2 z-20 -translate-x-1/2 text-xs text-[#5B6776] print-hidden`}
+      className={`${fixed ? "fixed" : "relative"} bottom-4 left-1/2 z-20 -translate-x-1/2 text-xs text-[#A7BCCF] print-hidden`}
     >
       <div className="flex items-center gap-2 whitespace-nowrap px-1 py-1">
-        <a className="hover:text-[#0A1628]" href="https://www.buckysolutions.com/privacy-policy/" target="_blank" rel="noreferrer">
+        <a className="transition-colors hover:text-[#5B6776]" href="https://www.buckysolutions.com/privacy-policy/" target="_blank" rel="noreferrer">
           Privacy Policy
         </a>
         <span>·</span>
-        <a className="hover:text-[#0A1628]" href="https://www.buckysolutions.com/cookie-policy/" target="_blank" rel="noreferrer">
+        <a className="transition-colors hover:text-[#5B6776]" href="https://www.buckysolutions.com/cookie-policy/" target="_blank" rel="noreferrer">
           Cookie Policy
         </a>
         <span>·</span>
-        <a className="hover:text-[#0A1628]" href="https://www.buckysolutions.com/terms-and-conditions/" target="_blank" rel="noreferrer">
+        <a className="transition-colors hover:text-[#5B6776]" href="https://www.buckysolutions.com/terms-and-conditions/" target="_blank" rel="noreferrer">
           Terms and Conditions
         </a>
       </div>
@@ -889,28 +889,12 @@ function PolicyFooter({ fixed }: { fixed?: boolean }) {
 
 function TopographicPanel() {
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {/* Mesh glow */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: `
-            radial-gradient(circle at 0% 0%, rgba(45,164,169,0.18) 0%, transparent 40%),
-            radial-gradient(circle at 100% 100%, rgba(45,164,169,0.12) 0%, transparent 40%),
-            radial-gradient(circle at 50% 50%, rgba(10,22,40,0.06) 0%, transparent 55%),
-            radial-gradient(ellipse 120% 100% at 30% 80%, rgba(45,164,169,0.10) 0%, transparent 45%)
-          `,
-          filter: "blur(80px)",
-        }}
-      />
-      {/* Noise texture overlay */}
-      <svg className="absolute inset-0 h-full w-full opacity-[0.15]" style={{ mixBlendMode: "overlay" }}>
-        <filter id="pg-noise">
-          <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch" seed="2" />
-          <feColorMatrix type="saturate" values="0" />
-        </filter>
-        <rect width="100%" height="100%" filter="url(#pg-noise)" fill="white" />
-      </svg>
+    <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,#f2f7fb_0%,#edf4f9_48%,#eaf3f8_100%)]" />
+      <div className="absolute -left-24 top-16 h-[380px] w-[380px] rounded-full bg-[#9cd7dc]/45 blur-[90px]" />
+      <div className="absolute right-[-140px] top-[22%] h-[460px] w-[460px] rounded-full bg-[#bdebd3]/40 blur-[110px]" />
+      <div className="absolute bottom-[-160px] left-1/2 h-[420px] w-[620px] -translate-x-1/2 rounded-full bg-[#d9e8f4]/60 blur-[120px]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0.20)_55%,rgba(255,255,255,0.42)_100%)]" />
     </div>
   );
 }
@@ -1600,7 +1584,7 @@ export default function Home() {
   const [flippedCardId, setFlippedCardId] = useState<string | null>(null);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
-  const [isLandingFaqOpen, setIsLandingFaqOpen] = useState(false);
+
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState("");
   const [isGeneratingQrCode, setIsGeneratingQrCode] = useState(false);
   const [isGeneratingAiFix, setIsGeneratingAiFix] = useState(false);
@@ -1619,6 +1603,7 @@ export default function Home() {
   const [hasShownEngagementPrompt, setHasShownEngagementPrompt] = useState(false);
   const [hasClosedSecondIssue, setHasClosedSecondIssue] = useState(false);
   const [secondIssueCloseScrollY, setSecondIssueCloseScrollY] = useState<number | null>(null);
+  const landingInputRef = useRef<HTMLInputElement | null>(null);
   const scanRequestRef = useRef(0);
   const loadingStartRef = useRef<number | null>(null);
   const reportSectionRef = useRef<HTMLElement | null>(null);
@@ -1635,6 +1620,20 @@ export default function Home() {
     () => scanResult?.checks.find((check) => check.id === flippedCardId) ?? null,
     [flippedCardId, scanResult],
   );
+
+  useEffect(() => {
+    if (step !== "landing" || isHydratingSharedReport) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      landingInputRef.current?.focus();
+    }, 120);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isHydratingSharedReport, step, isTradeshowMode]);
 
   useEffect(() => {
     if (!activeCheck) {
@@ -2769,92 +2768,30 @@ export default function Home() {
                   width={181}
                   height={32}
                   style={{ height: "2rem", width: "auto" }}
-                  className="pointer-events-none absolute left-1/2 top-6 z-20 -translate-x-1/2 sm:left-10 sm:top-8 sm:translate-x-0"
+                  className="pointer-events-none absolute left-6 top-6 z-20 sm:left-10 sm:top-8"
                 />
-                <div className="print-hidden absolute right-6 top-6 z-20 hidden items-center gap-3 sm:right-10 sm:top-8 sm:flex">
-                  <button
-                    type="button"
-                    aria-label="Language selector"
-                    className="inline-flex h-12 items-center gap-2 rounded-full border border-[#AEBCCA] bg-white/75 px-5 text-base font-normal text-[#0A1628] backdrop-blur-sm transition-colors hover:border-[#2DA4A9]"
-                  >
-                    <GlobeAltIcon className="h-5 w-5" aria-hidden="true" />
-                    <span>English</span>
-                    <ChevronDownIcon className="h-4 w-4" aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsLandingFaqOpen(true)}
-                    className="inline-flex h-12 items-center justify-center rounded-full border border-[#AEBCCA] bg-white/75 px-7 text-base font-normal text-[#0A1628] backdrop-blur-sm transition-colors hover:border-[#2DA4A9]"
-                  >
-                    FAQ
-                  </button>
-                </div>
+
               </>
             ) : null}
-            {isLandingFaqOpen ? (
-              <motion.div
-                className="print-hidden fixed inset-0 z-50 flex items-center justify-center bg-[#0A1628]/55 px-4 py-6 backdrop-blur-[2px]"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setIsLandingFaqOpen(false)}
-              >
-                <motion.div
-                  className="relative w-full max-w-[680px] overflow-hidden border border-[#DDE7F0] bg-[#F8FAFC] shadow-[0_24px_80px_rgba(10,22,40,0.24)]"
-                  initial={{ opacity: 0, y: 18, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 18, scale: 0.98 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setIsLandingFaqOpen(false)}
-                    className="absolute right-3 top-3 inline-flex h-12 w-12 items-center justify-center text-3xl leading-none text-[#9AA9B5] transition-colors hover:text-[#0A1628]"
-                    aria-label="Close FAQ"
-                  >
-                    <XMarkIcon className="h-7 w-7" aria-hidden="true" />
-                  </button>
-                  <div className="border-b border-[#E6EBF0] bg-[linear-gradient(180deg,#ffffff_0%,#f6f9fc_100%)] px-6 py-6 sm:px-8">
-                    <p className="text-lg font-normal text-[#0A1628]">Frequently Asked Questions</p>
-                    <p className="mt-2 text-base text-[#435468]">Quick answers about how ParkGrader works.</p>
-                  </div>
-                  <div className="space-y-6 px-6 py-6 sm:px-8 sm:py-7">
-                    <div>
-                      <p className="text-base font-medium text-[#0A1628]">How long does the audit take?</p>
-                      <p className="mt-2 text-base leading-7 text-[#435468]">Most audits are ready in about 10-20 seconds.</p>
-                    </div>
-                    <div>
-                      <p className="text-base font-medium text-[#0A1628]">Is this really free?</p>
-                      <p className="mt-2 text-base leading-7 text-[#435468]">Yes. There is no credit card required to run an audit.</p>
-                    </div>
-                    <div>
-                      <p className="text-base font-medium text-[#0A1628]">What does ParkGrader check?</p>
-                      <p className="mt-2 text-base leading-7 text-[#435468]">We analyze booking flow, mobile experience, trust signals, and online visibility.</p>
-                    </div>
-                    <div>
-                      <p className="text-base font-medium text-[#0A1628]">Will this change my website?</p>
-                      <p className="mt-2 text-base leading-7 text-[#435468]">No. ParkGrader is read-only and does not modify your site.</p>
-                    </div>
-                  </div>
-                </motion.div>
-              </motion.div>
-            ) : null}
+
             <motion.div
               className="relative z-10 mx-auto w-full max-w-3xl"
               initial={{ y: 24, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
             >
-              <div className="mx-auto max-w-[42rem] border border-[#DCE5ED] bg-[#F8FAFC] px-6 py-8 shadow-[0_10px_30px_rgba(10,22,40,0.05)] sm:px-10 sm:py-10">
+              <div className="mx-auto max-w-[52rem] px-3 py-6 sm:px-6 sm:py-8">
                 <div className="flex flex-col items-center text-center">
-                  <h1 className="mt-10 text-2xl leading-[0.98] text-[#0A1628] sm:text-[2.75rem]">
-                    Audit your park
+                  <p className="text-sm font-semibold tracking-[0.08em] text-[#9AA9B5]">
+                    100+ PARKS GRADED SO FAR
+                  </p>
+                  <h1 className="mt-4 text-[2rem] leading-[0.95] text-[#0A1628] sm:text-[2.8rem] sm:whitespace-nowrap">
+                    Get more direct bookings
                   </h1>
-                  <p className="mt-6 max-w-[34ch] text-base leading-7 text-[#5B6776] sm:text-xl sm:leading-8">
-                    Get a clear report on booking flow, mobile experience, trust signals, and online visibility.
+                  <p className="mt-4 max-w-[46ch] text-base leading-7 text-[#5B6776] sm:text-xl sm:leading-8">
+                    We analyze your booking flow, mobile experience, and trust signals, then show the highest-impact fixes you can make first.
                   </p>
                 </div>
-                <div className="mx-auto mt-12 w-full max-w-[34ch]">
+                <div className="mx-auto mt-9 w-full max-w-[34ch]">
                   <div className="text-left">
                     <motion.div
                       animate={urlInputShakeCount > 0 ? { x: [0, -10, 10, -7, 7, -3, 3, 0] } : { x: 0 }}
@@ -2863,6 +2800,7 @@ export default function Home() {
                       {isTradeshowMode ? (
                         <div className="relative">
                           <input
+                            ref={landingInputRef}
                             value={contactSearch}
                             onFocus={() => setIsContactSearchOpen(true)}
                             onBlur={() => {
@@ -2883,8 +2821,8 @@ export default function Home() {
                               }
                             }}
                             placeholder="Search by name, email, or company"
-                            className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base font-medium text-[#0A1628] text-center outline-none transition-colors placeholder:text-[#8C97A8] ${
-                              scanError ? "border-[#DC2626]" : "border-[#C4D3E2] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                            className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-lg font-semibold text-[#0A1628] text-center outline-none transition-colors placeholder:font-normal placeholder:text-[#6E7C90] ${
+                              scanError ? "border-[#DC2626]" : "border-[#8DA4BA] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
                             }`}
                           />
                           {isContactSearchOpen ? (
@@ -2926,6 +2864,7 @@ export default function Home() {
                         </div>
                       ) : (
                         <input
+                          ref={landingInputRef}
                           value={urlInput}
                           onChange={(event) => {
                             setUrlInput(event.target.value);
@@ -2940,22 +2879,22 @@ export default function Home() {
                             }
                           }}
                           placeholder="Enter your park website"
-                          className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base font-medium text-[#0A1628] text-center outline-none transition-colors placeholder:text-[#8C97A8] ${
-                            scanError ? "border-[#DC2626]" : "border-[#C4D3E2] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                          className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-lg font-semibold text-[#0A1628] text-center outline-none transition-colors placeholder:font-normal placeholder:text-[#6E7C90] ${
+                            scanError ? "border-[#DC2626]" : "border-[#8DA4BA] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
                           }`}
                         />
                       )}
                     </motion.div>
-                    {scanError ? <p className="mt-2 text-base text-[#B42318]">{scanError}</p> : null}
+                    {scanError ? <p className="mt-2 text-center text-base text-[#B42318]">{scanError}</p> : null}
                   </div>
                   <p className="mt-4 text-center text-base text-[#5B6776]">100% free. No credit card required.</p>
                   <motion.button
                     whileHover={{ y: -1 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={beginAssessment}
-                    className="mx-auto mt-10 block min-h-12 w-full max-w-[260px] rounded-2xl bg-[#2DA4A9] px-6 py-3 text-base font-medium text-white transition-colors hover:bg-[#24858A]"
+                    className="mx-auto mt-8 block min-h-12 w-full max-w-[260px] rounded-2xl bg-[#2DA4A9] px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-[#24858A]"
                   >
-                    Get free audit
+                    Get My Free Audit
                   </motion.button>
                 </div>
               </div>
