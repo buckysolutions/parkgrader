@@ -1180,7 +1180,7 @@ const PASS_LEARN_CTA_BY_ID: Record<string, string> = {
 };
 
 const PASS_BENEFIT_BY_ID: Record<string, string> = {
-  "response-time": "Fast loading: guests can open your site quickly without frustration, so more high-intent visitors stay on the booking path.",
+  "response-time": "Server response: your hosting server hands off the page quickly, so visitors aren't left waiting for the site to even start loading.",
   "mobile-viewport": "Smartphone ready: your website layout stays readable and easy to use when guests look you up from the road.",
   "meta-title": "Search engine signage: your Google listing label is clear, so the right guests can recognize your park faster.",
   "meta-description": "Your search preview explains the value of your park clearly, improving click quality from potential guests.",
@@ -1395,7 +1395,7 @@ const condenseFixCopy = (copy: string): string => {
 
 const CHECK_DISPLAY_LABEL_BY_ID: Record<string, string> = {
   "technical-trust-security": "Technical trust & security",
-  "response-time": "Fast loading",
+  "response-time": "Server response",
   "broken-links": "Working website links",
   "pagespeed-mobile": "Phone loading speed",
   "human-written-content": "Human-written content",
@@ -1471,7 +1471,7 @@ const getCheckHeadline = (check?: ScanCheck | null): string => {
     case "copyright-freshness":
       return p ? "Copyright year is current" : f ? "Copyright year is outdated" : "No copyright year found";
     case "response-time":
-      return p ? "Website responds quickly" : f ? "Website is slow to respond" : "Website response is borderline";
+      return p ? "Server responds quickly" : f ? "Server is slow to respond" : "Server response is borderline";
     case "broken-links":
       return p ? "No broken links found" : f ? "Some links on the site are broken" : "One or more links may be broken";
     case "date-picker-discoverability":

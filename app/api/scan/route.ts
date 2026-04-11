@@ -731,7 +731,7 @@ Answer these 9 questions about the website content. Return ONLY valid JSON, no m
     "summary": "one sentence explaining why"
   },
   "parkMap": {
-    "found": true/false (is there a park map, campground map, site map showing the property layout, interactive map of the grounds, or downloadable PDF map of the property? Also check the LINK URLS section for any links containing 'map' and '.pdf'.),
+    "found": true/false (is there a park map, campground map, or site map showing the PROPERTY LAYOUT — meaning a visual diagram of campsites, RV pads, cabins, or facilities? A Google Maps embed showing the park's street address or driving directions does NOT count. A sitemap.xml link does NOT count. Only return true if there is an actual property layout map.),
     "summary": "one sentence"
   }
 }`;
@@ -1318,8 +1318,10 @@ export async function GET(request: NextRequest) {
 
     // Professional email detection (informational — never penalizes).
     const emailMatches = html.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) ?? [];
+    const placeholderEmailDomains = ["domain.com", "example.com", "example.org", "example.net", "yourpark.com", "yourdomain.com", "email.com", "company.com", "test.com", "placeholder.com", "sentry.io", "sentry-next.wixpress.com"];
     const personalEmailDomains = ["gmail.com", "yahoo.com", "hotmail.com", "aol.com", "outlook.com", "icloud.com", "me.com", "live.com", "msn.com", "verizon.net", "comcast.net", "att.net", "sbcglobal.net", "bellsouth.net", "charter.net", "cox.net", "earthlink.net", "juno.com", "protonmail.com", "mail.com", "ymail.com", "rocketmail.com", "frontier.com", "windstream.net"];
-    const siteEmails = emailMatches.filter((em) => !personalEmailDomains.some((d) => em.toLowerCase().endsWith(`@${d}`)));
+    const excludedEmailDomains = [...personalEmailDomains, ...placeholderEmailDomains];
+    const siteEmails = emailMatches.filter((em) => !excludedEmailDomains.some((d) => em.toLowerCase().endsWith(`@${d}`)));
     const personalEmails = emailMatches.filter((em) => personalEmailDomains.some((d) => em.toLowerCase().endsWith(`@${d}`)));
     const hasBrandedEmail = siteEmails.length > 0;
     const foundPersonalDomain = personalEmails.length > 0 ? personalEmails[0]!.split("@")[1] : null;
@@ -1352,8 +1354,8 @@ export async function GET(request: NextRequest) {
       : "fail";
     const responseTimeFinding = `Your server responded in ${responseTimeMs}ms.`;
     const responseTimeDetails = responseTimeMs < 3000
-      ? "Response time is healthy — your site starts loading quickly."
-      : "Your site is taking too long to start loading. Most visitors leave if they wait more than a couple seconds.";
+      ? "Your server responds quickly — the first step to a fast-loading site."
+      : "Your server is taking too long to respond. Most visitors leave if they wait more than a couple seconds.";
     const mobileViewportStatus: CheckStatus = !hasViewport
       ? "fail"
       : "pass";
@@ -1421,7 +1423,12 @@ export async function GET(request: NextRequest) {
     const regexArrivalSection = hrefContains(["/directions", "/getting-here", "/arrival"]) || deepKeywordContains(["directions", "getting here", "arrival instructions", "how to get here"]);
     const regexGpsPitfallWarning = /low\s*clearance|bridge\s*clearance|avoid\s+.*road|do not use\s+gps|use\s+main\s+entrance|truck\s*route|rv\s*route/i.test(fullSiteText);
     const regexCheckInOutTimes = /check[ -]?in\s*(?:time|:|\bat\b|begins|starts|is)\s*\d|check[ -]?out\s*(?:time|:|\bat\b|by|is)\s*\d|\d{1,2}\s*(?:am|pm|a\.m\.|p\.m\.)\s*check[ -]?in|\d{1,2}\s*(?:am|pm|a\.m\.|p\.m\.)\s*check[ -]?out|check[ -]?in.*\d{1,2}.*check[ -]?out.*\d{1,2}|office\s*hours\s*[:\-]?\s*(?:mon|tue|wed|thu|fri|sat|sun)|hours\s*of\s*operation\s*[:\-]?\s*(?:mon|tue|wed|thu|fri|sat|sun)/i.test(fullSiteText);
-    const regexParkMap = hrefContains(["/map", "/park-map", "/campground-map", "/site-map", "/property-map"]) || deepKeywordContains(["park map", "campground map", "site map", "property map", "resort map"]) || links.some((href) => /map.*\.pdf|\.pdf.*map/i.test(href));
+    const internalMapLink = links.some((href) => {
+      const lower = href.toLowerCase();
+      if (lower.includes("google.com/map") || lower.includes("maps.google") || lower.includes("goo.gl/maps") || lower.includes("maps.app.goo.gl") || lower.includes("bing.com/maps") || lower.includes("mapquest.com") || lower.includes("waze.com")) return false;
+      return ["/map", "/park-map", "/campground-map", "/site-map", "/property-map"].some((p) => lower.includes(p));
+    });
+    const regexParkMap = internalMapLink || deepKeywordContains(["park map", "campground map", "property map", "resort map"]) || /\bsite\s+map\b/i.test(fullSiteText) && !/sitemap\.xml/i.test(fullSiteText) || links.some((href) => /map.*\.pdf|\.pdf.*map/i.test(href));
 
     // Merge AI results with regex fallbacks — pass if EITHER source found it.
     const hasMaxLengthInfo = (aiContent?.bigRigReadiness?.maxLength ?? false) || regexMaxLengthInfo;
