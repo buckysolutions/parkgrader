@@ -891,28 +891,32 @@ function TopographicPanel() {
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
       {/* Rich multi-color base gradient */}
-      <div className="absolute inset-0 bg-[linear-gradient(135deg,#f0f9f8_0%,#e9fdfe_25%,#e6f4f1_50%,#f5f0e8_75%,#fef8f0_100%)]" />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,#f8fbfc_0%,#eef9f8_18%,#e9fdfe_42%,#edf7f1_68%,#faf6ef_100%)] sm:bg-[linear-gradient(135deg,#f0f9f8_0%,#e9fdfe_25%,#e6f4f1_50%,#f5f0e8_75%,#fef8f0_100%)]" />
       
       {/* Brand teal - top left */}
-      <div className="absolute -left-32 top-8 h-[280px] w-[280px] rounded-full bg-[#54a2a7]/12 blur-[70px] sm:-left-24 sm:top-16 sm:h-[380px] sm:w-[380px] sm:bg-[#54a2a7]/18 sm:blur-[90px]" />
+      <div className="absolute -left-32 top-4 h-[240px] w-[240px] rounded-full bg-[#54a2a7]/8 blur-[78px] sm:-left-24 sm:top-16 sm:h-[380px] sm:w-[380px] sm:bg-[#54a2a7]/18 sm:blur-[90px]" />
       
       {/* Vibrant cyan - right side */}
-      <div className="absolute right-[-160px] top-[28%] h-[320px] w-[320px] rounded-full bg-[#00a9ba]/20 blur-[80px] sm:right-[-140px] sm:top-[22%] sm:h-[460px] sm:w-[460px] sm:bg-[#00a9ba]/28 sm:blur-[110px]" />
+      <div className="absolute right-[-170px] top-[24%] h-[260px] w-[260px] rounded-full bg-[#00a9ba]/12 blur-[88px] sm:right-[-140px] sm:top-[22%] sm:h-[460px] sm:w-[460px] sm:bg-[#00a9ba]/28 sm:blur-[110px]" />
       
       {/* Fresh green - bottom center */}
-      <div className="absolute bottom-[-140px] left-1/2 h-[300px] w-[480px] -translate-x-1/2 rounded-full bg-[#5abf7e]/25 blur-[100px] sm:bottom-[-160px] sm:h-[420px] sm:w-[620px] sm:bg-[#5abf7e]/35 sm:blur-[120px]" />
+      <div className="absolute bottom-[-120px] left-1/2 h-[240px] w-[420px] -translate-x-1/2 rounded-full bg-[#5abf7e]/14 blur-[105px] sm:bottom-[-160px] sm:h-[420px] sm:w-[620px] sm:bg-[#5abf7e]/35 sm:blur-[120px]" />
       
       {/* Warm orange accent - top right */}
-      <div className="absolute -top-20 -right-40 h-[240px] w-[240px] rounded-full bg-[#ff8a44]/18 blur-[80px] sm:-top-16 sm:-right-32 sm:h-[320px] sm:w-[320px] sm:bg-[#ff8a44]/22 sm:blur-[100px]" />
+      <div className="absolute -top-16 -right-32 h-[180px] w-[180px] rounded-full bg-[#ff8a44]/10 blur-[78px] sm:-top-16 sm:-right-32 sm:h-[320px] sm:w-[320px] sm:bg-[#ff8a44]/22 sm:blur-[100px]" />
       
       {/* Deep teal depth - bottom left */}
-      <div className="absolute -bottom-32 -left-40 h-[280px] w-[280px] rounded-full bg-[#005056]/6 blur-[90px] sm:-bottom-24 sm:-left-32 sm:h-[360px] sm:w-[360px] sm:bg-[#005056]/10 sm:blur-[110px]" />
+      <div className="absolute -bottom-28 -left-36 h-[220px] w-[220px] rounded-full bg-[#005056]/4 blur-[95px] sm:-bottom-24 sm:-left-32 sm:h-[360px] sm:w-[360px] sm:bg-[#005056]/10 sm:blur-[110px]" />
       
       {/* Tertiary soft teal - center right */}
-      <div className="absolute top-1/3 right-1/4 h-[200px] w-[200px] rounded-full bg-[#befcff]/15 blur-[70px] sm:h-[280px] sm:w-[280px] sm:bg-[#befcff]/20 sm:blur-[90px]" />
+      <div className="absolute top-[38%] right-[18%] h-[150px] w-[150px] rounded-full bg-[#befcff]/12 blur-[72px] sm:top-1/3 sm:right-1/4 sm:h-[280px] sm:w-[280px] sm:bg-[#befcff]/20 sm:blur-[90px]" />
+
+      {/* Mobile edge blending so the background eases into device chrome more cleanly */}
+      <div className="absolute inset-x-0 top-0 h-28 bg-[linear-gradient(180deg,rgba(248,251,252,0.92)_0%,rgba(248,251,252,0.55)_55%,rgba(248,251,252,0)_100%)] sm:hidden" />
+      <div className="absolute inset-x-0 bottom-0 h-36 bg-[linear-gradient(0deg,rgba(250,246,239,0.96)_0%,rgba(250,246,239,0.62)_50%,rgba(250,246,239,0)_100%)] sm:hidden" />
       
       {/* Glossy overlay for premium depth */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.10)_0%,rgba(255,255,255,0.20)_40%,rgba(255,255,255,0.38)_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0.28)_42%,rgba(255,255,255,0.50)_100%)] sm:bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.10)_0%,rgba(255,255,255,0.20)_40%,rgba(255,255,255,0.38)_100%)]" />
     </div>
   );
 }
@@ -2799,11 +2803,12 @@ export default function Home() {
             >
               <div className="mx-auto max-w-[52rem] px-3 py-6 sm:px-6 sm:py-8">
                 <div className="flex flex-col items-center text-center">
-                  <p className="text-sm font-semibold tracking-[0.08em] text-[#9AA9B5]">
+                  <p className="text-sm font-normal tracking-[0.08em] text-[#9AA9B5]">
                     100+ PARKS GRADED SO FAR
                   </p>
                   <h1 className="mt-4 text-[2rem] leading-[0.95] text-[#0A1628] sm:text-[2.8rem] sm:whitespace-nowrap">
-                    Get more direct bookings
+                    <span className="sm:hidden">Get more bookings</span>
+                    <span className="hidden sm:inline">Get more direct bookings</span>
                   </h1>
                   <p className="mt-4 max-w-[56ch] text-base leading-7 text-[#5B6776] sm:text-xl sm:leading-8">
                     See exactly what's costing you direct bookings — and what to fix first.
@@ -2910,7 +2915,7 @@ export default function Home() {
                     whileHover={{ y: -1 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={beginAssessment}
-                    className="mx-auto mt-8 block min-h-12 w-full max-w-[260px] rounded-2xl bg-[#2DA4A9] px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-[#24858A]"
+                    className="mx-auto mt-8 block min-h-12 w-full rounded-2xl bg-[#2DA4A9] px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-[#24858A] sm:max-w-[260px]"
                   >
                     Get My Free Audit
                   </motion.button>
