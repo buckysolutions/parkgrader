@@ -890,33 +890,25 @@ function PolicyFooter({ fixed }: { fixed?: boolean }) {
 function TopographicPanel() {
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-      {/* Rich multi-color base gradient */}
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,#f8fbfc_0%,#eef9f8_18%,#e9fdfe_42%,#edf7f1_68%,#faf6ef_100%)] sm:bg-[linear-gradient(135deg,#f0f9f8_0%,#e9fdfe_25%,#e6f4f1_50%,#f5f0e8_75%,#fef8f0_100%)]" />
-      
-      {/* Brand teal - top left */}
-      <div className="absolute -left-32 top-4 h-[240px] w-[240px] rounded-full bg-[#54a2a7]/8 blur-[78px] sm:-left-24 sm:top-16 sm:h-[380px] sm:w-[380px] sm:bg-[#54a2a7]/18 sm:blur-[90px]" />
-      
-      {/* Vibrant cyan - right side */}
-      <div className="absolute right-[-170px] top-[24%] h-[260px] w-[260px] rounded-full bg-[#00a9ba]/12 blur-[88px] sm:right-[-140px] sm:top-[22%] sm:h-[460px] sm:w-[460px] sm:bg-[#00a9ba]/28 sm:blur-[110px]" />
-      
-      {/* Fresh green - bottom center */}
-      <div className="absolute bottom-[-120px] left-1/2 h-[240px] w-[420px] -translate-x-1/2 rounded-full bg-[#5abf7e]/14 blur-[105px] sm:bottom-[-160px] sm:h-[420px] sm:w-[620px] sm:bg-[#5abf7e]/35 sm:blur-[120px]" />
-      
-      {/* Warm orange accent - top right */}
-      <div className="absolute -top-16 -right-32 h-[180px] w-[180px] rounded-full bg-[#ff8a44]/10 blur-[78px] sm:-top-16 sm:-right-32 sm:h-[320px] sm:w-[320px] sm:bg-[#ff8a44]/22 sm:blur-[100px]" />
-      
-      {/* Deep teal depth - bottom left */}
-      <div className="absolute -bottom-28 -left-36 h-[220px] w-[220px] rounded-full bg-[#005056]/4 blur-[95px] sm:-bottom-24 sm:-left-32 sm:h-[360px] sm:w-[360px] sm:bg-[#005056]/10 sm:blur-[110px]" />
-      
-      {/* Tertiary soft teal - center right */}
-      <div className="absolute top-[38%] right-[18%] h-[150px] w-[150px] rounded-full bg-[#befcff]/12 blur-[72px] sm:top-1/3 sm:right-1/4 sm:h-[280px] sm:w-[280px] sm:bg-[#befcff]/20 sm:blur-[90px]" />
+      {/* Mobile: flat, quiet background */}
+      <div className="absolute inset-0 bg-[#F8FAFC] sm:hidden" />
 
-      {/* Mobile edge blending so the background eases into device chrome more cleanly */}
-      <div className="absolute inset-x-0 top-0 h-28 bg-[linear-gradient(180deg,rgba(248,251,252,0.92)_0%,rgba(248,251,252,0.55)_55%,rgba(248,251,252,0)_100%)] sm:hidden" />
-      <div className="absolute inset-x-0 bottom-0 h-36 bg-[linear-gradient(0deg,rgba(250,246,239,0.96)_0%,rgba(250,246,239,0.62)_50%,rgba(250,246,239,0)_100%)] sm:hidden" />
-      
-      {/* Glossy overlay for premium depth */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0.28)_42%,rgba(255,255,255,0.50)_100%)] sm:bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.10)_0%,rgba(255,255,255,0.20)_40%,rgba(255,255,255,0.38)_100%)]" />
+      {/* Tablet: restrained ambient wash */}
+      <div className="absolute inset-0 hidden bg-[linear-gradient(180deg,#f7fbfb_0%,#eef8f6_48%,#f7f8f6_100%)] sm:block lg:hidden" />
+      <div className="absolute hidden sm:block lg:hidden -left-24 top-8 h-[260px] w-[260px] rounded-full bg-[#54a2a7]/10 blur-[90px]" />
+      <div className="absolute hidden sm:block lg:hidden right-[-120px] top-[22%] h-[280px] w-[280px] rounded-full bg-[#00a9ba]/10 blur-[100px]" />
+      <div className="absolute hidden sm:block lg:hidden bottom-[-120px] left-1/2 h-[260px] w-[460px] -translate-x-1/2 rounded-full bg-[#5abf7e]/10 blur-[110px]" />
+      <div className="absolute hidden sm:block lg:hidden inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.16)_0%,rgba(255,255,255,0.26)_45%,rgba(255,255,255,0.42)_100%)]" />
+
+      {/* Desktop: richer multi-color gradient */}
+      <div className="absolute inset-0 hidden bg-[linear-gradient(135deg,#f0f9f8_0%,#e9fdfe_25%,#e6f4f1_50%,#f5f0e8_75%,#fef8f0_100%)] lg:block" />
+      <div className="absolute hidden lg:block -left-24 top-16 h-[380px] w-[380px] rounded-full bg-[#54a2a7]/18 blur-[90px]" />
+      <div className="absolute hidden lg:block right-[-140px] top-[22%] h-[460px] w-[460px] rounded-full bg-[#00a9ba]/28 blur-[110px]" />
+      <div className="absolute hidden lg:block bottom-[-160px] left-1/2 h-[420px] w-[620px] -translate-x-1/2 rounded-full bg-[#5abf7e]/35 blur-[120px]" />
+      <div className="absolute hidden lg:block -top-16 -right-32 h-[320px] w-[320px] rounded-full bg-[#ff8a44]/22 blur-[100px]" />
+      <div className="absolute hidden lg:block -bottom-24 -left-32 h-[360px] w-[360px] rounded-full bg-[#005056]/10 blur-[110px]" />
+      <div className="absolute hidden lg:block top-1/3 right-1/4 h-[280px] w-[280px] rounded-full bg-[#befcff]/20 blur-[90px]" />
+      <div className="absolute hidden lg:block inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.10)_0%,rgba(255,255,255,0.20)_40%,rgba(255,255,255,0.38)_100%)]" />
     </div>
   );
 }
