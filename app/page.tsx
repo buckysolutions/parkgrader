@@ -890,11 +890,29 @@ function PolicyFooter({ fixed }: { fixed?: boolean }) {
 function TopographicPanel() {
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,#f2f7fb_0%,#edf4f9_48%,#eaf3f8_100%)]" />
-      <div className="absolute -left-24 top-16 h-[380px] w-[380px] rounded-full bg-[#9cd7dc]/45 blur-[90px]" />
-      <div className="absolute right-[-140px] top-[22%] h-[460px] w-[460px] rounded-full bg-[#bdebd3]/40 blur-[110px]" />
-      <div className="absolute bottom-[-160px] left-1/2 h-[420px] w-[620px] -translate-x-1/2 rounded-full bg-[#d9e8f4]/60 blur-[120px]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.06)_0%,rgba(255,255,255,0.20)_55%,rgba(255,255,255,0.42)_100%)]" />
+      {/* Rich multi-color base gradient */}
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,#f0f9f8_0%,#e9fdfe_25%,#e6f4f1_50%,#f5f0e8_75%,#fef8f0_100%)]" />
+      
+      {/* Brand teal - top left */}
+      <div className="absolute -left-32 top-8 h-[280px] w-[280px] rounded-full bg-[#54a2a7]/12 blur-[70px] sm:-left-24 sm:top-16 sm:h-[380px] sm:w-[380px] sm:bg-[#54a2a7]/18 sm:blur-[90px]" />
+      
+      {/* Vibrant cyan - right side */}
+      <div className="absolute right-[-160px] top-[28%] h-[320px] w-[320px] rounded-full bg-[#00a9ba]/20 blur-[80px] sm:right-[-140px] sm:top-[22%] sm:h-[460px] sm:w-[460px] sm:bg-[#00a9ba]/28 sm:blur-[110px]" />
+      
+      {/* Fresh green - bottom center */}
+      <div className="absolute bottom-[-140px] left-1/2 h-[300px] w-[480px] -translate-x-1/2 rounded-full bg-[#5abf7e]/25 blur-[100px] sm:bottom-[-160px] sm:h-[420px] sm:w-[620px] sm:bg-[#5abf7e]/35 sm:blur-[120px]" />
+      
+      {/* Warm orange accent - top right */}
+      <div className="absolute -top-20 -right-40 h-[240px] w-[240px] rounded-full bg-[#ff8a44]/18 blur-[80px] sm:-top-16 sm:-right-32 sm:h-[320px] sm:w-[320px] sm:bg-[#ff8a44]/22 sm:blur-[100px]" />
+      
+      {/* Deep teal depth - bottom left */}
+      <div className="absolute -bottom-32 -left-40 h-[280px] w-[280px] rounded-full bg-[#005056]/6 blur-[90px] sm:-bottom-24 sm:-left-32 sm:h-[360px] sm:w-[360px] sm:bg-[#005056]/10 sm:blur-[110px]" />
+      
+      {/* Tertiary soft teal - center right */}
+      <div className="absolute top-1/3 right-1/4 h-[200px] w-[200px] rounded-full bg-[#befcff]/15 blur-[70px] sm:h-[280px] sm:w-[280px] sm:bg-[#befcff]/20 sm:blur-[90px]" />
+      
+      {/* Glossy overlay for premium depth */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.10)_0%,rgba(255,255,255,0.20)_40%,rgba(255,255,255,0.38)_100%)]" />
     </div>
   );
 }
@@ -2768,7 +2786,7 @@ export default function Home() {
                   width={181}
                   height={32}
                   style={{ height: "2rem", width: "auto" }}
-                  className="pointer-events-none absolute left-6 top-6 z-20 sm:left-10 sm:top-8"
+                  className="pointer-events-none absolute left-1/2 top-6 z-20 -translate-x-1/2 lg:left-10 lg:top-8 lg:translate-x-0"
                 />
 
               </>
@@ -2787,8 +2805,8 @@ export default function Home() {
                   <h1 className="mt-4 text-[2rem] leading-[0.95] text-[#0A1628] sm:text-[2.8rem] sm:whitespace-nowrap">
                     Get more direct bookings
                   </h1>
-                  <p className="mt-4 max-w-[46ch] text-base leading-7 text-[#5B6776] sm:text-xl sm:leading-8">
-                    We analyze your booking flow, mobile experience, and trust signals, then show the highest-impact fixes you can make first.
+                  <p className="mt-4 max-w-[56ch] text-base leading-7 text-[#5B6776] sm:text-xl sm:leading-8">
+                    See exactly what's costing you direct bookings — and what to fix first.
                   </p>
                 </div>
                 <div className="mx-auto mt-9 w-full max-w-[34ch]">
