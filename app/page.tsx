@@ -3366,7 +3366,7 @@ export default function Home() {
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
             >
-              <div className="mx-auto max-w-[52rem] px-3 pt-20 pb-6 sm:px-6 sm:pt-24 sm:pb-8 lg:mx-0 lg:max-w-xl lg:self-center lg:pt-6 lg:pb-8">
+              <div className="mx-auto max-w-[52rem] px-3 pt-24 pb-6 sm:px-6 sm:pt-28 sm:pb-8 lg:mx-0 lg:max-w-xl lg:self-center lg:pt-6 lg:pb-8">
                 <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
                   <p className="text-sm font-medium tracking-[0.04em] text-[#D97706]">
                     THE AVERAGE PARK WE AUDIT HAS 9 FIXABLE ISSUES

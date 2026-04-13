@@ -610,6 +610,8 @@ const storeAuditInSupabase = async (payload: Required<LeadPayload>): Promise<Sup
           company_name: payload.property_name || domain,
           website_url: payload.url,
           email: payload.email || persistedEmail || null,
+          contact_name: payload.name || null,
+          phone: payload.phone || null,
           score: payload.score,
           property_type: payload.property_type,
           primary_challenge: payload.primary_challenge,

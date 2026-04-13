@@ -5,6 +5,8 @@ create table if not exists public.parkgrader_audits (
   company_name text not null,
   website_url text not null,
   email text,
+  contact_name text,
+  phone text,
   score integer not null,
   property_type text,
   primary_challenge text,
@@ -17,6 +19,12 @@ create table if not exists public.parkgrader_audits (
 
 alter table public.parkgrader_audits
   add column if not exists report_snapshot jsonb;
+
+alter table public.parkgrader_audits
+  add column if not exists contact_name text;
+
+alter table public.parkgrader_audits
+  add column if not exists phone text;
 
 alter table public.parkgrader_audits
   drop constraint if exists parkgrader_audits_domain_fkey;
