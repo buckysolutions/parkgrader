@@ -4,6 +4,7 @@ import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 type LeadPayload = {
   email?: string;
   name?: string;
+  phone?: string;
   property_name?: string;
   url?: string;
   score?: number;
@@ -15,6 +16,7 @@ type LeadPayload = {
   hubspot_contact_id?: string;
   report_snapshot?: unknown;
   send_email_copy?: boolean;
+  lead_intent?: string;
 };
 
 type UpsertResult = {
@@ -263,6 +265,9 @@ const sendLeadCaptureWebhook = async (
 
   const webhookBody = {
     email: payload.email,
+    name: payload.name,
+    phone: payload.phone,
+    lead_intent: payload.lead_intent,
     url: payload.url,
     company_name: companyName,
     hubspot_contact_id: hubspotContactId,
@@ -631,6 +636,7 @@ const storeAuditInSupabase = async (payload: Required<LeadPayload>): Promise<Sup
 const toHubSpotContactProperties = (payload: Required<LeadPayload>) => ({
   email: payload.email,
   firstname: payload.name,
+  phone: payload.phone,
   company: payload.property_name,
   website: payload.url,
   parkgrader_score: String(payload.score),
@@ -1203,6 +1209,7 @@ export async function POST(request: NextRequest) {
     const payload: Required<LeadPayload> = {
       email: body.email?.trim().toLowerCase() ?? "",
       name: body.name?.trim() ?? "",
+      phone: body.phone?.trim() ?? "",
       property_name: body.property_name?.trim() ?? "",
       url: body.url?.trim() ?? "",
       score: Number(body.score ?? 0),
@@ -1214,6 +1221,7 @@ export async function POST(request: NextRequest) {
       hubspot_contact_id: body.hubspot_contact_id?.trim() ?? "",
       report_snapshot: body.report_snapshot,
       send_email_copy: Boolean(body.send_email_copy),
+      lead_intent: body.lead_intent?.trim() ?? "",
     };
 
     if (!payload.url) {

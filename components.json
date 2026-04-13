@@ -25,7 +25,7 @@
     "@shadcnblocks": {
       "url": "https://shadcnblocks.com/r/{name}",
       "headers": {
-        "Authorization": "Bearer sk_live_9M8CtFrL-alq0UL7wEBiYPGYgAt7h3-V"
+        "Authorization": "Bearer REDACTED"
       }
     }
   }

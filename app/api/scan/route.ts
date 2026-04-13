@@ -12,8 +12,10 @@ type CheckCategory =
   | "Can Guests Find You?"
   | "Are You Losing Guests?";
 type CheckStatus = "pass" | "fail" | "unknown";
+type ConfidenceLevel = "CONFIRMED" | "INFERRED" | "UNVERIFIED";
 type Effort = "Low" | "Medium" | "High";
 type Impact = "Low" | "Medium" | "High";
+type CheckLink = { label: string; url: string };
 
 type Check = {
   id: string;
@@ -21,12 +23,15 @@ type Check = {
   category: CheckCategory;
   status: CheckStatus;
   pass: boolean;
+  confidence: ConfidenceLevel;
+  evidence: string;
   finding: string;
   details: string;
   weight: number;
   effort: Effort;
   impact: Impact;
   serviceKey: string;
+  links?: CheckLink[];
   estimatedImpact?: string;
   benchmark?: string;
 };
@@ -45,11 +50,11 @@ const industryConfig: Record<IndustryKey, IndustryConfig> = {
     unitLabel: "sites",
     listingKeywords: ["campendium", "thedyrt", "hipcamp", "rv life", "rvlife"],
     categoryWeights: {
-      "Does Your Website Work?": 15,
-      "Can Guests Book Online?": 25,
-      "What Info Are You Missing?": 30,
-      "Can Guests Find You?": 15,
-      "Are You Losing Guests?": 15,
+      "Does Your Website Work?": 20,
+      "Can Guests Book Online?": 30,
+      "What Info Are You Missing?": 20,
+      "Can Guests Find You?": 20,
+      "Are You Losing Guests?": 10,
     },
   },
   marina: {
@@ -57,11 +62,11 @@ const industryConfig: Record<IndustryKey, IndustryConfig> = {
     unitLabel: "slips",
     listingKeywords: ["dockwa", "marinas.com", "waterway guide", "snag-a-slip"],
     categoryWeights: {
-      "Does Your Website Work?": 15,
-      "Can Guests Book Online?": 25,
-      "What Info Are You Missing?": 25,
+      "Does Your Website Work?": 20,
+      "Can Guests Book Online?": 30,
+      "What Info Are You Missing?": 20,
       "Can Guests Find You?": 20,
-      "Are You Losing Guests?": 15,
+      "Are You Losing Guests?": 10,
     },
   },
   glamping: {
@@ -69,11 +74,11 @@ const industryConfig: Record<IndustryKey, IndustryConfig> = {
     unitLabel: "tents/domes",
     listingKeywords: ["hipcamp", "glamping hub", "canopy", "airbnb"],
     categoryWeights: {
-      "Does Your Website Work?": 10,
-      "Can Guests Book Online?": 20,
-      "What Info Are You Missing?": 35,
+      "Does Your Website Work?": 20,
+      "Can Guests Book Online?": 30,
+      "What Info Are You Missing?": 20,
       "Can Guests Find You?": 20,
-      "Are You Losing Guests?": 15,
+      "Are You Losing Guests?": 10,
     },
   },
   cabins: {
@@ -81,11 +86,11 @@ const industryConfig: Record<IndustryKey, IndustryConfig> = {
     unitLabel: "units",
     listingKeywords: ["airbnb", "vrbo", "booking.com", "expedia"],
     categoryWeights: {
-      "Does Your Website Work?": 15,
-      "Can Guests Book Online?": 25,
-      "What Info Are You Missing?": 30,
-      "Can Guests Find You?": 15,
-      "Are You Losing Guests?": 15,
+      "Does Your Website Work?": 20,
+      "Can Guests Book Online?": 30,
+      "What Info Are You Missing?": 20,
+      "Can Guests Find You?": 20,
+      "Are You Losing Guests?": 10,
     },
   },
 };
@@ -124,6 +129,13 @@ const FAIL_IMPACT_BY_CHECK_ID: Partial<Record<string, string>> = {
   "accessibility-score": "Poor accessibility excludes guests with disabilities and can hurt your search rankings.",
   "sitemap-presence": "Without a sitemap, search engines have to guess which pages matter — and they often miss the important ones.",
   "copyright-freshness": "An outdated copyright year makes visitors think your park might be closed or neglected.",
+  "physical-address": "Without a street address, Google can't verify your location for Maps — and guests can't plug it into their GPS.",
+  "lead-capture": "Visitors who leave without booking are gone forever — unless you captured their email.",
+  "thin-content": "A homepage with barely any text gives Google nothing to rank and guests nothing to read.",
+  "cliche-density": "Generic hospitality copy sounds like every other park. Guests scroll right past it.",
+  "google-rating": "Guests filter by 4+ stars on Google Maps. Below that, you're invisible to most searchers.",
+  "review-count": "Parks with fewer than 15 reviews look unproven. Every review adds credibility.",
+  "negative-review-risk": "A handful of unresolved bad reviews can kill trust and conversion before guests ever click Book.",
 };
 
 const PASS_IMPACT_BY_CHECK_ID: Partial<Record<string, string>> = {
@@ -453,6 +465,242 @@ const hostFromWebsiteUri = (websiteUri?: string): string => {
   }
 };
 
+type ApifyReviewData = {
+  lowRatedReviews: Array<{ rating: number; text: string; url?: string }>;
+  averageRating: number | null;
+  totalReviewCount: number | null;
+  error?: string;
+};
+
+const REVIEW_THEME_DEFINITIONS: Array<{ key: string; label: string; keywords: string[]; action: string }> = [
+  {
+    key: "cleanliness",
+    label: "cleanliness",
+    keywords: ["dirty", "unclean", "filthy", "trash", "bathroom", "restroom", "smell", "mold", "toilet", "shower"],
+    action: "Fix and photo-document cleaning standards for bathrooms/sites, then reply with what changed.",
+  },
+  {
+    key: "staff_service",
+    label: "staff service",
+    keywords: ["rude", "staff", "manager", "owner", "service", "unhelpful", "attitude", "customer service"],
+    action: "Coach front-desk scripts and publish a same-day escalation path for unhappy guests.",
+  },
+  {
+    key: "pricing_fees",
+    label: "pricing and fees",
+    keywords: ["overpriced", "price", "expensive", "fee", "hidden fee", "charges", "refund", "deposit"],
+    action: "Show all mandatory fees earlier and clarify refund/cancellation terms in booking flow.",
+  },
+  {
+    key: "noise_safety",
+    label: "noise or safety",
+    keywords: ["noise", "loud", "party", "unsafe", "security", "fight", "drunk", "police"],
+    action: "Enforce quiet hours and publish after-hours contact/security process visibly onsite.",
+  },
+  {
+    key: "site_maintenance",
+    label: "site maintenance",
+    keywords: ["broken", "maintenance", "electric", "power", "water", "sewer", "wifi", "mud", "pothole"],
+    action: "Prioritize recurring maintenance tickets and post completion dates in review responses.",
+  },
+];
+
+const extractLowReviewInsights = (reviews: Array<{ rating: number; text: string }>) => {
+  const themeCounts = new Map<string, number>();
+
+  for (const review of reviews) {
+    const text = review.text.toLowerCase();
+    for (const theme of REVIEW_THEME_DEFINITIONS) {
+      if (theme.keywords.some((keyword) => text.includes(keyword))) {
+        themeCounts.set(theme.key, (themeCounts.get(theme.key) ?? 0) + 1);
+      }
+    }
+  }
+
+  const topThemes = REVIEW_THEME_DEFINITIONS
+    .map((theme) => ({
+      ...theme,
+      count: themeCounts.get(theme.key) ?? 0,
+    }))
+    .filter((theme) => theme.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 2);
+
+  const labels = topThemes.map((theme) => theme.label);
+  const actions = topThemes.map((theme) => theme.action);
+
+  return {
+    labels,
+    actions,
+  };
+};
+
+const buildConversationalReviewFix = (input: {
+  themeSummary: string;
+  actions: string[];
+  examples: Array<{ snippet: string; url?: string }>;
+}): string => {
+  const sentences: string[] = [];
+
+  sentences.push(`The top pattern in your low-rated reviews is ${input.themeSummary}, so that's the first thing to fix this week.`);
+
+  if (input.examples.length > 0) {
+    const refs = input.examples.map((_, index) => `[[REVIEW_${index + 1}]]`);
+    if (refs.length === 1) {
+      sentences.push(`A recent example is ${refs[0]}.`);
+    } else {
+      const first = refs[0];
+      const rest = refs.slice(1).join(" and ");
+      sentences.push(`Recent examples include ${first} and ${rest}.`);
+    }
+  }
+
+  if (input.actions.length > 0) {
+    if (input.actions.length > 1) {
+      sentences.push(`Start with this: ${input.actions[0]} Then ${input.actions[1].charAt(0).toLowerCase()}${input.actions[1].slice(1)}`);
+    } else {
+      sentences.push(`Start with this: ${input.actions[0]}`);
+    }
+  }
+
+  sentences.push("Keep replies simple and consistent: respond within 24 hours, acknowledge specifics, and name one concrete fix with timing.");
+  sentences.push("After that, ask happy guests for fresh reviews so newer feedback starts outweighing older negative ones.");
+
+  return sentences.join(" ");
+};
+
+const fetchApifyReviews = async (queryCandidates: string[], apiKey?: string): Promise<ApifyReviewData | null> => {
+  const normalizedApiKey = apiKey?.trim() ?? "";
+  if (!normalizedApiKey) {
+    return null;
+  }
+
+  try {
+    const candidates = Array.from(new Set(queryCandidates.map((q) => q.trim()).filter((q) => q.length >= 3)));
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    let items: Array<Record<string, unknown>> | null = null;
+
+    for (const query of candidates) {
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        const response = await fetch(
+          `https://api.apify.com/v2/acts/compass~google-maps-reviews-scraper/run-sync-get-dataset-items?token=${encodeURIComponent(normalizedApiKey)}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              searchStringsArray: [query],
+              maxReviews: 20,
+              language: "en",
+              reviewsLanguage: "en",
+            }),
+            signal: AbortSignal.timeout(75000),
+          },
+        );
+
+        if (!response.ok) {
+          // Retry only transient failures.
+          if ((response.status === 429 || response.status >= 500) && attempt === 1) {
+            await new Promise((resolve) => setTimeout(resolve, 1200));
+            continue;
+          }
+          break;
+        }
+
+        const payload = (await response.json()) as Array<Record<string, unknown>>;
+        if (Array.isArray(payload) && payload.length > 0) {
+          items = payload;
+          break;
+        }
+      }
+
+      if (items && items.length > 0) {
+        break;
+      }
+    }
+
+    if (!items || items.length === 0) {
+      return null;
+    }
+
+    const toNumber = (value: unknown): number | null => {
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+      if (typeof value === "string") {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      }
+      return null;
+    };
+
+    const toExternalUrl = (value: unknown): string | undefined => {
+      if (typeof value !== "string") return undefined;
+      const trimmed = value.trim();
+      if (!trimmed) return undefined;
+      if (!/^https?:\/\//i.test(trimmed)) return undefined;
+      try {
+        const parsed = new URL(trimmed);
+        return parsed.toString();
+      } catch {
+        return undefined;
+      }
+    };
+
+    const parsedReviews = items.map((item) => {
+      const rating =
+        toNumber(item.stars) ??
+        toNumber(item.rating) ??
+        toNumber(item.reviewRating) ??
+        null;
+      const textCandidate =
+        (typeof item.text === "string" ? item.text : null) ??
+        (typeof item.reviewText === "string" ? item.reviewText : null) ??
+        (typeof item.reviewDescription === "string" ? item.reviewDescription : null) ??
+        "";
+      const reviewUrl =
+        toExternalUrl(item.reviewUrl) ??
+        toExternalUrl(item.reviewLink) ??
+        toExternalUrl(item.url) ??
+        toExternalUrl(item.link);
+      return {
+        rating,
+        text: textCandidate.trim(),
+        url: reviewUrl,
+      };
+    }).filter((review) => review.rating !== null);
+
+    const worstReviews = [...parsedReviews]
+      .sort((a, b) => (a.rating ?? 5) - (b.rating ?? 5))
+      .slice(0, 20);
+
+    const lowRatedReviews = worstReviews
+      .filter((review) => review.rating !== null && review.rating <= 2)
+      .map((review) => ({
+        rating: review.rating as number,
+        text: review.text.slice(0, 300),
+        url: review.url,
+      }));
+
+    const ratings = parsedReviews
+      .map((review) => review.rating)
+      .filter((rating): rating is number => rating !== null);
+    const averageRating = ratings.length > 0
+      ? Math.round((ratings.reduce((sum, value) => sum + value, 0) / ratings.length) * 10) / 10
+      : null;
+
+    return {
+      lowRatedReviews,
+      averageRating,
+      totalReviewCount: parsedReviews.length,
+    };
+  } catch {
+    return null;
+  }
+};
+
 const fetchPlacesBusinessSignals = async (
   host: string,
   apiKey?: string,
@@ -532,6 +780,8 @@ const fetchPlacesBusinessSignals = async (
       userRatingCount?: number;
       reviews?: Array<{
         publishTime?: string;
+        rating?: number | "ONE" | "TWO" | "THREE" | "FOUR" | "FIVE";
+        text?: { text?: string } | string;
         reviewReply?: { text?: { text?: string } | string } | string;
       }>;
     };
@@ -551,6 +801,7 @@ const fetchPlacesBusinessSignals = async (
       const publishTime = review.publishTime ? Date.parse(review.publishTime) : Number.NaN;
       return Number.isFinite(publishTime) && publishTime >= thirtyDaysAgo;
     });
+
     const ownerResponses30d = recentReviews.filter((review) => {
       if (typeof review.reviewReply === "string") {
         return review.reviewReply.trim().length > 0;
@@ -663,15 +914,19 @@ const evaluateHumanWrittenContent = (html: string): {
 };
 
 type AiContentResult = {
-  petPolicy: { found: boolean; noPets: boolean; summary: string };
-  cancellationPolicy: { found: boolean; summary: string };
-  rvHookupSpecs: { found: boolean; summary: string };
-  bigRigReadiness: { maxLength: boolean; siteType: boolean; summary: string };
-  arrivalDirections: { found: boolean; gpsWarning: boolean; summary: string };
-  checkinCheckoutTimes: { found: boolean; summary: string };
-  accessibilityStatement: { found: boolean; summary: string };
-  humanWrittenContent: { appearsHuman: boolean; summary: string };
-  parkMap: { found: boolean; summary: string };
+  petPolicy: { found: boolean; noPets: boolean; summary: string; quote: string; feedback: string };
+  cancellationPolicy: { found: boolean; summary: string; quote: string; feedback: string };
+  rvHookupSpecs: { found: boolean; summary: string; quote: string; feedback: string };
+  bigRigReadiness: { maxLength: boolean; siteType: boolean; summary: string; quote: string; feedback: string };
+  arrivalDirections: { found: boolean; gpsWarning: boolean; summary: string; quote: string; feedback: string };
+  checkinCheckoutTimes: { found: boolean; summary: string; quote: string; feedback: string };
+  accessibilityStatement: { found: boolean; summary: string; quote: string; feedback: string };
+  humanWrittenContent: { appearsHuman: boolean; summary: string; quote: string; feedback: string };
+  parkMap: { found: boolean; summary: string; quote: string; feedback: string };
+  physicalAddress: { found: boolean; address: string; summary: string; quote: string; feedback: string };
+  thinContent: { isThin: boolean; estimatedWordCount: number; summary: string; quote: string; feedback: string };
+  clicheDensity: { hasCliches: boolean; examples: string[]; summary: string; quote: string; feedback: string };
+  copyrightYear: { found: boolean; latestYear: number; summary: string; quote: string; feedback: string };
 };
 
 const evaluateContentWithAI = async (
@@ -687,52 +942,102 @@ const evaluateContentWithAI = async (
 
   const prompt = `You are an auditor for outdoor hospitality websites (campgrounds, RV parks, glamping, marinas, cabins). Analyze the following website text and answer each question with a JSON object. Be generous — if the content is present in ANY form, mark it as found.
 
+IMPORTANT: For every check, include these two fields:
+- "quote": Copy the exact 1-2 sentences from the website that led you to your conclusion. If nothing relevant was found, use an empty string.
+- "feedback": Write a 2-sentence explanation addressed directly to the business owner. Be specific about what you found or what's missing. Reference the actual content on THEIR site — don't be generic.
+
 WEBSITE TEXT:
 ---
 ${truncated}
 ---
 
-Answer these 9 questions about the website content. Return ONLY valid JSON, no markdown fences, no explanation.
+Answer these 13 questions about the website content. Return ONLY valid JSON, no markdown fences, no explanation.
 
 {
   "petPolicy": {
     "found": true/false (is there ANY mention of pets, dogs, pet policy, pet-friendly, no pets, leash rules, dog park, pet fee, etc.?),
     "noPets": true/false (does the site explicitly say no pets allowed? false if pets are welcome or no mention),
-    "summary": "one sentence describing what was found"
+    "summary": "one sentence describing what was found",
+    "quote": "exact text from the site about pets, or empty string",
+    "feedback": "2-sentence personalized explanation to the owner about what their pet policy is missing or doing well — reference their actual content"
   },
   "cancellationPolicy": {
     "found": true/false (is there ANY mention of cancellation, refund, no-refund, nonrefundable, cancel reservation, etc.?),
-    "summary": "one sentence"
+    "summary": "one sentence",
+    "quote": "exact text from the site about cancellation, or empty string",
+    "feedback": "2-sentence personalized explanation"
   },
   "rvHookupSpecs": {
     "found": true/false (is there ANY mention of 30 amp, 50 amp, full hookup, water/electric, sewer hookup, electric hookup, etc.?),
-    "summary": "one sentence"
+    "summary": "one sentence",
+    "quote": "exact text about hookups, or empty string",
+    "feedback": "2-sentence personalized explanation"
   },
   "bigRigReadiness": {
     "maxLength": true/false (is there mention of max RV length, rig length limit, or specific footage like '45 ft max'?),
     "siteType": true/false (is there mention of pull-through or back-in sites?),
-    "summary": "one sentence"
+    "summary": "one sentence",
+    "quote": "exact text about rig size or site type, or empty string",
+    "feedback": "2-sentence personalized explanation"
   },
   "arrivalDirections": {
     "found": true/false (is there a directions page, 'getting here' section, arrival instructions, or 'how to get here'?),
     "gpsWarning": true/false (is there a GPS warning, low clearance, bridge clearance, avoid certain roads, RV route advice?),
-    "summary": "one sentence"
+    "summary": "one sentence",
+    "quote": "exact text about directions or arrival, or empty string",
+    "feedback": "2-sentence personalized explanation"
   },
   "checkinCheckoutTimes": {
     "found": true/false (are specific check-in and/or check-out TIMES posted, OR are office hours / business hours / front desk hours posted with days and times? Office hours like 'Mon-Fri 9am-5pm' count as check-in/check-out guidance.),
-    "summary": "one sentence"
+    "summary": "one sentence",
+    "quote": "exact text showing check-in/out times or office hours, or empty string",
+    "feedback": "2-sentence personalized explanation"
   },
   "accessibilityStatement": {
     "found": true/false (is there ANY mention of accessibility, ADA, wheelchair accessible sites, accessible facilities, mobility needs?),
-    "summary": "one sentence"
+    "summary": "one sentence",
+    "quote": "exact text about accessibility, or empty string",
+    "feedback": "2-sentence personalized explanation"
   },
   "humanWrittenContent": {
     "appearsHuman": true/false (does the main body copy appear to be written by a real person about THIS specific property, rather than generic AI-generated template text?),
-    "summary": "one sentence explaining why"
+    "summary": "one sentence explaining why",
+    "quote": "one example sentence that best shows whether the writing is human or templated",
+    "feedback": "2-sentence personalized explanation about the writing quality on THIS site"
   },
   "parkMap": {
     "found": true/false (is there a park map, campground map, or site map showing the PROPERTY LAYOUT — meaning a visual diagram of campsites, RV pads, cabins, or facilities? A Google Maps embed showing the park's street address or driving directions does NOT count. A sitemap.xml link does NOT count. Only return true if there is an actual property layout map.),
-    "summary": "one sentence"
+    "summary": "one sentence",
+    "quote": "exact text or link referencing the park map, or empty string",
+    "feedback": "2-sentence personalized explanation"
+  },
+  "physicalAddress": {
+    "found": true/false (is there a physical street address visible on the site? PO boxes do NOT count. Must be a real street address like '123 Main St, City, State ZIP'.),
+    "address": "the address found, or empty string",
+    "summary": "one sentence",
+    "quote": "the address as it appears on the site, or empty string",
+    "feedback": "2-sentence personalized explanation"
+  },
+  "thinContent": {
+    "isThin": true/false (does the site have very little unique body text — fewer than ~300 words of real content excluding navigation, footer, and boilerplate? Sites that are mostly images, iframes, or booking widgets with minimal descriptive text are thin.),
+    "estimatedWordCount": 0 (your rough estimate of unique body content word count),
+    "summary": "one sentence",
+    "quote": "one representative sentence from the body content, or empty string",
+    "feedback": "2-sentence personalized explanation about the content depth on THIS site"
+  },
+  "clicheDensity": {
+    "hasCliches": true/false (does the site heavily rely on generic hospitality clichés like 'nestled amidst', 'unforgettable experience', 'look no further', 'breathtaking views', 'hidden gem', 'paradise awaits', 'escape the hustle', 'where memories are made'? One or two is fine — mark true only if the copy is dominated by these phrases.),
+    "examples": ["list up to 3 cliché phrases found"],
+    "summary": "one sentence",
+    "quote": "the most egregious cliché sentence from the site, or empty string",
+    "feedback": "2-sentence personalized explanation about what specific phrases to replace and with what kind of content"
+  },
+  "copyrightYear": {
+    "found": true/false (is there a visible copyright notice with a year, such as © 2026, Copyright 2026, or a range like 2024-2026?),
+    "latestYear": 0 (latest copyright year found as a 4-digit number, or 0 if none),
+    "summary": "one sentence",
+    "quote": "exact text showing copyright year, or empty string",
+    "feedback": "2-sentence personalized explanation"
   }
 }`;
 
@@ -749,7 +1054,7 @@ Answer these 9 questions about the website content. Return ONLY valid JSON, no m
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.1,
-            maxOutputTokens: 800,
+            maxOutputTokens: 2400,
           },
         }),
       },
@@ -821,16 +1126,21 @@ const createCheck = (input: {
   status: CheckStatus;
   finding: string;
   details: string;
+  confidence?: ConfidenceLevel;
+  evidence?: string;
   weight?: number;
   effort?: Effort;
   impact?: Impact;
   serviceKey?: string;
+  links?: CheckLink[];
 }): Check => {
   return {
     weight: 1,
     effort: "Medium",
     impact: "Medium",
     serviceKey: "default",
+    confidence: "CONFIRMED",
+    evidence: "",
     ...input,
     pass: input.status === "pass",
   };
@@ -1008,10 +1318,13 @@ export async function GET(request: NextRequest) {
       placesApiKey,
     );
 
+
     const html = await homeResponse.text();
     const loweredHtml = html.toLowerCase();
     const title = extractMeta(html, "title");
     const description = extractMeta(html, "description");
+    const h1Match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+    const h1Text = h1Match ? h1Match[1]!.replace(/<[^>]+>/g, "").trim() : "";
 
     const bodySnippet = html
       .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -1019,6 +1332,18 @@ export async function GET(request: NextRequest) {
       .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .slice(0, 2500);
+
+    const apifyApiKey = process.env.APIFY_API_KEY?.trim() || "";
+    const hostNoWww = websiteUrl.hostname.replace(/^www\./i, "");
+    const hostRoot = hostNoWww.replace(/\.(com|net|org|co|io|us|biz|info|camp|rv|travel)$/i, "");
+    const titleHead = title.split(/[|\-]/)[0]?.trim() || title;
+    const apifyQueries = [
+      titleHead,
+      hostNoWww,
+      hostRoot,
+      `${titleHead} ${hostNoWww}`.trim(),
+    ];
+    const apifyReviewsPromise = fetchApifyReviews(apifyQueries, apifyApiKey);
 
     if (!isLikelyOutdoorHospitalitySite({
       hostname: websiteUrl.hostname,
@@ -1264,7 +1589,7 @@ export async function GET(request: NextRequest) {
       return broken;
     };
 
-    const [pageSpeedResult, mapReachable, bookingLandingResult, brokenCount, placesSignals, subpageText, sitemapReachable] = await Promise.all([
+        const [pageSpeedResult, mapReachable, bookingLandingResult, brokenCount, placesSignals, subpageText, sitemapReachable, apifyReviews] = await Promise.all([
       pageSpeedPromise,
       measure("mapLinkCheck", runMapCheck),
       measure("bookingLandingCheck", runBookingLandingCheck),
@@ -1278,6 +1603,7 @@ export async function GET(request: NextRequest) {
           return text.includes("<urlset") || text.includes("<sitemapindex");
         } catch { return false; }
       }),
+      measure("apifyReviews", () => apifyReviewsPromise),
     ]);
     const bookingLandingHtml = bookingLandingResult.html;
     const fullSiteText = `${loweredHtml} ${subpageText}`;
@@ -1309,12 +1635,72 @@ export async function GET(request: NextRequest) {
     const rvHookupFound = (aiContent?.rvHookupSpecs?.found ?? false) || regexRvHookupFound;
     const accessibilityFound = (aiContent?.accessibilityStatement?.found ?? false) || regexAccessibilityFound;
     const aiHumanContent = aiContent?.humanWrittenContent ?? null;
+    const aiPhysicalAddress = aiContent?.physicalAddress ?? null;
+    const aiThinContent = aiContent?.thinContent ?? null;
+    const aiClicheDensity = aiContent?.clicheDensity ?? null;
+    const aiCopyright = aiContent?.copyrightYear ?? null;
+
+    // Regex fallback for physical address (US-style street address pattern).
+    const regexPhysicalAddress = /\d{1,5}\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:St|Street|Rd|Road|Ave|Avenue|Blvd|Boulevard|Dr|Drive|Ln|Lane|Way|Hwy|Highway|Ct|Court|Pl|Place)\b/i.test(fullSiteText);
+    const physicalAddressFound = (aiPhysicalAddress?.found ?? false) || regexPhysicalAddress;
+
+    // Lead capture detection — email input fields outside of booking engine context.
+    const hasLeadCaptureForm = /<input[^>]*type=["']email["'][^>]*>/i.test(html) && (/newsletter|subscribe|sign.?up|mailing.?list|email.?list|stay.?in.?touch|get.?updates/i.test(html));
+
+    // Thin content detection — fallback word count from stripped text.
+    const strippedBodyText = html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+      .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+      .replace(/<header[\s\S]*?<\/header>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const bodyWordCount = strippedBodyText.split(/\s+/).filter((w) => w.length > 1).length;
+    const isThinContent = (aiThinContent?.isThin ?? false) || bodyWordCount < 300;
 
     // Copyright year freshness — detect outdated footer copyright.
     const currentYear = new Date().getFullYear();
-    const copyrightMatches = html.match(/(?:©|&copy;|copyright)[\s®™(c)]*?(\d{4})/gi) ?? [];
-    const copyrightYears = copyrightMatches.map((m) => parseInt(m.match(/(\d{4})/)![1], 10)).filter((y) => y >= 2000 && y <= currentYear);
-    const latestCopyrightYear = copyrightYears.length > 0 ? Math.max(...copyrightYears) : null;
+    const copyrightSearchCorpus = [
+      html,
+      html.replace(/<!--[\s\S]*?-->/g, " "),
+      html.replace(/<!--[\s\S]*?-->/g, " ").replace(/<[^>]+>/g, " "),
+    ];
+    const copyrightYearSet = new Set<number>();
+    for (const corpus of copyrightSearchCorpus) {
+      const fragments = corpus.match(/(?:©|&copy;|copyright)[\s\S]{0,120}/gi) ?? [];
+      for (const fragment of fragments) {
+        const years = fragment.match(/(?:19|20)\d{2}/g) ?? [];
+        for (const yearText of years) {
+          const year = parseInt(yearText, 10);
+          if (year >= 2000 && year <= currentYear + 2) {
+            copyrightYearSet.add(year);
+          }
+        }
+      }
+    }
+    const regexCopyrightYears = Array.from(copyrightYearSet);
+    const latestRegexCopyrightYear = regexCopyrightYears.length > 0 ? Math.max(...regexCopyrightYears) : null;
+    const aiLatestYear =
+      aiCopyright?.found && Number.isFinite(aiCopyright.latestYear) && aiCopyright.latestYear >= 2000 && aiCopyright.latestYear <= currentYear + 2
+        ? aiCopyright.latestYear
+        : null;
+    const latestCopyrightYear =
+      latestRegexCopyrightYear !== null || aiLatestYear !== null
+        ? Math.max(latestRegexCopyrightYear ?? 0, aiLatestYear ?? 0)
+        : null;
+    const copyrightEvidenceParts: string[] = [];
+    if (latestRegexCopyrightYear !== null) {
+      copyrightEvidenceParts.push(`Regex latest year: ${latestRegexCopyrightYear}.`);
+    }
+    if (aiLatestYear !== null) {
+      copyrightEvidenceParts.push(`AI latest year: ${aiLatestYear}.`);
+    }
+    if (aiCopyright?.quote) {
+      copyrightEvidenceParts.push(`AI quote: ${aiCopyright.quote}`);
+    }
+    const copyrightConfidence: ConfidenceLevel = latestRegexCopyrightYear !== null ? "CONFIRMED" : aiLatestYear !== null ? "INFERRED" : "CONFIRMED";
 
     // Professional email detection (informational — never penalizes).
     const emailMatches = html.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) ?? [];
@@ -1360,7 +1746,34 @@ export async function GET(request: NextRequest) {
       ? "fail"
       : "pass";
     const reviewCount = placesSignals?.reviewCount ?? websiteReviewCount;
+    const googleRating = placesSignals?.rating ?? null;
+    const ownerResponseRate = placesSignals?.ownerResponseRate30d ?? null;
     const hasGoogleBusinessPresence = Boolean(mapLink || hasEmbeddedMap || placesSignals?.matched);
+    const lowRatedReviewCount = apifyReviews?.lowRatedReviews.length ?? 0;
+    const lowReviewInsights = extractLowReviewInsights(apifyReviews?.lowRatedReviews ?? []);
+    const lowReviewThemeLine = lowReviewInsights.labels.length > 0
+      ? `Top complaint themes: ${lowReviewInsights.labels.join(" and ")}.`
+      : null;
+    const lowReviewActionLine = lowReviewInsights.actions.length > 0
+      ? `Priority actions: ${lowReviewInsights.actions.join(" Then ")}`
+      : "Priority actions: Reply within 24 hours, acknowledge specifics, and share a concrete fix + timeline.";
+    const lowReviewThemeSummary = lowReviewInsights.labels.length > 0
+      ? lowReviewInsights.labels.join(" and ")
+      : "recurring service issues";
+    const sampleLowReview = (apifyReviews?.lowRatedReviews ?? [])
+      .map((review) => review.text.trim())
+      .find((text) => text.length > 0) ?? "";
+    const sampleLowReviewExamples = (apifyReviews?.lowRatedReviews ?? [])
+      .map((review) => ({
+        snippet: review.text.trim(),
+        url: review.url?.trim(),
+      }))
+      .filter((review) => review.snippet.length > 0)
+      .slice(0, 2)
+      .map((review) => ({
+        snippet: review.snippet.length > 90 ? `${review.snippet.slice(0, 87)}...` : review.snippet,
+        url: review.url && /^https?:\/\//i.test(review.url) ? review.url : undefined,
+      }));
     const humanContentSignal = evaluateHumanWrittenContent(html);
 
     // Outdated technology detection.
@@ -1416,6 +1829,7 @@ export async function GET(request: NextRequest) {
     // If SSL timed out or HTTP redirect timed out, those signals are unknown — not false.
     const sslConfirmedValid = sslData.valid;
     const sslTimedOut = sslData.timedOut === true;
+    const sslCertExpiringSoon = sslConfirmedValid && sslData.daysUntilExpiry > 0 && sslData.daysUntilExpiry <= 30;
     const securitySignals = [sslConfirmedValid, redirectedToHttps, canonicalRedirectHealthy].filter(Boolean).length;
     const trustStackScore = [sslConfirmedValid || sslTimedOut, redirectedToHttps || httpRedirectUnknown, cancellationFound, onsiteGuestProofVisible].filter(Boolean).length;
     const regexMaxLengthInfo = /max(?:imum)?\s*(?:rv|rig|vehicle)?\s*length|up to\s*\d{2,3}\s*(?:ft|feet)|\d{2,3}\s*(?:ft|feet)\s*(?:max|maximum)|rig\s*length/i.test(deepSurface);
@@ -1444,24 +1858,32 @@ export async function GET(request: NextRequest) {
         name: "Technical trust & security",
         category: "Does Your Website Work?",
         status: (sslTimedOut || httpRedirectUnknown)
-          // If we couldn't reach the server to check SSL, give benefit of the doubt — the site loaded over HTTPS.
           ? "pass"
           : !sslConfirmedValid || !redirectedToHttps
             ? "fail"
-            : canonicalUrl && !canonicalRedirectHealthy
+            : sslCertExpiringSoon
               ? "fail"
-              // No canonical tag but SSL + redirect are good = pass.
-              : "pass",
+              : canonicalUrl && !canonicalRedirectHealthy
+                ? "fail"
+                : "pass",
+        confidence: sslTimedOut ? "INFERRED" : "CONFIRMED",
+        evidence: sslTimedOut
+          ? "SSL check timed out; site loaded over HTTPS."
+          : `SSL valid: ${sslConfirmedValid}, HTTPS redirect: ${redirectedToHttps}, cert expires in ${sslData.daysUntilExpiry} days.`,
         finding: (sslTimedOut || httpRedirectUnknown)
           ? "SSL and HTTPS appear to be working (site loaded securely)."
-          : `${securitySignals} of 3 trust-and-security signals detected (SSL, HTTPS redirect, canonical alignment).`,
+          : sslCertExpiringSoon
+            ? `SSL certificate expires in ${sslData.daysUntilExpiry} days — renew immediately.`
+            : `${securitySignals} of 3 trust-and-security signals detected (SSL, HTTPS redirect, canonical alignment).`,
         details: (sslTimedOut || httpRedirectUnknown)
           ? "Your site loaded over HTTPS, which means SSL is working. The redirect check was slow but no security issues were detected."
           : !sslConfirmedValid || !redirectedToHttps
             ? "Your site is missing basic security. Browsers will show a warning to visitors, and most will leave immediately. Get SSL enabled and force HTTPS."
-            : canonicalUrl && !canonicalRedirectHealthy
-              ? `Your canonical URL (${canonicalUrl.toString()}) doesn't match your secure address. This confuses Google and can split your search traffic.`
-              : "Security and URL setup look good.",
+            : sslCertExpiringSoon
+              ? `Your SSL certificate expires in ${sslData.daysUntilExpiry} days. If it lapses, browsers will show a scary warning and guests won't be able to book. Contact your hosting provider to renew now.`
+              : canonicalUrl && !canonicalRedirectHealthy
+                ? `Your canonical URL (${canonicalUrl.toString()}) doesn't match your secure address. This confuses Google and can split your search traffic.`
+                : "Security and URL setup look good.",
         effort: "Low",
         impact: "High",
         serviceKey: "ssl",
@@ -1471,6 +1893,8 @@ export async function GET(request: NextRequest) {
         name: "Server response time",
         category: "Does Your Website Work?",
         status: responseTimeStatus,
+        confidence: "CONFIRMED",
+        evidence: `Server responded in ${responseTimeMs}ms.`,
         finding: responseTimeFinding,
         details: responseTimeDetails,
         effort: "Medium",
@@ -1482,6 +1906,8 @@ export async function GET(request: NextRequest) {
         name: "Broken links",
         category: "Does Your Website Work?",
         status: brokenCount === 0 ? "pass" : "fail",
+        confidence: "CONFIRMED",
+        evidence: `${brokenCount} broken link(s) detected.`,
         finding:
           brokenCount === 0
             ? "No broken links found on your homepage."
@@ -1499,6 +1925,8 @@ export async function GET(request: NextRequest) {
         name: "Phone loading speed",
         category: "Does Your Website Work?",
         status: pageSpeedStatus,
+        confidence: (pageSpeedScore ?? 0) > 0 ? "CONFIRMED" : "UNVERIFIED",
+        evidence: (pageSpeedScore ?? 0) > 0 ? `PageSpeed score: ${pageSpeedScore}/100.` : "PageSpeed API did not return a score.",
         finding: pageSpeedFinding,
         details: pageSpeedDetails,
         effort: "Medium",
@@ -1509,14 +1937,18 @@ export async function GET(request: NextRequest) {
         id: "human-written-content",
         name: "Human-written content",
         category: "Does Your Website Work?",
+        confidence: aiHumanContent ? "CONFIRMED" : "INFERRED",
+        evidence: aiHumanContent?.quote || "",
         status: aiHumanContent
           ? (aiHumanContent.appearsHuman ? "pass" : "fail")
           : humanContentSignal.status,
-        finding: aiHumanContent
-          ? (aiHumanContent.appearsHuman
-              ? `Content appears human-written. ${aiHumanContent.summary}`
-              : `Content appears heavily templated or AI-generated. ${aiHumanContent.summary}`)
-          : humanContentSignal.finding,
+        finding: aiHumanContent?.feedback
+          ? aiHumanContent.feedback
+          : aiHumanContent
+            ? (aiHumanContent.appearsHuman
+                ? `Content appears human-written. ${aiHumanContent.summary}`
+                : `Content appears heavily templated or AI-generated. ${aiHumanContent.summary}`)
+            : humanContentSignal.finding,
         details: aiHumanContent
           ? (aiHumanContent.appearsHuman
               ? "The writing tone looks natural and trustworthy for guests comparing multiple parks."
@@ -1531,6 +1963,8 @@ export async function GET(request: NextRequest) {
         name: "Website technology",
         category: "Does Your Website Work?",
         status: outdatedTechCount === 0 ? "pass" : "fail",
+        confidence: "CONFIRMED",
+        evidence: outdatedTechCount > 0 ? `Outdated signals: ${outdatedSignals.join(", ")}.` : "No outdated technology patterns detected.",
         finding: outdatedTechCount === 0
           ? "No outdated website technology detected."
           : `Outdated technology detected: ${outdatedSignals.join(", ")}.`,
@@ -1547,7 +1981,11 @@ export async function GET(request: NextRequest) {
         id: "copyright-freshness",
         name: "Copyright year",
         category: "Does Your Website Work?",
-        status: latestCopyrightYear === null ? "fail" : latestCopyrightYear >= currentYear ? "pass" : "fail",
+        status: latestCopyrightYear === null ? "unknown" : latestCopyrightYear >= currentYear ? "pass" : "fail",
+        confidence: copyrightConfidence,
+        evidence: latestCopyrightYear !== null
+          ? copyrightEvidenceParts.join(" ") || `Latest copyright year found: ${latestCopyrightYear}.`
+          : "No copyright year pattern found in HTML or AI review.",
         finding: latestCopyrightYear === null
           ? "No copyright year found on the page."
           : latestCopyrightYear >= currentYear
@@ -1567,6 +2005,8 @@ export async function GET(request: NextRequest) {
         name: "Online booking system",
         category: "Can Guests Book Online?",
         status: detectedPlatform || hasInlineBookingForm || hasExternalBookingLink ? "pass" : "fail",
+        confidence: detectedPlatform ? "CONFIRMED" : hasInlineBookingForm || hasExternalBookingLink ? "INFERRED" : "CONFIRMED",
+        evidence: detectedPlatform ? `Detected platform: ${detectedPlatform}.` : hasInlineBookingForm ? "Inline booking form found." : hasExternalBookingLink ? "External booking link found." : "No booking system detected.",
         finding: detectedPlatform
           ? `Detected ${detectedPlatform}.`
           : hasInlineBookingForm
@@ -1586,6 +2026,7 @@ export async function GET(request: NextRequest) {
         name: "Book Now button",
         category: "Can Guests Book Online?",
         status: bookingCallToAction ? "pass" : "fail",
+        confidence: "CONFIRMED",
         finding: bookingCallToAction
           ? "'Book Now' or similar button found."
           : "No clear 'Book Now' button found.",
@@ -1601,17 +2042,10 @@ export async function GET(request: NextRequest) {
         name: "Pet policy",
         category: "What Info Are You Missing?",
         status: petPolicyFound ? "pass" : "fail",
-        finding: petPolicyFound
-          ? noPetsPolicy
-            ? "Pet policy found — your property does not allow pets."
-            : "Pet policy found — pets appear to be welcome."
-          : "No pet policy found on the website.",
-        details:
-          petPolicyFound
-            ? noPetsPolicy
-              ? "Clear 'no pets' policy helps avoid awkward conversations at check-in. Make sure it's easy to find."
-              : "Pet owners can see they're welcome before booking."
-            : "40% of RV travelers bring their dog. If you allow pets, say so clearly. If not, say that too — it saves everyone time.",
+        confidence: regexPetPolicyFound ? "CONFIRMED" : aiContent?.petPolicy?.found ? "INFERRED" : "CONFIRMED",
+        evidence: [regexPetPolicyFound ? "Regex: pet policy keywords/links detected." : null, aiContent?.petPolicy?.found ? `AI: ${aiContent.petPolicy.quote || aiContent.petPolicy.summary}` : null].filter(Boolean).join(" ") || "",
+        finding: aiContent?.petPolicy?.feedback || (petPolicyFound ? (noPetsPolicy ? "Pet policy found — your property does not allow pets." : "Pet policy found — pets appear to be welcome.") : "No pet policy found on the website."),
+        details: petPolicyFound ? (noPetsPolicy ? "Clear 'no pets' policy helps avoid awkward conversations at check-in. Make sure it's easy to find." : "Pet owners can see they're welcome before booking.") : "40% of RV travelers bring their dog. If you allow pets, say so clearly. If not, say that too — it saves everyone time.",
         effort: "Low",
         impact: "Medium",
         serviceKey: "default",
@@ -1621,13 +2055,10 @@ export async function GET(request: NextRequest) {
         name: "RV hookup details",
         category: "What Info Are You Missing?",
         status: rvHookupFound ? "pass" : "fail",
-        finding: rvHookupFound
-          ? "Hookup specifications found (amps, sewer, water, etc.)."
-          : "No hookup specifications found.",
-        details:
-          rvHookupFound
-            ? "RV guests can check if your sites fit their rig before booking."
-            : "RV travelers need to see 30 amp, 50 amp, full hookup details. Without this, they call — or just book somewhere that lists it.",
+        confidence: regexRvHookupFound ? "CONFIRMED" : aiContent?.rvHookupSpecs?.found ? "INFERRED" : "CONFIRMED",
+        evidence: [regexRvHookupFound ? "Regex: hookup keywords detected (30A, 50A, full hookup)." : null, aiContent?.rvHookupSpecs?.found ? `AI: ${aiContent.rvHookupSpecs.quote || aiContent.rvHookupSpecs.summary}` : null].filter(Boolean).join(" ") || "",
+        finding: aiContent?.rvHookupSpecs?.feedback || (rvHookupFound ? "Hookup specifications found (amps, sewer, water, etc.)." : "No hookup specifications found."),
+        details: rvHookupFound ? "RV guests can check if your sites fit their rig before booking." : "RV travelers need to see 30 amp, 50 amp, full hookup details. Without this, they call — or just book somewhere that lists it.",
         weight: rvWeight,
         effort: "Low",
         impact: industry === "campground" ? "High" : "Low",
@@ -1638,12 +2069,10 @@ export async function GET(request: NextRequest) {
         name: "Big rig info",
         category: "What Info Are You Missing?",
         status: hasMaxLengthInfo || hasSiteTypeInfo ? "pass" : "fail",
-        finding: hasMaxLengthInfo || hasSiteTypeInfo
-          ? `Big-rig details found: ${[hasMaxLengthInfo ? "max length" : null, hasSiteTypeInfo ? "pull-through/back-in" : null].filter(Boolean).join(" and ")}.`
-          : "No big-rig details found (max length or pull-through/back-in).",
-        details: hasMaxLengthInfo || hasSiteTypeInfo
-          ? "Class A motorhome owners can check if they'll fit before making the trip."
-          : "Post your max rig length and whether you have pull-through sites. Big-rig guests won't gamble on fitting.",
+        confidence: hasMaxLengthInfo || hasSiteTypeInfo ? "CONFIRMED" : aiContent?.bigRigReadiness?.maxLength || aiContent?.bigRigReadiness?.siteType ? "INFERRED" : "CONFIRMED",
+        evidence: [hasMaxLengthInfo ? "Regex: max length detected." : null, hasSiteTypeInfo ? "Regex: pull-through/back-in detected." : null, aiContent?.bigRigReadiness?.maxLength || aiContent?.bigRigReadiness?.siteType ? `AI: ${aiContent.bigRigReadiness.quote || aiContent.bigRigReadiness.summary}` : null].filter(Boolean).join(" ") || "",
+        finding: aiContent?.bigRigReadiness?.feedback || (hasMaxLengthInfo || hasSiteTypeInfo ? `Big-rig details found: ${[hasMaxLengthInfo ? "max length" : null, hasSiteTypeInfo ? "pull-through/back-in" : null].filter(Boolean).join(" and ")}.` : "No big-rig details found (max length or pull-through/back-in)."),
+        details: hasMaxLengthInfo || hasSiteTypeInfo ? "Class A motorhome owners can check if they'll fit before making the trip." : "Post your max rig length and whether you have pull-through sites. Big-rig guests won't gamble on fitting.",
         effort: "Low",
         impact: industry === "campground" ? "High" : "Medium",
         serviceKey: "default",
@@ -1653,16 +2082,10 @@ export async function GET(request: NextRequest) {
         name: "Arrival directions",
         category: "What Info Are You Missing?",
         status: hasArrivalSection ? "pass" : "fail",
-        finding: hasArrivalSection
-          ? gpsPitfallWarning
-            ? "Arrival directions found with GPS/route warnings — great detail."
-            : "Arrival directions found on your site."
-          : "No arrival directions found on the website.",
-        details: hasArrivalSection
-          ? gpsPitfallWarning
-            ? "Guests are less likely to get lost or arrive frustrated."
-            : "Guests can find how to get to you. Consider adding GPS warnings or RV-safe route tips if your location is tricky to find."
-          : "Add a 'Getting Here' page with your entrance location, GPS tips, and any route warnings. Bad directions cause terrible first impressions.",
+        confidence: hasArrivalSection ? "CONFIRMED" : aiContent?.arrivalDirections?.found ? "INFERRED" : "CONFIRMED",
+        evidence: [hasArrivalSection ? `Regex: arrival section detected (GPS warning: ${gpsPitfallWarning ? "yes" : "no"}).` : null, aiContent?.arrivalDirections?.found ? `AI: ${aiContent.arrivalDirections.quote || aiContent.arrivalDirections.summary}` : null].filter(Boolean).join(" ") || "",
+        finding: aiContent?.arrivalDirections?.feedback || (hasArrivalSection ? (gpsPitfallWarning ? "Arrival directions found with GPS/route warnings — great detail." : "Arrival directions found on your site.") : "No arrival directions found on the website."),
+        details: hasArrivalSection ? (gpsPitfallWarning ? "Guests are less likely to get lost or arrive frustrated." : "Guests can find how to get to you. Consider adding GPS warnings or RV-safe route tips if your location is tricky to find.") : "Add a 'Getting Here' page with your entrance location, GPS tips, and any route warnings. Bad directions cause terrible first impressions.",
         effort: "Low",
         impact: "Medium",
         serviceKey: "default",
@@ -1672,6 +2095,7 @@ export async function GET(request: NextRequest) {
         name: "Amenities listed",
         category: "What Info Are You Missing?",
         status: amenitiesFound ? "pass" : "fail",
+        confidence: "INFERRED",
         finding: amenitiesFound
           ? "Amenities or activities content found."
           : "No amenities or activities content found.",
@@ -1688,9 +2112,13 @@ export async function GET(request: NextRequest) {
         name: "Park map",
         category: "What Info Are You Missing?",
         status: hasParkMap ? "pass" : "fail",
-        finding: hasParkMap
-          ? "A park or property map is available on your site."
-          : "No park map found on the website.",
+        confidence: aiContent?.parkMap ? "CONFIRMED" : "INFERRED",
+        evidence: aiContent?.parkMap?.quote || "",
+        finding: aiContent?.parkMap?.feedback
+          ? aiContent.parkMap.feedback
+          : hasParkMap
+            ? "A park or property map is available on your site."
+            : "No park map found on the website.",
         details: hasParkMap
           ? "Guests can see the layout before they arrive — that helps them pick the right site and reduces confusion on check-in day."
           : "Guests want to see where they'll be staying. A simple map showing site locations, amenities, and key landmarks helps them choose the right spot and feel confident booking.",
@@ -1703,13 +2131,10 @@ export async function GET(request: NextRequest) {
         name: "Cancellation policy",
         category: "What Info Are You Missing?",
         status: cancellationFound ? "pass" : "fail",
-        finding: cancellationFound
-          ? "Cancellation or refund policy found."
-          : "No cancellation policy found.",
-        details:
-          cancellationFound
-            ? "Guests can understand the rules before committing money."
-            : "Families book months ahead and worry about 'what if something comes up.' A clear cancellation policy often tips someone from 'thinking about it' to clicking 'Reserve.'",
+        confidence: regexCancellationFound ? "CONFIRMED" : aiContent?.cancellationPolicy?.found ? "INFERRED" : "CONFIRMED",
+        evidence: [regexCancellationFound ? "Regex: cancellation/refund keywords detected." : null, aiContent?.cancellationPolicy?.found ? `AI: ${aiContent.cancellationPolicy.quote || aiContent.cancellationPolicy.summary}` : null].filter(Boolean).join(" ") || "",
+        finding: aiContent?.cancellationPolicy?.feedback || (cancellationFound ? "Cancellation or refund policy found." : "No cancellation policy found."),
+        details: cancellationFound ? "Guests can understand the rules before committing money." : "Families book months ahead and worry about 'what if something comes up.' A clear cancellation policy often tips someone from 'thinking about it' to clicking 'Reserve.'",
         effort: "Low",
         impact: "Medium",
         serviceKey: "default",
@@ -1719,12 +2144,10 @@ export async function GET(request: NextRequest) {
         name: "Check-in / check-out times",
         category: "What Info Are You Missing?",
         status: hasCheckInOutTimes ? "pass" : "fail",
-        finding: hasCheckInOutTimes
-          ? "Check-in and check-out times are posted."
-          : "No check-in or check-out times found.",
-        details: hasCheckInOutTimes
-          ? "Guests know when they can arrive and when they need to leave — that prevents confusion and phone calls."
-          : "Guests planning a trip need to know when they can arrive and when they need to leave. Post your check-in and check-out times clearly on your site. This prevents phone calls and avoids guests showing up before their site is ready.",
+        confidence: hasCheckInOutTimes ? "CONFIRMED" : aiContent?.checkinCheckoutTimes?.found ? "INFERRED" : "CONFIRMED",
+        evidence: [hasCheckInOutTimes ? "Regex: check-in/out times or office hours detected." : null, aiContent?.checkinCheckoutTimes?.found ? `AI: ${aiContent.checkinCheckoutTimes.quote || aiContent.checkinCheckoutTimes.summary}` : null].filter(Boolean).join(" ") || "",
+        finding: aiContent?.checkinCheckoutTimes?.feedback || (hasCheckInOutTimes ? "Check-in and check-out times are posted." : "No check-in or check-out times found."),
+        details: hasCheckInOutTimes ? "Guests know when they can arrive and when they need to leave — that prevents confusion and phone calls." : "Guests planning a trip need to know when they can arrive and when they need to leave. Post your check-in and check-out times clearly on your site. This prevents phone calls and avoids guests showing up before their site is ready.",
         effort: "Low",
         impact: "Low",
         serviceKey: "default",
@@ -1734,27 +2157,43 @@ export async function GET(request: NextRequest) {
         name: "Accessibility info",
         category: "What Info Are You Missing?",
         status: accessibilityFound ? "pass" : "fail",
-        finding: accessibilityFound
-          ? "Accessibility information found."
-          : "No accessibility statement found.",
-        details:
-          accessibilityFound
-            ? "Guests with mobility needs can plan their visit with confidence."
-            : "Guests with limited mobility — or those traveling with elderly family — need to know what to expect. A simple statement shows you've thought about their needs.",
+        confidence: regexAccessibilityFound ? "CONFIRMED" : aiContent?.accessibilityStatement?.found ? "INFERRED" : "CONFIRMED",
+        evidence: [regexAccessibilityFound ? "Regex: accessibility keywords/links detected." : null, aiContent?.accessibilityStatement?.found ? `AI: ${aiContent.accessibilityStatement.quote || aiContent.accessibilityStatement.summary}` : null].filter(Boolean).join(" ") || "",
+        finding: aiContent?.accessibilityStatement?.feedback || (accessibilityFound ? "Accessibility information found." : "No accessibility statement found."),
+        details: accessibilityFound ? "Guests with mobility needs can plan their visit with confidence." : "Guests with limited mobility — or those traveling with elderly family — need to know what to expect. A simple statement shows you've thought about their needs.",
         effort: "Low",
         impact: "Medium",
         serviceKey: "default",
       }),
       createCheck({
         id: "meta-title",
-        name: "Google page title",
+        name: "Google page title & H1",
         category: "Can Guests Find You?",
-        status: title.length > 0 ? "pass" : "fail",
-        finding: title ? `Title found: "${title.length > 60 ? title.slice(0, 57) + "..." : title}"` : "Page title is missing.",
-        details:
-          title.length > 0
-            ? "This shows up as the headline in Google search results."
-            : "Without a title, Google shows a generic heading for your site. Set a clear title like 'Pine Ridge Campground | Full Hookups Near Lake George.'",
+        status: title.length > 0 && title.length >= 30 && title.length <= 60 && h1Text.length > 0
+          ? "pass"
+          : title.length > 0 && h1Text.length > 0
+            ? "pass"
+            : "fail",
+        confidence: "CONFIRMED",
+        evidence: `Title (${title.length} chars): "${title.slice(0, 80)}". H1: "${h1Text.slice(0, 80) || "(none)"}".`,
+        finding: !title
+          ? "Page title is missing."
+          : !h1Text
+            ? `Title found (${title.length} chars) but no H1 heading on the page.`
+            : title.length < 30
+              ? `Title is too short (${title.length} chars, aim for 30–60). H1 found: "${h1Text.slice(0, 50)}".`
+              : title.length > 60
+                ? `Title may be too long (${title.length} chars, aim for 30–60). H1 found.`
+                : `Title found: "${title.length > 60 ? title.slice(0, 57) + "..." : title}". H1 heading present.`,
+        details: !title
+          ? "Without a title, Google shows a generic heading for your site. Set a clear title like 'Pine Ridge Campground | Full Hookups Near Lake George.'"
+          : !h1Text
+            ? "Your page has a title but no H1 heading. Add a clear H1 so Google and screen readers understand what the page is about."
+            : title.length < 30
+              ? "Your title is shorter than ideal. Google may truncate or rewrite it. Aim for 30–60 characters with your park name and key selling point."
+              : title.length > 60
+                ? "Your title is longer than 60 characters and may get cut off in Google results. Tighten it up."
+                : "This shows up as the headline in Google search results. Title length and H1 are both good.",
         effort: "Low",
         impact: "Medium",
         serviceKey: "meta_tags",
@@ -1764,6 +2203,8 @@ export async function GET(request: NextRequest) {
         name: "Google search preview",
         category: "Can Guests Find You?",
         status: description.length > 0 ? "pass" : "fail",
+        confidence: "CONFIRMED",
+        evidence: description ? `Meta description (${description.length} chars): "${description.slice(0, 100)}"` : "No meta description tag found.",
         finding: description
           ? `Preview text found (${description.length} characters).`
           : "Search preview text is missing.",
@@ -1776,21 +2217,94 @@ export async function GET(request: NextRequest) {
         serviceKey: "meta_tags",
       }),
       createCheck({
-        id: "gbp-sync",
-        name: "Google Business Profile",
+        id: "google-rating",
+        name: "Google rating",
         category: "Can Guests Find You?",
-        status: hasGoogleBusinessPresence ? "pass" : "fail",
-        finding: !hasGoogleBusinessPresence
-          ? "No Google Business Profile signal found."
-          : reviewCount !== null && reviewCount < 15
-            ? `Google Business Profile found with ${reviewCount} reviews — aim for 15+ to build trust.`
-            : "Google Business Profile looks active.",
-        details: hasGoogleBusinessPresence
-          ? reviewCount !== null && reviewCount < 15
-            ? "Your Google listing is visible. Keep asking happy guests to leave reviews — 15+ makes a real difference."
-            : "Your Google listing is visible and has enough reviews to build trust."
-          : "When someone Googles 'campground near me,' Google shows a map with photos, hours, and reviews. If your profile is missing or weak, you simply won't appear.",
+        status: googleRating !== null && googleRating >= 4.0 ? "pass" : googleRating !== null ? "fail" : "pass",
+        confidence: googleRating !== null ? "CONFIRMED" : "UNVERIFIED",
+        evidence: [
+          googleRating !== null ? `Google rating: ${googleRating}/5.` : "No Google rating data available.",
+          lowRatedReviewCount > 0 ? `Low-rated reviews (<=2 stars): ${lowRatedReviewCount}.` : null,
+          lowReviewThemeLine,
+        ].filter(Boolean).join(" "),
+        finding: googleRating !== null
+          ? googleRating >= 4.0
+            ? `Google rating is ${googleRating}/5 — strong.`
+            : `Google rating is ${googleRating}/5 — below the 4.0 trust threshold.`
+          : "Google rating not available — not penalizing.",
+        details: googleRating !== null
+          ? googleRating >= 4.0
+            ? "A 4.0+ rating builds immediate trust when guests compare parks on Google Maps."
+            : lowRatedReviewCount > 0
+              ? `You're below the 4.0 threshold many guests use when scanning Maps. Your biggest complaint theme is ${lowReviewThemeSummary}; fix that first and name the exact change in your public replies. Then ask happy guests for fresh reviews and keep a 24-hour response standard so new concerns don't stack up.`
+              : "You're below the 4.0 threshold many guests use when scanning Maps. Reply to recent negative reviews with one concrete fix and timeline, then ask happy guests for fresh reviews to rebuild momentum."
+          : "We couldn't retrieve your Google rating. This isn't a problem — it may just require more reviews.",
+        effort: "Medium",
+        impact: "High",
+        serviceKey: "google_business",
+      }),
+      createCheck({
+        id: "review-count",
+        name: "Review volume",
+        category: "Can Guests Find You?",
+        status: reviewCount !== null && reviewCount >= 15 ? "pass" : reviewCount !== null && reviewCount > 0 ? "fail" : "pass",
+        confidence: reviewCount !== null ? "CONFIRMED" : "UNVERIFIED",
+        evidence: reviewCount !== null ? `Google review count: ${reviewCount}.` : "No review count data available.",
+        finding: reviewCount !== null
+          ? reviewCount >= 15
+            ? `${reviewCount} Google reviews — strong social proof.`
+            : `Only ${reviewCount} Google reviews — aim for 15+ to build trust.`
+          : "Review count not available — not penalizing.",
+        details: reviewCount !== null
+          ? reviewCount >= 15
+            ? "Enough reviews to build trust. Keep the momentum going — respond to every review, good or bad."
+            : "Parks with 15+ reviews get significantly more clicks on Google Maps. Ask every happy guest to leave a review at checkout."
+          : "We couldn't retrieve your review count. This isn't a problem with your site.",
         effort: "Low",
+        impact: "High",
+        serviceKey: "google_business",
+      }),
+      createCheck({
+        id: "negative-review-risk",
+        name: "Bad reviews",
+        category: "Are You Losing Guests?",
+        status:
+          apifyReviews === null
+            ? "unknown"
+            : (lowRatedReviewCount > 0 ? "fail" : "pass"),
+        confidence: apifyReviews !== null ? "CONFIRMED" : "UNVERIFIED",
+        evidence:
+          apifyReviews !== null
+            ? [
+                `Low-rated reviews (<=2 stars): ${lowRatedReviewCount}.`,
+                apifyReviews.averageRating !== null ? `Average rating: ${apifyReviews.averageRating}/5.` : null,
+                apifyReviews.totalReviewCount !== null ? `Total reviews scraped: ${apifyReviews.totalReviewCount}.` : null,
+                lowReviewThemeLine,
+              ].filter(Boolean).join(" ")
+            : "No Apify review data available.",
+        finding:
+          apifyReviews === null
+            ? "Review signal unavailable."
+            : lowRatedReviewCount > 0
+              ? `${lowRatedReviewCount} low-rated review${lowRatedReviewCount === 1 ? "" : "s"} detected.`
+              : "No critical bad-review signal found.",
+        details:
+          apifyReviews === null
+            ? "Apify review scraping did not return data on this run."
+            : lowRatedReviewCount > 0
+              ? buildConversationalReviewFix({
+                  themeSummary: lowReviewThemeSummary,
+                  actions: lowReviewInsights.actions,
+                  examples: sampleLowReviewExamples,
+                })
+              : "Recent review quality looks healthy. Keep responding to every guest review.",
+        links: sampleLowReviewExamples
+          .filter((example): example is { snippet: string; url: string } => Boolean(example.url))
+          .map((example) => ({
+            label: `\"${example.snippet}\"`,
+            url: example.url,
+          })),
+        effort: "Medium",
         impact: "High",
         serviceKey: "google_business",
       }),
@@ -1799,6 +2313,8 @@ export async function GET(request: NextRequest) {
         name: "Rich search data",
         category: "Can Guests Find You?",
         status: structuredDataScore >= 2 ? "pass" : "fail",
+        confidence: "CONFIRMED",
+        evidence: `${structuredDataScore} of 3 structured data signals detected.`,
         finding: structuredDataScore >= 2
           ? `${structuredDataScore} of 3 structured data signals found.`
           : structuredDataScore === 1
@@ -1816,6 +2332,7 @@ export async function GET(request: NextRequest) {
         name: "XML sitemap",
         category: "Can Guests Find You?",
         status: sitemapReachable ? "pass" : "fail",
+        confidence: "CONFIRMED",
         finding: sitemapReachable
           ? "XML sitemap found at /sitemap.xml."
           : "No XML sitemap found.",
@@ -1831,6 +2348,7 @@ export async function GET(request: NextRequest) {
         name: "Phone layout",
         category: "Are You Losing Guests?",
         status: mobileViewportStatus,
+        confidence: "CONFIRMED",
         finding: !hasViewport
           ? "Your site is missing phone layout settings."
           : "Phone layout settings detected.",
@@ -1846,6 +2364,7 @@ export async function GET(request: NextRequest) {
         id: "phone-conversion-readiness",
         name: "Phone call setup",
         category: "Are You Losing Guests?",
+        confidence: "CONFIRMED",
         status: [Boolean(phoneMatch), hasClickableHeaderPhone, callIntentSignal].filter(Boolean).length >= 2 ? "pass" : "fail",
         finding: `${[Boolean(phoneMatch), hasClickableHeaderPhone, callIntentSignal].filter(Boolean).length} of 3 phone-call signals found.`,
         details: [Boolean(phoneMatch), hasClickableHeaderPhone, callIntentSignal].filter(Boolean).length >= 2
@@ -1860,6 +2379,8 @@ export async function GET(request: NextRequest) {
         name: "Accessibility score",
         category: "Are You Losing Guests?",
         status: accessibilityScore === null ? "pass" : accessibilityScore >= 70 ? "pass" : "fail",
+        confidence: accessibilityScore !== null ? "CONFIRMED" : "UNVERIFIED",
+        evidence: accessibilityScore !== null ? `Lighthouse accessibility score: ${accessibilityScore}/100.` : "Accessibility score not returned by API.",
         finding: accessibilityScore !== null
           ? `Accessibility score: ${accessibilityScore}/100.`
           : "Accessibility score not available — not penalizing.",
@@ -1877,6 +2398,7 @@ export async function GET(request: NextRequest) {
         name: "Pricing visible",
         category: "Are You Losing Guests?",
         status: rateTransparency as CheckStatus,
+        confidence: "INFERRED",
         finding: pricesVisible ? "Pricing is visible on your site." : "No clear pricing found.",
         details: pricesVisible
           ? "Guests can see if they can afford you before investing time in the booking process."
@@ -1890,6 +2412,8 @@ export async function GET(request: NextRequest) {
         name: "Contact options",
         category: "Are You Losing Guests?",
         status: contactFrictionScore >= 2 ? "pass" : "fail",
+        confidence: "CONFIRMED",
+        evidence: `Contact methods found: ${[phoneInHeader ? "phone" : null, hasEmailLink ? "email" : null, hasBookingForm ? "form" : null, hasLiveChat ? "chat" : null].filter(Boolean).join(", ") || "none"}.`,
         finding: `${contactFrictionScore} of 4 contact methods found (phone, email, booking form, live chat).`,
         details:
           contactFrictionScore >= 2
@@ -1904,6 +2428,7 @@ export async function GET(request: NextRequest) {
         name: "Business email",
         category: "Are You Losing Guests?",
         status: "pass",
+        confidence: "CONFIRMED",
         finding: hasBrandedEmail
           ? "A branded business email is visible on your site."
           : foundPersonalDomain
@@ -1915,6 +2440,86 @@ export async function GET(request: NextRequest) {
             ? "A branded email like info@yourpark.com costs a few dollars a month and instantly looks more professional. Not penalizing — just a tip."
             : "Consider adding a visible email address so guests can reach you.",
         effort: "Low",
+        impact: "Medium",
+        serviceKey: "default",
+      }),
+      createCheck({
+        id: "physical-address",
+        name: "Physical address",
+        category: "Can Guests Find You?",
+        status: physicalAddressFound ? "pass" : "fail",
+        confidence: aiPhysicalAddress ? "CONFIRMED" : regexPhysicalAddress ? "INFERRED" : "CONFIRMED",
+        evidence: aiPhysicalAddress?.quote || (aiPhysicalAddress?.address
+          ? `Address found: "${aiPhysicalAddress.address}".`
+          : regexPhysicalAddress ? "Street address pattern detected via regex." : "No street address detected."),
+        finding: aiPhysicalAddress?.feedback
+          ? aiPhysicalAddress.feedback
+          : physicalAddressFound
+            ? aiPhysicalAddress?.address
+              ? `Physical address found: ${aiPhysicalAddress.address.slice(0, 80)}.`
+              : "A physical street address is visible on the site."
+            : "No physical street address found on the website.",
+        details: physicalAddressFound
+          ? "Guests and Google can verify your location. Street addresses build trust and help with local search."
+          : "Post your physical street address on your site. Google uses it for Maps results, and guests need it for GPS navigation. A PO Box doesn't count.",
+        effort: "Low",
+        impact: "High",
+        serviceKey: "google_business",
+      }),
+      createCheck({
+        id: "lead-capture",
+        name: "Lead capture",
+        category: "Can Guests Book Online?",
+        status: hasLeadCaptureForm ? "pass" : "fail",
+        confidence: "CONFIRMED",
+        evidence: hasLeadCaptureForm ? "Email signup form detected on the site." : "No email signup form found.",
+        finding: hasLeadCaptureForm
+          ? "An email signup or newsletter form was found."
+          : "No email capture form found on the website.",
+        details: hasLeadCaptureForm
+          ? "You're collecting emails from interested visitors — smart. Use this list to send seasonal deals and fill last-minute cancellations."
+          : "Add a simple email signup ('Get seasonal deals' or 'Be first to know about openings'). Visitors who don't book today might book next month — but only if you can reach them.",
+        effort: "Low",
+        impact: "High",
+        serviceKey: "booking_cta",
+      }),
+      createCheck({
+        id: "thin-content",
+        name: "Content depth",
+        category: "Are You Losing Guests?",
+        status: isThinContent ? "fail" : "pass",
+        confidence: aiThinContent ? "CONFIRMED" : "INFERRED",
+        evidence: aiThinContent?.quote || `Estimated body word count: ${aiThinContent?.estimatedWordCount ?? bodyWordCount}. ${aiThinContent?.summary ?? ""}`.trim(),
+        finding: aiThinContent?.feedback
+          ? aiThinContent.feedback
+          : isThinContent
+            ? `Your homepage has thin content (~${aiThinContent?.estimatedWordCount ?? bodyWordCount} words). Aim for 300+ words of real description.`
+            : `Homepage has sufficient content depth (~${aiThinContent?.estimatedWordCount ?? bodyWordCount} words).`,
+        details: isThinContent
+          ? "A homepage with barely any text gives Google nothing to rank and gives guests nothing to read. Add a few paragraphs about what makes your property special — amenities, nearby attractions, what guests love."
+          : "Your homepage has enough descriptive content for Google to understand and rank your site.",
+        effort: "Medium",
+        impact: "Medium",
+        serviceKey: "default",
+      }),
+      createCheck({
+        id: "cliche-density",
+        name: "Original copy",
+        category: "Are You Losing Guests?",
+        status: aiClicheDensity?.hasCliches ? "fail" : "pass",
+        confidence: aiClicheDensity ? "CONFIRMED" : "UNVERIFIED",
+        evidence: aiClicheDensity?.quote || (aiClicheDensity?.examples?.length
+          ? `Cliché phrases found: ${aiClicheDensity.examples.slice(0, 3).join(", ")}.`
+          : "No excessive clichés detected."),
+        finding: aiClicheDensity?.feedback
+          ? aiClicheDensity.feedback
+          : aiClicheDensity?.hasCliches
+            ? `Copy is heavy on hospitality clichés: "${aiClicheDensity.examples?.[0] ?? "generic phrasing"}".`
+            : "Copy appears original and specific to this property.",
+        details: aiClicheDensity?.hasCliches
+          ? "Phrases like 'nestled amidst nature' and 'unforgettable experience' say nothing about YOUR property. Replace them with real details — what can guests actually see, do, and experience here?"
+          : "Your website copy sounds authentic and specific — that stands out when guests are comparing multiple parks.",
+        effort: "Medium",
         impact: "Medium",
         serviceKey: "default",
       }),

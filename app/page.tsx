@@ -1,14 +1,19 @@
 "use client";
 
 import Image from "next/image";
+import { Faq3 } from "@/components/faq3";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
+import Lottie from "lottie-react";
+import starLoaderAnimation from "@/public/star-loader.json";
 import {
   ArrowRightIcon,
+  ArrowPathIcon,
   CalendarDaysIcon,
   ChartBarSquareIcon,
   CheckCircleIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   ClipboardDocumentListIcon,
   ClockIcon,
   CreditCardIcon,
@@ -26,7 +31,6 @@ import {
   PhotoIcon,
   QueueListIcon,
   ReceiptPercentIcon,
-  ShareIcon,
   ShieldCheckIcon,
   SparklesIcon,
   SunIcon,
@@ -36,8 +40,11 @@ import {
   UsersIcon,
   XMarkIcon,
   BoltIcon,
+  ChatBubbleLeftRightIcon,
+  StarIcon,
+  LockClosedIcon,
 } from "@heroicons/react/24/outline";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, SVGProps } from "react";
 import QRCode from "qrcode";
 
@@ -52,6 +59,7 @@ type CheckCategory =
 type CheckStatus = "pass" | "fail" | "unknown";
 type Effort = "Low" | "Medium" | "High";
 type Impact = "Low" | "Medium" | "High";
+type ResultStatusFilter = Record<CheckStatus, boolean>;
 
 type ScanCheck = {
   id: string;
@@ -59,8 +67,11 @@ type ScanCheck = {
   category: CheckCategory;
   status: CheckStatus;
   pass: boolean;
+  confidence?: "CONFIRMED" | "INFERRED" | "UNVERIFIED";
+  evidence?: string;
   finding: string;
   details: string;
+  links?: Array<{ label: string; url: string }>;
   weight: number;
   effort: Effort;
   impact: Impact;
@@ -146,6 +157,9 @@ type SaveAuditSessionOptions = {
   sendEmailCopy?: boolean;
   aiFixDraftByCheckIdOverride?: Record<string, string>;
   localReviewCompareByCheckIdOverride?: Record<string, LocalReviewCompareResult>;
+  nameOverride?: string;
+  phoneOverride?: string;
+  leadIntent?: string;
 };
 
 type LocalReviewCompareResult = {
@@ -266,6 +280,12 @@ const CHECK_ICON_BY_ID: Record<string, HeroIcon> = {
   "meta-title": TagIcon,
   "meta-description": NewspaperIcon,
   "gbp-sync": MapPinIcon,
+  "google-rating": StarIcon,
+  "review-count": ChatBubbleLeftRightIcon,
+  "physical-address": MapPinIcon,
+  "lead-capture": EnvelopeIcon,
+  "thin-content": DocumentTextIcon,
+  "cliche-density": DocumentTextIcon,
   "local-review-competitiveness": MapPinIcon,
   "social-presence": UsersIcon,
   "structured-data": GlobeAltIcon,
@@ -321,8 +341,21 @@ const hasEnabledQueryFlag = (params: URLSearchParams, key: string): boolean => {
   return value === "" || value === "true" || value === "1";
 };
 
+const formatPhoneInput = (raw: string): string => {
+  const digits = raw.replace(/\D/g, "").slice(0, 10);
+
+  if (digits.length <= 3) {
+    return digits;
+  }
+
+  if (digits.length <= 6) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  }
+
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+};
+
 const INTERNAL_TEST_DOMAIN = "buckysolutions.com";
-const IS_REVIEW_COACH_ENABLED = process.env.NEXT_PUBLIC_ENABLE_REVIEW_COACH === "true";
 
 const isInternalTestDomain = (raw: string): boolean => {
   return formatDisplayUrl(raw).toLowerCase() === INTERNAL_TEST_DOMAIN;
@@ -445,17 +478,17 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
       serviceKey: "rate_page",
     },
     {
-      id: "gbp-sync",
-      name: "Google listing",
+      id: "google-rating",
+      name: "Google rating",
       category: "Can Guests Find You?",
       status: good ? "pass" : "fail",
       pass: good,
-      finding: good ? "Google map and strong review signals found." : "Google Business Profile link appears weak or missing.",
+      finding: good ? "Google rating is above 4.0." : "Google rating is below 4.0.",
       details: good
-        ? "Local trust signals support discovery traffic."
-        : "Weak local presence makes it harder to compete in maps and branded search.",
+        ? "Strong rating helps guests trust your park quickly when comparing options on Maps."
+        : "Guests often filter to 4+ stars on Maps. Improve rating momentum by fixing recurring complaints, replying quickly, and asking happy guests for fresh reviews.",
       weight: 1,
-      effort: "Low",
+      effort: "Medium",
       impact: "High",
       serviceKey: "google_business",
     },
@@ -552,7 +585,67 @@ type ReviewCoachResult = {
   message?: string;
 };
 
+type CoachReviewInput = {
+  id: string;
+  rating: number;
+  text: string;
+  hasOwnerReply?: boolean;
+};
+
 const STAR_COLORS: Record<number, string> = { 1: "#DC2626", 2: "#EA580C", 3: "#D97706", 4: "#2DA4A9", 5: "#16A34A" };
+
+const parseManualReviews = (raw: string): { reviews: CoachReviewInput[]; error: string } => {
+  const blocks = raw
+    .split(/\n\s*\n/g)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  if (!blocks.length) {
+    return { reviews: [], error: "Paste at least one review to analyze." };
+  }
+
+  const reviews: CoachReviewInput[] = [];
+
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]!;
+    let text = block;
+    let rating = 5;
+
+    const starsPrefix = block.match(/^([★⭐]{1,5})\s*[-:|]?\s*/);
+    if (starsPrefix) {
+      rating = Math.min(5, starsPrefix[1].length);
+      text = block.slice(starsPrefix[0].length).trim();
+    } else {
+      const numericPrefix = block.match(/^([1-5])\s*(?:stars?)?\s*[-:|]\s*/i);
+      if (numericPrefix) {
+        rating = Number(numericPrefix[1]);
+        text = block.slice(numericPrefix[0].length).trim();
+      } else {
+        const inlineRating = block.match(/\b([1-5])\s*\/\s*5\b/);
+        if (inlineRating) {
+          rating = Number(inlineRating[1]);
+        }
+      }
+    }
+
+    if (text.length < 6) {
+      continue;
+    }
+
+    reviews.push({
+      id: `manual-${index + 1}`,
+      rating,
+      text,
+      hasOwnerReply: false,
+    });
+  }
+
+  if (!reviews.length) {
+    return { reviews: [], error: "Could not read any review text. Use one review per paragraph, like: '5 - Great staff and easy check-in'." };
+  }
+
+  return { reviews, error: "" };
+};
 
 function ReviewCoachPanel({ propertyName, isVisible }: { propertyName: string; isVisible: boolean }) {
   const [tone, setTone] = useState<ReviewCoachTone>("friendly");
@@ -564,6 +657,27 @@ function ReviewCoachPanel({ propertyName, isVisible }: { propertyName: string; i
   const [locations, setLocations] = useState<{ name: string; title: string; address: string }[]>([]);
   const [selectedLocation, setSelectedLocation] = useState("");
   const [isFetching, setIsFetching] = useState(false);
+  const [manualReviewsInput, setManualReviewsInput] = useState("");
+
+  const analyzeReviews = async (reviews: CoachReviewInput[], displayName: string) => {
+    setIsLoading(true);
+    setError("");
+    setResult(null);
+    try {
+      const res = await fetch("/api/review-coach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ propertyName: displayName || propertyName, tone, reviews }),
+      });
+      const payload = (await res.json()) as ReviewCoachResult;
+      if (!res.ok) throw new Error(payload.message ?? "Analysis failed.");
+      setResult(payload);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error analyzing reviews.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const refreshLocations = async () => {
     try {
@@ -639,18 +753,20 @@ function ReviewCoachPanel({ propertyName, isVisible }: { propertyName: string; i
       if (!res.ok) { if (res.status === 401) setAuthStatus("disconnected"); throw new Error(payload.message ?? "Fetch failed."); }
       const fetchedReviews = payload.reviews ?? [];
       if (!fetchedReviews.length) { setError("No reviews found."); setIsFetching(false); return; }
-      setIsLoading(true);
       const selectedLoc = locations.find((l) => l.name === selectedLocation);
-      const res2 = await fetch("/api/review-coach", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ propertyName: selectedLoc?.title || propertyName, tone, reviews: fetchedReviews }),
-      });
-      const payload2 = (await res2.json()) as ReviewCoachResult;
-      if (!res2.ok) throw new Error(payload2.message ?? "Analysis failed.");
-      setResult(payload2);
+      await analyzeReviews(fetchedReviews as CoachReviewInput[], selectedLoc?.title || propertyName);
     } catch (e) { setError(e instanceof Error ? e.message : "Error fetching or analyzing reviews."); }
-    finally { setIsFetching(false); setIsLoading(false); }
+    finally { setIsFetching(false); }
+  };
+
+  const analyzeManualReviews = async () => {
+    const parsed = parseManualReviews(manualReviewsInput);
+    if (parsed.error) {
+      setError(parsed.error);
+      setResult(null);
+      return;
+    }
+    await analyzeReviews(parsed.reviews, propertyName);
   };
 
   const copy = async (id: string, text: string) => {
@@ -693,6 +809,25 @@ function ReviewCoachPanel({ propertyName, isVisible }: { propertyName: string; i
               Sign in with Google
             </button>
             <p className="text-[10px] text-[#9AA9B5] text-center">We only access your reviews and location info</p>
+
+            <div className="mt-3 border-t border-[#E2E9EF] pt-3">
+              <p className="text-xs font-medium text-[#314154]">Or paste reviews manually</p>
+              <p className="mt-1 text-[10px] leading-4 text-[#5B6776]">Use one review per paragraph. Start with rating if possible, e.g. <span className="font-medium">5 - Great staff and easy check-in.</span></p>
+              <textarea
+                value={manualReviewsInput}
+                onChange={(event) => setManualReviewsInput(event.target.value)}
+                placeholder={"5 - Great location and friendly team.\n\n2 - Bathrooms were dirty and check-in was slow."}
+                className="mt-2 h-28 w-full resize-none border border-[#D4DEE7] bg-white px-3 py-2 text-xs leading-5 text-[#0A1628] outline-none focus:border-[#2DA4A9]"
+              />
+              <button
+                type="button"
+                onClick={() => void analyzeManualReviews()}
+                disabled={isLoading || !manualReviewsInput.trim()}
+                className="mt-2 w-full bg-[#0A1628] hover:bg-[#1a2a4a] disabled:opacity-50 px-4 py-2 text-xs font-semibold text-white transition-colors"
+              >
+                {isLoading ? "Analyzing..." : "Analyze Pasted Reviews"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -871,11 +1006,30 @@ function PolicyFooter({ fixed }: { fixed?: boolean }) {
   );
 }
 
-function TopographicPanel() {
+function TopographicPanel({ mode = "default" }: { mode?: "default" | "report" }) {
+  if (mode === "report") {
+    return (
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden" aria-hidden="true">
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,#f8fcfc_0%,#e6f5f4_44%,#eef7fb_100%)] sm:hidden" />
+        <div className="absolute inset-0 hidden bg-[linear-gradient(180deg,#f8fcfc_0%,#e3f4f2_40%,#eaf4fa_72%,#f6f1ea_100%)] sm:block lg:hidden" />
+        <div className="absolute inset-0 hidden bg-[linear-gradient(145deg,#f3fbfa_0%,#ddf3f1_34%,#e4effa_68%,#f7eee2_100%)] lg:block" />
+
+        <div className="absolute -left-32 top-16 h-[360px] w-[360px] rounded-full bg-[#54a2a7]/20 blur-[115px]" />
+        <div className="absolute right-[-180px] top-[20%] h-[460px] w-[460px] rounded-full bg-[#00a9ba]/22 blur-[125px]" />
+        <div className="absolute bottom-[-180px] left-1/2 h-[460px] w-[680px] -translate-x-1/2 rounded-full bg-[#5abf7e]/20 blur-[135px]" />
+        <div className="absolute -right-20 top-[8%] h-[260px] w-[260px] rounded-full bg-[#ff8a44]/14 blur-[110px]" />
+        <div className="absolute -left-16 bottom-[12%] h-[240px] w-[240px] rounded-full bg-[#7cc7ff]/12 blur-[105px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0.18)_42%,rgba(255,255,255,0.34)_100%)]" />
+      </div>
+    );
+  }
+
   return (
     <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-      {/* Mobile: flat, quiet background */}
-      <div className="absolute inset-0 bg-[#F8FAFC] sm:hidden" />
+      {/* Mobile: subtle gradient */}
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,#f7fbfb_0%,#f0f7f6_50%,#f8f9f7_100%)] sm:hidden" />
+      <div className="absolute sm:hidden -left-16 top-12 h-[200px] w-[200px] rounded-full bg-[#54a2a7]/8 blur-[80px]" />
+      <div className="absolute sm:hidden right-[-80px] top-[30%] h-[200px] w-[200px] rounded-full bg-[#00a9ba]/6 blur-[90px]" />
 
       {/* Tablet: restrained ambient wash */}
       <div className="absolute inset-0 hidden bg-[linear-gradient(180deg,#f7fbfb_0%,#eef8f6_48%,#f7f8f6_100%)] sm:block lg:hidden" />
@@ -1090,6 +1244,30 @@ const CHECK_CTA_BY_ID: Record<string, Pick<ServiceCta, "buttonLabel" | "href">> 
     buttonLabel: "Improve GBP visibility",
     href: "https://www.buckysolutions.com/services/local-seo/",
   },
+  "google-rating": {
+    buttonLabel: "Improve Google rating",
+    href: "https://www.buckysolutions.com/services/local-seo/",
+  },
+  "review-count": {
+    buttonLabel: "Increase review volume",
+    href: "https://www.buckysolutions.com/services/local-seo/",
+  },
+  "physical-address": {
+    buttonLabel: "Fix local SEO",
+    href: "https://www.buckysolutions.com/services/local-seo/",
+  },
+  "lead-capture": {
+    buttonLabel: "Add email capture",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
+  "thin-content": {
+    buttonLabel: "Improve content",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
+  "cliche-density": {
+    buttonLabel: "Improve copywriting",
+    href: "https://www.buckysolutions.com/services/website-management/",
+  },
   "local-review-competitiveness": {
     buttonLabel: "Increase review volume",
     href: "https://www.buckysolutions.com/services/local-seo/",
@@ -1166,6 +1344,12 @@ const PASS_LEARN_CTA_BY_ID: Record<string, string> = {
   "checkin-checkout-times": "Learn about check-in times",
   "accessibility-statement": "Learn about accessibility",
   "gbp-sync": "Learn about Google listings",
+  "google-rating": "Learn about Google ratings",
+  "review-count": "Learn about review strategy",
+  "physical-address": "Learn about local SEO",
+  "lead-capture": "Learn about email marketing",
+  "thin-content": "Learn about content depth",
+  "cliche-density": "Learn about copywriting",
   "local-review-competitiveness": "Learn about review strategy",
   "social-presence": "Learn about social presence",
   "structured-data": "Learn about structured data",
@@ -1205,6 +1389,12 @@ const PASS_BENEFIT_BY_ID: Record<string, string> = {
   "checkin-checkout-times": "Posted check-in and check-out times prevent confusion, reduce phone calls, and help guests plan their travel schedule.",
   "accessibility-statement": "Accessibility information is available, helping guests with mobility or access needs plan their visit.",
   "gbp-sync": "Your Google Business Profile is active and consistent with your website, strengthening local search visibility.",
+  "google-rating": "Your Google rating is strong, building instant trust with guests comparing parks on Google Maps.",
+  "review-count": "You have a healthy volume of Google reviews, providing strong social proof for potential guests.",
+  "physical-address": "Your physical street address is visible on the site, helping Google verify your location and guests find you.",
+  "lead-capture": "You're collecting visitor emails, allowing you to re-engage interested guests with seasonal deals and last-minute openings.",
+  "thin-content": "Your homepage has enough descriptive content for Google to understand and rank your site effectively.",
+  "cliche-density": "Your website copy is original and specific to your property, standing out from generic hospitality language.",
   "local-review-competitiveness": "Your review volume and ratings are competitive locally, supporting trust and search ranking in your area.",
   "social-presence": "Active social profiles are linked from your site, giving guests additional proof that your property is real and active.",
   "structured-data": "Structured data is present on your site, helping Google display rich search results with stars, pricing, and business details.",
@@ -1345,6 +1535,20 @@ const CHECK_DIRECT_FIX_BY_ID: Record<string, string> = {
     "The short text that appears under your link in Google search results is called a meta description. Most platforms let you edit this under \"SEO Settings\" for each page. Write 1–2 sentences that describe what makes your park worth booking, mention your location, and end with something actionable like \"Book your site online today.\" If you do not want to write it yourself, use AI to draft it, then paste it into your page settings. Keep it under 155 characters so Google doesn't cut it off.",
   "gbp-sync":
     "Your Google Business Profile is often the first thing people see when they search your park. Log in at business.google.com and make sure your address, phone number, and website link are correct. Add recent photos (at least 10), fill in your hours, select the right business categories (like RV Park or Campground), and post an update at least once a month. Profiles that are active and complete rank higher and get more calls.",
+  "google-rating":
+    "Respond to every review — positive or negative — within 48 hours. Guests who leave negative reviews often update their rating when they see a thoughtful response. Focus on the most common complaint, fix it, and reply publicly saying what changed. Then ask your happiest guests to leave a Google review — even a simple card at checkout with a QR code works.",
+  "review-count":
+    "Ask every happy guest to leave a Google review at checkout. A simple sign at the front desk with a QR code linking to your review page works great. Aim for 15+ reviews — that's the threshold where most guests start to trust a listing. Respond to every review to show you're engaged.",
+  "negative-review-risk":
+    "Look at the complaint themes above — the one that keeps coming up is where to start. Fix that issue first, then reply to each review and tell the guest exactly what changed. Once you've addressed it, start asking your happiest guests for fresh reviews so the newer ones push the old ones down. Respond to every new review within 24 hours to show future guests you're paying attention.",
+  "physical-address":
+    "Post your physical street address on your contact page, footer, and Google Business Profile. Google uses this to verify your location for Maps and 'near me' searches. A PO box doesn't count — guests need the real address to plug into their GPS.",
+  "lead-capture":
+    "Add a simple email signup form on your homepage — something like 'Get seasonal deals and opening alerts.' Use it to fill last-minute cancellations and announce special events. Even a basic Mailchimp or ConvertKit signup works. Position it above the scroll fold for best results.",
+  "thin-content":
+    "Your homepage needs at least 300 words of real, descriptive content — not just a booking widget and a photo. Write about what makes your property special: the setting, the amenities, nearby attractions, what guests love most. This helps Google understand what you offer and ranks you for relevant searches.",
+  "cliche-density":
+    "Go through your copy and replace generic phrases with specific details about YOUR property. Instead of 'nestled amidst nature,' say 'surrounded by 50 acres of pine forest along the Shenandoah River.' Instead of 'unforgettable experience,' describe what guests actually do — fish, hike, sit by the fire. Specific copy converts better and ranks better.",
   "local-review-competitiveness":
     "To improve local win-rate, ask for fresh Google reviews weekly and reply to every review quickly. Review volume and recency often decide who gets the click when guests compare nearby parks.",
   "social-presence":
@@ -1417,6 +1621,13 @@ const CHECK_DISPLAY_LABEL_BY_ID: Record<string, string> = {
   "meta-title": "Search engine signage",
   "meta-description": "Search result description",
   "gbp-sync": "Google listing strength",
+  "google-rating": "Google rating",
+  "review-count": "Review volume",
+  "negative-review-risk": "Bad reviews",
+  "physical-address": "Physical address",
+  "lead-capture": "Email capture",
+  "thin-content": "Content depth",
+  "cliche-density": "Original copy",
   "local-review-competitiveness": "Local review competitiveness",
   "social-presence": "Social media presence",
   "structured-data": "Structured data for search",
@@ -1488,6 +1699,10 @@ const getCheckHeadline = (check?: ScanCheck | null): string => {
       return p ? "Guests can book online" : f ? "No online booking found" : "Online booking needs review";
     case "local-review-competitiveness":
       return p ? "Review strength looks competitive" : f ? "Review strength trails local competition" : "Review competitiveness is borderline";
+    case "negative-review-risk":
+      return p
+        ? "No major bad-review red flags"
+        : (check.finding?.trim() || "Recent bad-review risk needs review");
     case "fee-transparency":
       return p ? "All fees are shown up front" : f ? "Guests see surprise fees" : "Fee timing could be clearer";
     case "rate-transparency":
@@ -1510,6 +1725,18 @@ const getCheckHeadline = (check?: ScanCheck | null): string => {
       return p ? "Google search preview text is set" : f ? "Google search preview text is missing" : "Google preview text could be better";
     case "gbp-sync":
       return p ? "Google listing looks complete" : f ? "Google listing looks incomplete" : "Google listing needs attention";
+    case "google-rating":
+      return p ? "Google rating is strong" : (check.finding?.trim() || (f ? "Google rating needs improvement" : "Google rating not available"));
+    case "review-count":
+      return p ? "Healthy review volume" : f ? "More Google reviews needed" : "Review count not available";
+    case "physical-address":
+      return p ? "Physical address is visible" : f ? "No physical street address found" : "Address visibility unclear";
+    case "lead-capture":
+      return p ? "Email capture is in place" : f ? "No email capture form found" : "Email capture needs review";
+    case "thin-content":
+      return p ? "Content depth is sufficient" : f ? "Homepage content is too thin" : "Content depth needs review";
+    case "cliche-density":
+      return p ? "Copy is original and specific" : f ? "Copy relies heavily on clichés" : "Copy originality needs review";
     case "social-presence":
       return p ? "Active on social media" : f ? "Hard to find on social media" : "Social media presence is limited";
     case "mobile-viewport":
@@ -1538,6 +1765,54 @@ const getCheckHeadline = (check?: ScanCheck | null): string => {
       return "This check needs review";
     }
   }
+};
+
+const renderInlineReviewLinkedDetails = (check: ScanCheck, fallback: string): ReactNode => {
+  const links = check.links ?? [];
+  if (links.length === 0 || !fallback.includes("[[REVIEW_")) {
+    return fallback;
+  }
+
+  const segments: ReactNode[] = [];
+  const pattern = /\[\[REVIEW_(\d+)\]\]/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null = pattern.exec(fallback);
+
+  while (match) {
+    const tokenStart = match.index;
+    const tokenEnd = pattern.lastIndex;
+    const oneBasedIndex = Number(match[1]);
+    const link = Number.isFinite(oneBasedIndex) ? links[oneBasedIndex - 1] : undefined;
+
+    if (tokenStart > lastIndex) {
+      segments.push(fallback.slice(lastIndex, tokenStart));
+    }
+
+    if (link) {
+      segments.push(
+        <a
+          key={`${check.id}-${oneBasedIndex}-${link.url}`}
+          href={link.url}
+          target="_blank"
+          rel="noreferrer"
+          className="underline decoration-[#2DA4A9] decoration-1 underline-offset-2 hover:text-[#2DA4A9]"
+        >
+          {link.label}
+        </a>,
+      );
+    } else {
+      segments.push(match[0]);
+    }
+
+    lastIndex = tokenEnd;
+    match = pattern.exec(fallback);
+  }
+
+  if (lastIndex < fallback.length) {
+    segments.push(fallback.slice(lastIndex));
+  }
+
+  return segments;
 };
 
 export default function Home() {
@@ -1569,7 +1844,8 @@ export default function Home() {
   const [tradeshowConsentEmailCopy, setTradeshowConsentEmailCopy] = useState(false);
   const [tradeshowConsentMarketing, setTradeshowConsentMarketing] = useState(false);
   const [hasSubmittedTradeshowLead, setHasSubmittedTradeshowLead] = useState(false);
-  const [isReportUnlocked, setIsReportUnlocked] = useState(false);
+  // Report is always unlocked for viewing; email prompt is engagement-based
+  const [isReportUnlocked, setIsReportUnlocked] = useState(true);
   const [urlInputShakeCount, setUrlInputShakeCount] = useState(0);
   const [emailInputShakeCount, setEmailInputShakeCount] = useState(0);
   const [hubspotContactId, setHubspotContactId] = useState("");
@@ -1592,19 +1868,41 @@ export default function Home() {
   const [isComparingLocalReviews, setIsComparingLocalReviews] = useState(false);
   const [localReviewCompareError, setLocalReviewCompareError] = useState("");
   const [localReviewCompareByCheckId, setLocalReviewCompareByCheckId] = useState<Record<string, LocalReviewCompareResult>>({});
+  const [resultStatusFilter, setResultStatusFilter] = useState<ResultStatusFilter>({ pass: true, fail: true, unknown: true });
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [partialLoadingMessageIndex, setPartialLoadingMessageIndex] = useState(0);
   const [previousScanResult, setPreviousScanResult] = useState<ScanResponse | null>(null);
   const [collapsedPainGroups, setCollapsedPainGroups] = useState<Partial<Record<PainLevel, boolean>>>({});
   const [isHydratingSharedReport, setIsHydratingSharedReport] = useState(() => Boolean(getReportIdFromPathname(pathname ?? "")));
   const [engagementIssueClicks, setEngagementIssueClicks] = useState(0);
-  const [isReviewCoachOpen, setIsReviewCoachOpen] = useState(false);
-  const [hasShownEngagementPrompt, setHasShownEngagementPrompt] = useState(false);
-  const [hasClosedSecondIssue, setHasClosedSecondIssue] = useState(false);
-  const [secondIssueCloseScrollY, setSecondIssueCloseScrollY] = useState<number | null>(null);
+  const [showSharePrompt, setShowSharePrompt] = useState(false);
+  const [shareEmail, setShareEmail] = useState("");
+  const [sharePromptNotice, setSharePromptNotice] = useState("");
+  const [isSubmittingSharePrompt, setIsSubmittingSharePrompt] = useState(false);
+  // Engagement prompt shown after scroll/click
+  const [showEmailPrompt, setShowEmailPrompt] = useState(false);
+  const [hasTriggeredEmailPrompt, setHasTriggeredEmailPrompt] = useState(false);
+  const [reportSavedAt, setReportSavedAt] = useState<string>("");
+  const [emailPromptMode, setEmailPromptMode] = useState<"email" | "callback">("email");
+  const [engagementEmail, setEngagementEmail] = useState("");
+  const [engagementPromptNotice, setEngagementPromptNotice] = useState("");
+  const [isSubmittingEngagementPrompt, setIsSubmittingEngagementPrompt] = useState(false);
+  const [callbackName, setCallbackName] = useState("");
+  const [callbackEmail, setCallbackEmail] = useState("");
+  const [callbackPhone, setCallbackPhone] = useState("");
+  const [callbackPromptNotice, setCallbackPromptNotice] = useState("");
+  const [isSubmittingCallbackPrompt, setIsSubmittingCallbackPrompt] = useState(false);
+  const [showCheckHelpForm, setShowCheckHelpForm] = useState(false);
+  const [checkHelpSubmitted, setCheckHelpSubmitted] = useState(false);
+  const [checkHelpName, setCheckHelpName] = useState("");
+  const [checkHelpPhone, setCheckHelpPhone] = useState("");
+  const [checkHelpNotice, setCheckHelpNotice] = useState("");
+  const [isSubmittingCheckHelp, setIsSubmittingCheckHelp] = useState(false);
   const landingInputRef = useRef<HTMLInputElement | null>(null);
   const scanRequestRef = useRef(0);
   const loadingStartRef = useRef<number | null>(null);
-  const reportSectionRef = useRef<HTMLElement | null>(null);
+  const reportSectionRef = useRef<HTMLDivElement | null>(null);
+  const filterMenuRef = useRef<HTMLDivElement | null>(null);
   const capturedAuditReportsRef = useRef<Set<string>>(new Set());
   const hydratedFromSavedReportRef = useRef(false);
   const previousFlippedCardIdRef = useRef<string | null>(null);
@@ -1654,12 +1952,40 @@ export default function Home() {
     };
   }, [activeCheck]);
 
+  useEffect(() => {
+    if (!isFilterMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!filterMenuRef.current?.contains(event.target as Node)) {
+        setIsFilterMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsFilterMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isFilterMenuOpen]);
+
   const currentQuestion = questionsComplete ? null : GUIDED_QUESTIONS[questionIndex] ?? null;
 
   const finalScore = scanResult?.score ?? 0;
+  const gaugeTargetProgress = Math.max(0, Math.min(finalScore / 100, 1));
+  const gaugeColor = finalScore >= 75 ? "#16A34A" : finalScore >= 50 ? "#D97706" : "#DC2626";
   const letterGrade = scoreToLetterGrade(finalScore);
   const displayReportUrl = useMemo(() => formatDisplayUrl(reportUrl), [reportUrl]);
-  const emailInputError = !isReportUnlocked ? leadNotice : "";
+  const emailInputError = leadNotice;
   const activeCheckCta = useMemo(() => getCheckCtaForStatus(activeCheck), [activeCheck]);
   const activeCheckNeedsAi = useMemo(
     () => Boolean(activeCheck && WRITING_HEAVY_CHECK_IDS.has(activeCheck.id)),
@@ -1672,6 +1998,10 @@ export default function Home() {
   const activeCheckDirectFix = useMemo(() => {
     if (!activeCheck) {
       return "";
+    }
+
+    if ((activeCheck.id === "negative-review-risk" || activeCheck.id === "google-rating") && activeCheck.details?.trim()) {
+      return activeCheck.details.trim();
     }
 
     return condenseFixCopy(
@@ -1861,6 +2191,14 @@ export default function Home() {
     setLocalReviewCompareError("");
   }, [activeCheck?.id]);
 
+  useEffect(() => {
+    setShowCheckHelpForm(false);
+    setCheckHelpSubmitted(false);
+    setCheckHelpName(name);
+    setCheckHelpPhone("");
+    setCheckHelpNotice("");
+  }, [activeCheck?.id, email, name]);
+
   const generatePdfReport = useCallback(async () => {
     if (typeof window === "undefined" || isGeneratingPdf) {
       return;
@@ -1868,148 +2206,159 @@ export default function Home() {
 
     setIsGeneratingPdf(true);
     try {
-      const reportMarkup = reportSectionRef.current?.outerHTML;
-      if (!reportMarkup) {
-        window.print();
-        return;
-      }
+      const title = `${displayReportUrl || reportUrl || "parkgrader"}-audit`;
+      const { jsPDF } = await import("jspdf");
 
-      const headContent = Array.from(document.head.querySelectorAll("style, link[rel='stylesheet']"))
-        .map((node) => node.outerHTML)
-        .join("\n");
-      const title = `${displayReportUrl || "parkgrader-report"}-audit`;
-
-      const iframe = document.createElement("iframe");
-      iframe.setAttribute("aria-hidden", "true");
-      iframe.style.position = "fixed";
-      iframe.style.right = "0";
-      iframe.style.bottom = "0";
-      iframe.style.width = "0";
-      iframe.style.height = "0";
-      iframe.style.border = "0";
-      document.body.appendChild(iframe);
-
-      const printDocument = iframe.contentDocument;
-      const printWindow = iframe.contentWindow;
-      if (!printDocument || !printWindow) {
-        iframe.remove();
-        window.print();
-        return;
-      }
-
-      printDocument.open();
-      printDocument.write(`
-        <!doctype html>
-        <html lang="en">
-          <head>
-            <meta charset="utf-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <title>${title}</title>
-            <base href="${window.location.origin}" />
-            ${headContent}
-            <style>
-              html, body {
-                background: #ffffff !important;
-              }
-
-              body {
-                margin: 0 !important;
-              }
-
-              .report-print-shell {
-                min-height: 100vh;
-                background: #ffffff;
-              }
-
-              .report-print-shell .print-hidden {
-                display: none !important;
-              }
-
-              .report-print-shell .report-page {
-                min-height: auto !important;
-                background: #ffffff !important;
-              }
-
-              .report-print-shell .report-page * {
-                animation: none !important;
-                transition: none !important;
-              }
-
-              .report-print-shell .report-page [style*="opacity: 0"] {
-                opacity: 1 !important;
-              }
-
-              .report-print-shell .report-page [style*="transform"] {
-                transform: none !important;
-              }
-
-              .report-print-shell .report-page [style*="path-length"] {
-                stroke-dasharray: none !important;
-                stroke-dashoffset: 0 !important;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="report-print-shell">${reportMarkup}</div>
-          </body>
-        </html>
-      `);
-      printDocument.close();
-
-      const waitForImages = async () => {
-        const images = Array.from(printDocument.images);
-        if (images.length === 0) {
-          return;
+      // Fetch SVG logo and rasterise to PNG so jsPDF can embed it
+      let logoPngDataUrl: string | null = null;
+      try {
+        const res = await fetch("/api/logo");
+        let svgText = await res.text();
+        // Ensure explicit dimensions so the browser renders it at a known size
+        if (!/<svg[^>]+width=/.test(svgText)) {
+          svgText = svgText.replace("<svg", '<svg width="480" height="96"');
         }
+        // base64 data URI is more reliable than objectURL for SVG→canvas
+        const b64 = btoa(unescape(encodeURIComponent(svgText)));
+        const dataUri = `data:image/svg+xml;base64,${b64}`;
+        logoPngDataUrl = await new Promise<string>((resolve, reject) => {
+          const img = new window.Image();
+          img.onload = () => {
+            const scale = 3;
+            const canvas = document.createElement("canvas");
+            canvas.width = 480 * scale;
+            canvas.height = 96 * scale;
+            const ctx = canvas.getContext("2d")!;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const png = canvas.toDataURL("image/png");
+            // If canvas is blank (cross-origin taint or render failure) reject
+            if (png === "data:,") { reject(); return; }
+            resolve(png);
+          };
+          img.onerror = () => reject();
+          img.src = dataUri;
+        });
+      } catch {
+        // Logo unavailable — will fall back to text wordmark
+      }
 
-        await Promise.race([
-          Promise.all(
-            images.map(
-              (image) =>
-                new Promise<void>((resolve) => {
-                  if (image.complete) {
-                    resolve();
-                    return;
-                  }
-                  image.addEventListener("load", () => resolve(), { once: true });
-                  image.addEventListener("error", () => resolve(), { once: true });
-                }),
-            ),
-          ),
-          new Promise<void>((resolve) => {
-            window.setTimeout(() => resolve(), 2200);
-          }),
-        ]);
+      const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "letter" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const L = 56; // left
+      const R = 56; // right
+      const W = pageW - L - R;
+
+      const hexRgb = (h: string): [number, number, number] => {
+        const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h);
+        return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [0, 0, 0];
+      };
+      const tc = (h: string) => { const [r, g, b] = hexRgb(h); pdf.setTextColor(r, g, b); };
+      const dc = (h: string) => { const [r, g, b] = hexRgb(h); pdf.setDrawColor(r, g, b); };
+
+      let y = 48;
+
+      const needBreak = (h: number) => {
+        if (y + h > pageH - 52) { pdf.addPage(); y = 48; }
       };
 
-      await Promise.race([
-        new Promise<void>((resolve) => {
-          if (printDocument.readyState === "complete") {
-            resolve();
-            return;
-          }
-          printWindow.addEventListener("load", () => resolve(), { once: true });
-        }),
-        new Promise<void>((resolve) => {
-          window.setTimeout(() => resolve(), 1200);
-        }),
-      ]);
+      // ── Logo ──────────────────────────────────────────────────────────────────
+      if (logoPngDataUrl) {
+        pdf.addImage(logoPngDataUrl, "PNG", L, y - 10, 120, 24);
+        y += 28;
+      } else {
+        tc("#0A1628"); pdf.setFont("helvetica", "bold"); pdf.setFontSize(14);
+        pdf.text("ParkGrader", L, y);
+        y += 20;
+      }
 
-      await waitForImages();
-      await new Promise<void>((resolve) => printWindow.setTimeout(() => resolve(), 250));
+      // ── Header rule ───────────────────────────────────────────────────────────
+      dc("#D6E2EE"); pdf.setLineWidth(0.5);
+      pdf.line(L, y, pageW - R, y);
+      y += 28;
 
-      printWindow.focus();
-      printWindow.print();
-      printWindow.onafterprint = () => iframe.remove();
-      window.setTimeout(() => {
-        iframe.remove();
-      }, 4000);
+      // ── Site + score ──────────────────────────────────────────────────────────
+      tc("#0A1628"); pdf.setFont("helvetica", "bold"); pdf.setFontSize(16);
+      pdf.text(displayReportUrl || reportUrl || "—", L, y);
+      y += 14;
+
+      tc("#5B6776"); pdf.setFont("helvetica", "normal"); pdf.setFontSize(9);
+      const score = scanResult?.score ?? 0;
+      const status = scanResult?.status ?? "";
+      const dateStr = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+      pdf.text(`Score: ${score} / 100  ·  ${status}  ·  ${dateStr}`, L, y);
+      y += 28;
+
+      // ── Section rule ──────────────────────────────────────────────────────────
+      dc("#D6E2EE"); pdf.setLineWidth(0.5);
+      pdf.line(L, y, pageW - R, y);
+      y += 20;
+
+      // ── Check rows ───────────────────────────────────────────────────────────
+      const allChecks = [
+        ...(scanResult?.checks ?? []).filter(c => c.status === "fail"),
+        ...(scanResult?.checks ?? []).filter(c => c.status !== "fail" && c.status !== "pass"),
+        ...(scanResult?.checks ?? []).filter(c => c.status === "pass"),
+      ];
+
+      for (const check of allChecks) {
+        const statusLabel =
+          check.status === "pass" ? "Pass" :
+          check.status === "fail" ? "Fail" : "Review";
+          const statusColor =
+            check.status === "pass" ? "#16A34A" :
+            check.status === "fail" ? "#DC2626" : "#D97706";
+          const nameLines: string[] = pdf.splitTextToSize(check.name, W - 60);
+        const finding = (check.finding ?? "").replace(/^(PASS|FAIL|WARN|UNKNOWN):\s*/i, "").replace(/\.$/, "");
+          const findLines: string[] = finding ? pdf.splitTextToSize(finding, W - 60) : [];
+        const rowH = nameLines.length * 12 + (findLines.length ? findLines.length * 11 + 4 : 0) + 18;
+
+        needBreak(rowH + 4);
+
+          // Colored left rail
+          const [rr, rg, rb] = hexRgb(statusColor);
+          pdf.setFillColor(rr, rg, rb);
+          pdf.rect(L, y + 4, 3, rowH - 8, "F");
+
+          // Status label — right-aligned, colored
+          tc(statusColor); pdf.setFont("helvetica", "bold"); pdf.setFontSize(8);
+        pdf.text(statusLabel, pageW - R, y + 12, { align: "right" });
+
+        // Check name
+        tc("#0A1628"); pdf.setFont("helvetica", "bold"); pdf.setFontSize(9);
+          pdf.text(nameLines, L + 12, y + 12);
+
+        // Finding
+        if (findLines.length) {
+          tc("#5B6776"); pdf.setFont("helvetica", "normal"); pdf.setFontSize(8.5);
+            pdf.text(findLines, L + 12, y + 12 + nameLines.length * 12 + 5);
+        }
+
+        // Bottom hairline
+        dc("#EEF2F7"); pdf.setLineWidth(0.3);
+        pdf.line(L, y + rowH, pageW - R, y + rowH);
+
+        y += rowH + 6;
+      }
+
+      // ── Footer on every page ────────────────────────────────────────────────
+      const totalPages = (pdf.internal as unknown as { pages: unknown[] }).pages.length - 1;
+      for (let p = 1; p <= totalPages; p++) {
+        pdf.setPage(p);
+        dc("#D6E2EE"); pdf.setLineWidth(0.4);
+        pdf.line(L, pageH - 30, pageW - R, pageH - 30);
+        tc("#8898AA"); pdf.setFont("helvetica", "normal"); pdf.setFontSize(7);
+        pdf.text("ParkGrader  ·  parkgrader.com", L, pageH - 18);
+        pdf.text(`${p} / ${totalPages}`, pageW - R, pageH - 18, { align: "right" });
+      }
+
+      pdf.save(`${title}.pdf`);
     } finally {
       window.setTimeout(() => {
         setIsGeneratingPdf(false);
       }, 300);
     }
-  }, [displayReportUrl, isGeneratingPdf]);
+  }, [displayReportUrl, isGeneratingPdf, reportUrl, scanResult]);
 
   const syncReportPath = useCallback((nextReportId: string) => {
     if (typeof window === "undefined") {
@@ -2039,6 +2388,9 @@ export default function Home() {
       syncReportPath(nextReportId);
 
       const normalizedEmail = (leadEmail ?? email).trim().toLowerCase();
+      const normalizedName = (options?.nameOverride ?? name).trim();
+      const normalizedPhone = (options?.phoneOverride ?? "").trim();
+      const savedAt = new Date().toISOString();
       const reportSnapshotPayload: ReportSnapshot = {
         reportId: nextReportId,
         reportUrl,
@@ -2048,27 +2400,29 @@ export default function Home() {
           options?.localReviewCompareByCheckIdOverride ?? localReviewCompareByCheckId,
         previousScanResult: previousScanResult || undefined,
         answers,
-        name,
+        name: normalizedName,
         propertyName,
         email: normalizedEmail,
         emailConfirmation,
-        savedAt: new Date().toISOString(),
+        savedAt,
         demoMode,
       };
 
       const payload = {
         email: normalizedEmail || undefined,
-        name,
+        name: normalizedName,
+        phone: normalizedPhone || undefined,
         property_name: propertyName,
         url: reportUrl,
         score: scanResult.score ?? 0,
         property_type: selectedPropertyType,
         primary_challenge: selectedChallenge,
         property_size: selectedPropertySize ?? "25-75",
-        scan_date: new Date().toISOString(),
+        scan_date: savedAt,
         report_id: nextReportId,
         report_snapshot: reportSnapshotPayload,
         send_email_copy: Boolean(options?.sendEmailCopy),
+        lead_intent: options?.leadIntent || undefined,
         hubspot_contact_id: hubspotContactId || undefined,
         tradeshow_consent_email: isTradeshowMode ? tradeshowConsentEmailCopy : undefined,
         tradeshow_consent_marketing: isTradeshowMode ? tradeshowConsentMarketing : undefined,
@@ -2168,6 +2522,15 @@ export default function Home() {
     }
   }, []);
 
+  const handleRescan = useCallback(() => {
+    if (!reportUrl || isScanning || !scanResult) {
+      return;
+    }
+    setPartialLoadingMessageIndex(0);
+    setStep("partial");
+    void runScan(reportUrl, scanResult.industry);
+  }, [isScanning, reportUrl, runScan, scanResult]);
+
   useEffect(() => {
     if (!isTradeshowMode || step !== "landing" || !isContactSearchOpen) {
       return;
@@ -2240,17 +2603,22 @@ export default function Home() {
     setLocalReviewCompareByCheckId({});
     setFlippedCardId(null);
     setEngagementIssueClicks(0);
-    setHasShownEngagementPrompt(false);
-    setHasClosedSecondIssue(false);
-    setSecondIssueCloseScrollY(null);
-    setIsReportUnlocked(isTradeshowMode);
+    // (Obsolete: engagement prompt state removed)
+    setIsReportUnlocked(true);
+    setShowEmailPrompt(false);
+    setHasTriggeredEmailPrompt(false);
     hydratedFromSavedReportRef.current = false;
     loadingStartRef.current = null;
     if (typeof window !== "undefined") {
       window.history.replaceState({}, "", "/");
     }
     setReportUrl(normalized);
-    setStep("guided");
+    if (isTradeshowMode) {
+      setStep("guided");
+    } else {
+      setQuestionsComplete(true);
+      setStep("partial");
+    }
     void runScan(normalized, "campground");
   };
 
@@ -2291,12 +2659,13 @@ export default function Home() {
     setEmail(snapshot.email);
     setEmailConfirmation(snapshot.emailConfirmation);
     setDemoMode(snapshot.demoMode);
-    const unlocked = Boolean(snapshot.email) || Boolean(snapshot.demoMode) || isTradeshowMode;
-    setIsReportUnlocked(unlocked);
+    setReportSavedAt(snapshot.savedAt ?? "");
+    // Report is always unlocked for viewing; suppress email prompt if we already have their email
+    setIsReportUnlocked(true);
+    setShowEmailPrompt(false);
+    setHasTriggeredEmailPrompt(Boolean(snapshot.email) || Boolean(snapshot.demoMode));
     setEngagementIssueClicks(0);
-    setHasShownEngagementPrompt(unlocked);
-    setHasClosedSecondIssue(false);
-    setSecondIssueCloseScrollY(null);
+    // (Obsolete: engagement prompt state removed)
     syncReportPath(snapshot.reportId);
     setStep("report");
   }, [isTradeshowMode, syncReportPath]);
@@ -2423,7 +2792,8 @@ export default function Home() {
           setReportId(nextReportId);
         }
         syncReportPath(nextReportId);
-        setIsReportUnlocked(Boolean(demoMode) || isTradeshowMode || isInternalTestDomain(reportUrl));
+        setIsReportUnlocked(true);
+        setReportSavedAt(new Date().toISOString());
         setStep("report");
       },
       Math.max(0, minDelay - elapsed),
@@ -2500,6 +2870,222 @@ export default function Home() {
     return () => window.cancelAnimationFrame(raf);
   }, [scanResult?.score, step]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const toggleChatWidget = () => {
+      const hs = (window as unknown as {
+        HubSpotConversations?: { widget?: { load?: () => void; remove?: () => void } };
+      }).HubSpotConversations;
+      const widget = hs?.widget;
+      if (!widget) {
+        return;
+      }
+
+      if (step === "report") {
+        widget.load?.();
+      } else {
+        widget.remove?.();
+      }
+    };
+
+    // Try immediately and once again shortly after script hydration.
+    toggleChatWidget();
+    const retry = window.setTimeout(toggleChatWidget, 500);
+    return () => window.clearTimeout(retry);
+  }, [step]);
+
+  const openSharePrompt = useCallback(() => {
+    setShareEmail(email);
+    setSharePromptNotice("");
+    setShowSharePrompt(true);
+  }, [email]);
+
+  const openEngagementPrompt = useCallback(() => {
+    setEmailPromptMode("email");
+    setEngagementEmail(email);
+    setEngagementPromptNotice("");
+    setShowEmailPrompt(true);
+  }, [email]);
+
+  const openCallbackPromptStep = useCallback(() => {
+    setEmailPromptMode("callback");
+    setCallbackName(name);
+    setCallbackEmail(email || engagementEmail);
+    setCallbackPhone("");
+    setCallbackPromptNotice("");
+  }, [email, engagementEmail, name]);
+
+  const submitSharePrompt = async () => {
+    const normalizedEmail = shareEmail.trim().toLowerCase();
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!normalizedEmail) {
+      setSharePromptNotice("Please enter an email address.");
+      return;
+    }
+
+    if (!emailPattern.test(normalizedEmail)) {
+      setSharePromptNotice("Please enter a valid email address.");
+      return;
+    }
+
+    setIsSubmittingSharePrompt(true);
+    setSharePromptNotice("");
+
+    try {
+      const result = await saveAuditSession(normalizedEmail, { sendEmailCopy: true, leadIntent: "share-report" });
+      setEmail(normalizedEmail);
+      setEmailConfirmation(
+        isInternalTestEmail(normalizedEmail)
+          ? `Test mode is on for ${normalizedEmail}. No email was sent.`
+          : result.emailSent
+            ? `A copy of this report has been sent to ${normalizedEmail}.`
+            : `We saved your report, but could not send email right now. Use the share link below.`,
+      );
+      setShowSharePrompt(false);
+    } catch (error) {
+      setSharePromptNotice(error instanceof Error ? error.message : "Unable to send report.");
+    } finally {
+      setIsSubmittingSharePrompt(false);
+    }
+  };
+
+  const submitEngagementPrompt = async () => {
+    const normalizedEmail = engagementEmail.trim().toLowerCase();
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!normalizedEmail) {
+      setEngagementPromptNotice("Please enter your email address.");
+      return;
+    }
+
+    if (!emailPattern.test(normalizedEmail)) {
+      setEngagementPromptNotice("Please enter a valid email address.");
+      return;
+    }
+
+    setIsSubmittingEngagementPrompt(true);
+    setEngagementPromptNotice("");
+
+    try {
+      const result = await saveAuditSession(normalizedEmail, { sendEmailCopy: true, leadIntent: "engagement-email" });
+      setEmail(normalizedEmail);
+      setEmailConfirmation(
+        isInternalTestEmail(normalizedEmail)
+          ? `Test mode is on for ${normalizedEmail}. No email was sent.`
+          : result.emailSent
+            ? `A copy of this report has been sent to ${normalizedEmail}.`
+            : `We saved your report, but could not send email right now. Use the share link below.`,
+      );
+      setShowEmailPrompt(false);
+    } catch (error) {
+      setEngagementPromptNotice(error instanceof Error ? error.message : "Unable to send report.");
+    } finally {
+      setIsSubmittingEngagementPrompt(false);
+    }
+  };
+
+  const submitCallbackPrompt = async () => {
+    const normalizedName = callbackName.trim();
+    const normalizedEmail = callbackEmail.trim().toLowerCase();
+    const normalizedPhone = callbackPhone.trim();
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const phoneDigits = normalizedPhone.replace(/\D/g, "");
+
+    if (!normalizedName) {
+      setCallbackPromptNotice("Please enter your name.");
+      return;
+    }
+
+    if (!normalizedEmail) {
+      setCallbackPromptNotice("Please enter your email address.");
+      return;
+    }
+
+    if (!emailPattern.test(normalizedEmail)) {
+      setCallbackPromptNotice("Please enter a valid email address.");
+      return;
+    }
+
+    if (phoneDigits.length < 10) {
+      setCallbackPromptNotice("Please enter a valid phone number.");
+      return;
+    }
+
+    setIsSubmittingCallbackPrompt(true);
+    setCallbackPromptNotice("");
+
+    try {
+      await saveAuditSession(normalizedEmail, {
+        sendEmailCopy: false,
+        nameOverride: normalizedName,
+        phoneOverride: normalizedPhone,
+        leadIntent: "callback-request",
+      });
+      setName(normalizedName);
+      setEmail(normalizedEmail);
+      setShowEmailPrompt(false);
+      setEmailConfirmation("Thanks. We’ll pull up your site before we call.");
+    } catch (error) {
+      setCallbackPromptNotice(error instanceof Error ? error.message : "Unable to send your request.");
+    } finally {
+      setIsSubmittingCallbackPrompt(false);
+    }
+  };
+
+  const submitCheckHelpRequest = async () => {
+    if (!activeCheck) {
+      return;
+    }
+
+    const normalizedName = checkHelpName.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPhone = checkHelpPhone.trim();
+    const phoneDigits = normalizedPhone.replace(/\D/g, "");
+
+    if (!normalizedName) {
+      setCheckHelpNotice("Please enter your name.");
+      return;
+    }
+
+    if (phoneDigits.length < 10) {
+      setCheckHelpNotice("Please enter a valid phone number.");
+      return;
+    }
+
+    setIsSubmittingCheckHelp(true);
+    setCheckHelpNotice("");
+
+    try {
+      await saveAuditSession(normalizedEmail, {
+        sendEmailCopy: false,
+        nameOverride: normalizedName,
+        phoneOverride: normalizedPhone,
+        leadIntent: `check-help:${activeCheck.id}`,
+      });
+      setName(normalizedName);
+      setEmail(normalizedEmail);
+      setCheckHelpSubmitted(true);
+      setEmailConfirmation("Thanks. We received your request and will follow up about this issue.");
+    } catch (error) {
+      setCheckHelpNotice(error instanceof Error ? error.message : "Unable to send your request.");
+    } finally {
+      setIsSubmittingCheckHelp(false);
+    }
+  };
+
+  const handleDownloadIntent = useCallback(() => {
+    if (!hasTriggeredEmailPrompt) {
+      setHasTriggeredEmailPrompt(true);
+      openEngagementPrompt();
+      return;
+    }
+    void generatePdfReport();
+  }, [generatePdfReport, hasTriggeredEmailPrompt, openEngagementPrompt]);
+
   const submitLead = async () => {
     const normalizedEmail = email.trim().toLowerCase();
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -2542,7 +3128,8 @@ export default function Home() {
           : "Lead capture is connected, but HubSpot credentials are not configured yet.",
       );
       setIsReportUnlocked(true);
-      setHasShownEngagementPrompt(true);
+      setShowEmailPrompt(false);
+      // (Obsolete: engagement prompt state removed)
       setPendingProtectedAction(null);
       setStep("report");
       if (actionToRun) {
@@ -2559,7 +3146,8 @@ export default function Home() {
       );
       setLeadNotice(error instanceof Error ? error.message : "Lead capture failed.");
       setIsReportUnlocked(true);
-      setHasShownEngagementPrompt(true);
+      setShowEmailPrompt(false);
+      // (Obsolete: engagement prompt state removed)
       setPendingProtectedAction(null);
       setStep("report");
       if (actionToRun) {
@@ -2632,75 +3220,60 @@ export default function Home() {
   }, [emailShareLink, generatePdfReport, smsShareLink, takeReportWithYou]);
 
   const requestProtectedAction = useCallback((action: ProtectedAction) => {
+    if (action === "share") {
+      openSharePrompt();
+      return;
+    }
     if (isReportUnlocked) {
       void performProtectedAction(action);
       return;
     }
     setPendingProtectedAction(action);
-  }, [isReportUnlocked, performProtectedAction]);
+  }, [isReportUnlocked, openSharePrompt, performProtectedAction]);
 
   const openCheckDetails = useCallback((checkId: string) => {
-    setFlippedCardId(checkId);
-    if (!isReportUnlocked) {
-      setEngagementIssueClicks((value) => value + 1);
-    }
-  }, [isReportUnlocked]);
-
-  useEffect(() => {
-    const wasOpen = previousFlippedCardIdRef.current !== null;
-    const isNowClosed = wasOpen && flippedCardId === null;
-
-    if (isNowClosed && !isReportUnlocked && step === "report" && engagementIssueClicks >= 2 && !hasClosedSecondIssue) {
-      setHasClosedSecondIssue(true);
-      setSecondIssueCloseScrollY(window.scrollY);
-    }
-
-    previousFlippedCardIdRef.current = flippedCardId;
-  }, [engagementIssueClicks, flippedCardId, hasClosedSecondIssue, isReportUnlocked, step]);
-
-  useEffect(() => {
-    if (step !== "report" || isReportUnlocked || hasShownEngagementPrompt) {
-      return;
-    }
-
-    if (engagementIssueClicks < 3 || flippedCardId !== null) {
-      return;
-    }
-
-    setHasShownEngagementPrompt(true);
-    setPendingProtectedAction((existing) => existing ?? "share");
-  }, [engagementIssueClicks, flippedCardId, hasShownEngagementPrompt, isReportUnlocked, step]);
-
-  useEffect(() => {
-    if (step !== "report" || isReportUnlocked || hasShownEngagementPrompt) {
-      return;
-    }
-
-    const handleScroll = () => {
-      const scrollableHeight = document.documentElement.scrollHeight - window.innerHeight;
-      if (scrollableHeight <= 0) {
-        return;
+    setEngagementIssueClicks((value) => {
+      const next = value + 1;
+      // On the 3rd click, show prompt instead of opening the card underneath.
+      if (!hasTriggeredEmailPrompt && next >= 3) {
+        setFlippedCardId(null);
+        openEngagementPrompt();
+        setHasTriggeredEmailPrompt(true);
+        return next;
       }
 
-      const scrollPct = (window.scrollY / scrollableHeight) * 100;
-      const hasBrowsedAfterSecondClose =
-        hasClosedSecondIssue && secondIssueCloseScrollY !== null && Math.abs(window.scrollY - secondIssueCloseScrollY) >= 120;
+      setFlippedCardId(checkId);
+      return next;
+    });
+  }, [hasTriggeredEmailPrompt]);
 
-      if ((scrollPct >= 50 || hasBrowsedAfterSecondClose) && flippedCardId === null) {
-        setHasShownEngagementPrompt(true);
-        setPendingProtectedAction((existing) => existing ?? "share");
+  // Engagement-based email prompt: scroll 40% or 3rd card click
+  useEffect(() => {
+    if (step !== "report" || hasTriggeredEmailPrompt) return;
+    const onScroll = () => {
+      const doc = document.documentElement;
+      const scrollY = window.scrollY || doc.scrollTop;
+      const winH = window.innerHeight || doc.clientHeight;
+      const fullH = doc.scrollHeight;
+      if (fullH > 0 && (scrollY + winH) / fullH >= 0.4) {
+        openEngagementPrompt();
+        setHasTriggeredEmailPrompt(true);
       }
     };
-
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    handleScroll();
-
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [flippedCardId, hasClosedSecondIssue, hasShownEngagementPrompt, isReportUnlocked, secondIssueCloseScrollY, step]);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [step, hasTriggeredEmailPrompt, openEngagementPrompt]);
 
   const visibleChecks = (scanResult?.checks ?? []).filter(
-    (check) => !(check.id === "abandonment-recovery-readiness" && check.status === "unknown"),
+    (check) => {
+      if (check.id === "abandonment-recovery-readiness" && check.status === "unknown") {
+        return false;
+      }
+      return resultStatusFilter[check.status];
+    },
   );
+
+  const isFilterActive = !resultStatusFilter.pass || !resultStatusFilter.fail || !resultStatusFilter.unknown;
 
   const detailedPainGroups = PAIN_LEVEL_ORDER.map((painLevel) => ({
     painLevel,
@@ -2715,6 +3288,19 @@ export default function Home() {
         return a.name.localeCompare(b.name);
       }),
   })).filter((entry) => entry.checks.length > 0);
+
+  // Progressive tease: pick the 3 most alarming failing checks to show ungated
+  const ungatedCheckIds = useMemo(() => {
+    const failingChecks = visibleChecks
+      .filter((c) => c.status === "fail")
+      .sort((a, b) => {
+        const painA = getPainLevelForCheck(a);
+        const painB = getPainLevelForCheck(b);
+        const painOrder: Record<PainLevel, number> = { "money-losers": 0, "maintenance-needed": 1, "watchlist": 2, "working-well": 3 };
+        return (painOrder[painA] ?? 3) - (painOrder[painB] ?? 3);
+      });
+    return new Set(failingChecks.slice(0, 3).map((c) => c.id));
+  }, [visibleChecks]);
 
   return (
     <main className="relative min-h-screen bg-[#F8FAFC] text-[#0A1628]">
@@ -2740,6 +3326,7 @@ export default function Home() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
             >
               <TopographicPanel />
               <div className="relative z-10 text-center">
@@ -2752,12 +3339,14 @@ export default function Home() {
         {step === "landing" && !isHydratingSharedReport && (
           <motion.section
             key="landing"
-            className="relative flex min-h-screen items-center overflow-hidden bg-[#F8FAFC] px-6 pb-24 pt-10 sm:px-10 sm:pt-12"
+            className="relative overflow-hidden bg-[#F8FAFC]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}
           >
             <TopographicPanel />
+
             {!isWebsiteMode ? (
               <>
                 <Image
@@ -2765,33 +3354,33 @@ export default function Home() {
                   alt="ParkGrader"
                   width={181}
                   height={32}
-                  style={{ height: "2rem", width: "auto" }}
-                  className="pointer-events-none absolute left-1/2 top-6 z-20 -translate-x-1/2 lg:left-10 lg:top-8 lg:translate-x-0"
+                  className="pointer-events-none absolute left-1/2 top-6 z-20 -translate-x-1/2 h-7 w-auto lg:left-10 lg:top-8 lg:translate-x-0"
                 />
 
               </>
             ) : null}
 
             <motion.div
-              className="relative z-10 mx-auto w-full max-w-3xl"
-              initial={{ y: 24, opacity: 0 }}
+              className="relative z-10 mx-auto flex w-full max-w-7xl flex-col items-center px-4 lg:min-h-screen lg:flex-row lg:items-end lg:px-12 lg:gap-16"
+              initial={{ y: 32, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
             >
-              <div className="mx-auto max-w-[52rem] px-3 py-6 sm:px-6 sm:py-8">
-                <div className="flex flex-col items-center text-center">
-                  <p className="text-sm font-normal tracking-[0.08em] text-[#9AA9B5]">
-                    100+ PARKS GRADED SO FAR
+              <div className="mx-auto max-w-[52rem] px-3 pt-20 pb-6 sm:px-6 sm:pt-24 sm:pb-8 lg:mx-0 lg:max-w-xl lg:self-center lg:pt-6 lg:pb-8">
+                <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
+                  <p className="text-sm font-medium tracking-[0.04em] text-[#D97706]">
+                    THE AVERAGE PARK WE AUDIT HAS 9 FIXABLE ISSUES
                   </p>
-                  <h1 className="mt-4 text-[2rem] leading-[0.95] text-[#0A1628] sm:text-[2.8rem] sm:whitespace-nowrap">
-                    <span className="sm:hidden">Get more bookings</span>
-                    <span className="hidden sm:inline">Get more direct bookings</span>
+                  <h1 className="mt-4 text-[1.75rem] leading-[1.1] text-[#0A1628] sm:text-[2.4rem]">
+                    Find your park&apos;s booking leaks
                   </h1>
-                  <p className="mt-4 max-w-[56ch] text-base leading-7 text-[#5B6776] sm:text-xl sm:leading-8">
-                    See exactly what's costing you direct bookings — and what to fix first.
+                  <p className="mt-4 max-w-[52ch] text-lg leading-7 text-[#5B6776] sm:text-xl sm:leading-8">
+                    Most park websites lose 30%+ of direct bookings to fixable problems. Get a free audit in 60 seconds — no email required.
                   </p>
                 </div>
-                <div className="mx-auto mt-9 w-full max-w-[34ch]">
+                <div className="mx-auto mt-9 w-full max-w-[34ch] lg:mx-0 lg:max-w-none">
                   <div className="text-left">
+                    <label className="mb-2 block text-center text-xs font-medium tracking-wide text-[#5B6776] uppercase lg:text-left">Enter your park website</label>
                     <motion.div
                       animate={urlInputShakeCount > 0 ? { x: [0, -10, 10, -7, 7, -3, 3, 0] } : { x: 0 }}
                       transition={{ duration: 0.4 }}
@@ -2821,7 +3410,7 @@ export default function Home() {
                             }}
                             placeholder="Search by name, email, or company"
                             className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-lg font-semibold text-[#0A1628] text-center outline-none transition-colors placeholder:font-normal placeholder:text-[#6E7C90] ${
-                              scanError ? "border-[#DC2626]" : "border-[#8DA4BA] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                              scanError ? "border-[#DC2626]" : "border-[#5B6776] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
                             }`}
                           />
                           {isContactSearchOpen ? (
@@ -2877,9 +3466,9 @@ export default function Home() {
                               void beginAssessment();
                             }
                           }}
-                          placeholder="Enter your park website"
-                          className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-lg font-semibold text-[#0A1628] text-center outline-none transition-colors placeholder:font-normal placeholder:text-[#6E7C90] ${
-                            scanError ? "border-[#DC2626]" : "border-[#8DA4BA] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                          placeholder="e.g. happycampsrvpark.com"
+                          className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-lg font-semibold text-[#0A1628] text-center lg:text-left outline-none transition-colors placeholder:font-normal placeholder:text-[#6E7C90] ${
+                            scanError ? "border-[#DC2626]" : "border-[#5B6776] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
                           }`}
                         />
                       )}
@@ -2890,14 +3479,85 @@ export default function Home() {
                     whileHover={{ y: -1 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={beginAssessment}
-                    className="mx-auto mt-8 block min-h-12 w-full rounded-2xl bg-[#2DA4A9] px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-[#24858A] sm:max-w-[260px]"
+                    className="btn-rounded mx-auto mt-8 block min-h-12 w-full bg-[#2DA4A9] px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-[#24858A] lg:mx-0"
                   >
                     Get My Free Audit
                   </motion.button>
-                  <p className="mt-4 text-center text-base text-[#5B6776]">100% free. No credit card required.</p>
+                </div>
+              </div>
+
+              {/* iPhone mockup */}
+              <div className="relative mx-auto mt-8 h-[420px] w-[500px] overflow-hidden sm:mt-10 sm:h-[460px] sm:w-[560px] lg:absolute lg:bottom-0 lg:right-0 lg:mt-0 lg:h-auto lg:w-auto lg:overflow-visible">
+                <div className="relative w-full translate-x-[10%] lg:w-[850px] lg:translate-x-[28%]">
+                  {/* Audit mockup inside iPhone */}
+                  <div className="absolute top-[12%] left-[36.5%]! h-[67%]! w-[31%]! -translate-x-[52%] overflow-hidden rounded-[10px] bg-[#F8FAFC]">
+                    {/* iOS status bar overlay */}
+                    <div className="relative z-10 flex items-center justify-between bg-[#F8FAFC] px-[8%] pt-[4%] pb-[1.5%]">
+                      <span className="text-[clamp(4px,1.8vw,10px)] font-semibold text-[#0A1628]">9:41</span>
+                      <div className="flex items-center gap-[6%]">
+                        {/* Signal bars */}
+                        <svg className="h-[clamp(4px,1.2vw,8px)] w-auto" viewBox="0 0 17 10" fill="#0A1628">
+                          <rect x="0" y="6" width="3" height="4" rx="0.5"/>
+                          <rect x="4" y="4" width="3" height="6" rx="0.5"/>
+                          <rect x="8" y="2" width="3" height="8" rx="0.5"/>
+                          <rect x="12" y="0" width="3" height="10" rx="0.5"/>
+                        </svg>
+                        {/* Wifi */}
+                        <svg className="h-[clamp(4px,1.2vw,8px)] w-auto" viewBox="0 0 16 12" fill="#0A1628">
+                          <path d="M8 0C5.2 0 2.6 1.1.8 3l1.5 1.4C3.8 2.8 5.8 2 8 2s4.2.8 5.7 2.4L15.2 3C13.4 1.1 10.8 0 8 0z"/>
+                          <path d="M8 4C6.1 4 4.4 4.8 3.2 6l1.5 1.4C5.5 6.5 6.7 6 8 6s2.5.5 3.3 1.4L12.8 6C11.6 4.8 9.9 4 8 4z"/>
+                          <path d="M8 8c-.8 0-1.6.3-2.1.9L8 11l2.1-2.1C9.6 8.3 8.8 8 8 8z"/>
+                        </svg>
+                        {/* Battery */}
+                        <svg className="h-[clamp(4px,1.2vw,8px)] w-auto" viewBox="0 0 25 10" fill="none">
+                          <rect x=".5" y=".5" width="20" height="9" rx="1.5" stroke="#0A1628" strokeWidth="1"/>
+                          <rect x="2" y="2" width="14" height="6" rx=".5" fill="#0A1628"/>
+                          <path d="M22 3.5h1.5a1 1 0 011 1v1a1 1 0 01-1 1H22V3.5z" fill="#0A1628" fillOpacity=".4"/>
+                        </svg>
+                      </div>
+                    </div>
+                    <img
+                      className="h-full w-full object-cover object-top"
+                      src="https://assets.buckysolutions.com/website-assets/parkgrader_mobile_example.png"
+                      alt="ParkGrader audit report on iPhone"
+                    />
+                  </div>
+                  {/* iPhone frame */}
+                  <img
+                    alt=""
+                    src="https://deifkwefumgah.cloudfront.net/shadcnblocks/block/hero49/iphone.png"
+                    className="relative z-10 w-full"
+                    loading="lazy"
+                    width="1008.71"
+                    height="857"
+                  />
                 </div>
               </div>
             </motion.div>
+            {/* Full-width bottom stroke */}
+            <div className="relative z-20 h-px w-full bg-[#0A1628]/10" />
+
+              {/* ── FAQ ── */}
+              <div className="relative z-10">
+              <Faq3
+                heading="Common questions"
+                description=""
+                items={[
+                  { id: "faq-1", question: "Is this really free?", answer: "Yes — 100% free, no credit card, no commitment. You get your full score and category grades immediately. We ask for an email only to send you the detailed breakdown with specific fixes." },
+                  { id: "faq-2", question: "What exactly does the audit check?", answer: "We run 35+ automated checks across five categories: mobile speed & technical health, booking flow & conversion, site content & trust signals, Google presence & local SEO, and competitive positioning against nearby parks." },
+                  { id: "faq-3", question: "How long does it take?", answer: "About 60 seconds. Enter your website URL, answer a couple of quick questions about your property, and we scan everything automatically." },
+                  { id: "faq-4", question: "Will you try to sell me something?", answer: "Yes, we offer services at Bucky Solutions. But this audit is genuinely free with no obligation, and no sales call unless you ask for one." },
+                  { id: "faq-5", question: "What do I do with the results?", answer: "Every failing check includes a plain-English explanation of the problem and how to fix it. Most issues can be handled by your web developer or even on your own — no agency required." },
+                  { id: "faq-6", question: "Do you sell my information?", answer: "No. We never sell or share your data. Your email is only used to deliver your audit report." },
+                ]}
+                supportHeading=""
+                supportDescription=""
+                supportButtonText=""
+                supportButtonUrl=""
+              />
+              </div>
+            {/* Full-width bottom stroke under entire section */}
+            <div className="relative z-20 h-px w-full bg-[#0A1628]/10" />
             <PolicyFooter fixed />
           </motion.section>
         )}
@@ -2906,19 +3566,21 @@ export default function Home() {
           <motion.section
             key="guided"
             className="relative flex min-h-screen flex-col overflow-hidden bg-[#F8FAFC] px-6 pb-24 pt-10 sm:px-10 sm:pt-12"
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -24 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
           >
             <div className="mx-auto flex w-full max-w-[820px] flex-1 flex-col justify-center">
               {!questionsComplete && currentQuestion ? (
                 <motion.div
                   className="mx-auto w-full max-w-[680px]"
-                  initial={{ opacity: 0, y: 16 }}
+                  initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                 >
                   <Image src={PARKGRADER_LOGO} alt="ParkGrader" width={181} height={32} style={{ height: "2rem", width: "auto" }} className="mx-auto" />
-                  <motion.h2 key={currentQuestion.id} className="mt-10 text-center text-2xl leading-tight text-[#0A1628] sm:text-[2.2rem]" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }}>
+                  <motion.h2 key={currentQuestion.id} className="mt-10 text-center text-2xl leading-tight text-[#0A1628] sm:text-[2.2rem]" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
                     {currentQuestion.text}
                   </motion.h2>
                   <p className="mt-4 text-center text-base text-[#5B6776]">Choose the option that best matches your property today.</p>
@@ -2935,9 +3597,9 @@ export default function Home() {
                               : "border-[#E6EBF0] bg-[#fafcfd] text-[#0A1628] hover:border-[#BFD2DC]"
                           }`}
                           onClick={() => selectAnswer(option)}
-                          initial={{ opacity: 0, y: 12 }}
+                          initial={{ opacity: 0, y: 14 }}
                           animate={{ opacity: 1, y: 0, scale: pulse ? [1, 1.02, 1] : 1 }}
-                          transition={{ delay: 0.08 + index * 0.08, duration: 0.28 }}
+                          transition={{ delay: 0.1 + index * 0.07, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                           whileTap={{ scale: 0.98 }}
                         >
                           <span className={`flex h-5 w-5 shrink-0 items-center justify-center border ${
@@ -2963,25 +3625,30 @@ export default function Home() {
         {step === "partial" && (
           <motion.section
             key="partial"
-            className="flex h-screen items-center justify-center bg-[#F8FAFC] px-6 pb-24 pt-16 sm:px-10"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
+            className="relative flex h-screen items-center justify-center overflow-hidden bg-[#F8FAFC] px-6 pb-24 pt-16 sm:px-10"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
           >
-            <div className="flex w-full max-w-xl flex-col items-center text-center">
-              <motion.div
-                className="h-12 w-12 rounded-full border-[3px] border-[#D9E2EC] border-t-[#0A1628]"
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Number.POSITIVE_INFINITY, duration: 0.9, ease: "linear" }}
-              />
+            <TopographicPanel />
+            <div className="relative z-10 flex w-full max-w-xl flex-col items-center text-center">
+              <div className="h-36 w-36">
+                <Lottie
+                  animationData={starLoaderAnimation}
+                  loop
+                  autoplay
+                  className="h-full w-full"
+                />
+              </div>
               <AnimatePresence mode="wait">
                 <motion.p
                   key={partialLoadingMessageIndex}
-                  className="mt-6 text-base text-[#5B6776]"
-                  initial={{ opacity: 0, y: 4 }}
+                  className="-mt-1 text-base text-[#5B6776]"
+                  initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }}
                 >
                   {PARTIAL_LOADING_PHASES[partialLoadingMessageIndex]?.message}
                 </motion.p>
@@ -2993,44 +3660,85 @@ export default function Home() {
         )}
 
         {step === "report" && scanResult && (
-          <motion.section ref={reportSectionRef} key="report" className="report-page min-h-screen bg-[#F8FAFC]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <div className="px-6 pb-16 pt-12 sm:px-10">
+          <motion.section key="report" className="report-page relative min-h-screen overflow-hidden bg-[#F8FAFC]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}>
+            <TopographicPanel mode="report" />
+            <div ref={reportSectionRef} className="relative z-10 px-6 pb-16 pt-12 sm:px-10">
               <div className="mx-auto max-w-[760px]">
                 <div className="flex items-center justify-between gap-4">
                   <button type="button" onClick={resetToLandingPage} className="inline-flex cursor-pointer items-center" aria-label="Back to ParkGrader start page">
-                    <Image src={PARKGRADER_LOGO} alt="ParkGrader" width={181} height={32} style={{ height: "2rem", width: "auto" }} />
+                    <Image src={PARKGRADER_LOGO} alt="ParkGrader" width={181} height={32} className="h-7 w-auto" />
                   </button>
                   <div className={`print-hidden flex flex-wrap items-center justify-end gap-1 text-right text-[#0A1628] ${isReportUnlocked ? "" : "opacity-80"}`}>
-                    {IS_REVIEW_COACH_ENABLED ? (
+                    <button
+                      type="button"
+                      onClick={handleRescan}
+                      aria-label="Run scan again"
+                      title="Re-scan this website"
+                      className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-[#2DA4A9]"
+                    >
+                      <ArrowPathIcon className="h-5 w-5" aria-hidden="true" />
+                    </button>
+                    <div ref={filterMenuRef} className="relative">
                       <button
                         type="button"
-                        onClick={() => setIsReviewCoachOpen(!isReviewCoachOpen)}
-                        aria-label="View Review Coach"
-                        title="Review Coach — Analyze reviews & draft replies"
-                        className="inline-flex h-10 items-center gap-1.5 border border-[#DCE5EC] bg-white px-3 text-xs font-semibold text-[#0A1628] transition-colors hover:border-[#2DA4A9] hover:text-[#2DA4A9]"
+                        onClick={() => setIsFilterMenuOpen((value) => !value)}
+                        aria-label="Filter checks by status"
+                        title="Choose which check statuses to show"
+                        aria-expanded={isFilterMenuOpen}
+                        className={`inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-[#2DA4A9] ${isFilterActive ? "text-[#2DA4A9]" : ""}`}
                       >
-                        <SparklesIcon className="h-4 w-4" aria-hidden="true" />
-                        Reviews
+                        <QueueListIcon className="h-5 w-5" aria-hidden="true" />
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => requestProtectedAction("share")}
-                      aria-label="Share report"
-                      title="Share report"
-                      className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-[#2DA4A9]"
-                    >
-                      <ShareIcon className="h-5 w-5" aria-hidden="true" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => isTradeshowMode ? setTradeshowEmailModalOpen(true) : requestProtectedAction("email-share")}
-                      aria-label="Email"
-                      title="Email"
-                      className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-[#2DA4A9]"
-                    >
-                      <EnvelopeIcon className="h-5 w-5" aria-hidden="true" />
-                    </button>
+
+                      {isFilterMenuOpen ? (
+                        <div className="absolute right-0 top-full z-30 mt-2 w-48 rounded-xl border border-[#DCE6EE] bg-[rgba(248,250,252,0.97)] p-2 shadow-[0_12px_28px_rgba(10,22,40,0.14)] backdrop-blur-sm">
+                          <button
+                            type="button"
+                            onClick={() => setResultStatusFilter({ pass: true, fail: true, unknown: true })}
+                            className="flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm text-[#0A1628] transition-colors hover:bg-white"
+                          >
+                            <span>Show all</span>
+                            <span className="text-xs text-[#5B6776]">Reset</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setResultStatusFilter((previous) => {
+                              const enabledCount = Object.values(previous).filter(Boolean).length;
+                              if (previous.fail && enabledCount === 1) return previous;
+                              return { ...previous, fail: !previous.fail };
+                            })}
+                            className="mt-1 flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm text-[#0A1628] transition-colors hover:bg-white"
+                          >
+                            <span>Needs Fix</span>
+                            <span className={`text-xs ${resultStatusFilter.fail ? "text-[#2DA4A9]" : "text-[#9AA9B5]"}`}>{resultStatusFilter.fail ? "On" : "Off"}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setResultStatusFilter((previous) => {
+                              const enabledCount = Object.values(previous).filter(Boolean).length;
+                              if (previous.unknown && enabledCount === 1) return previous;
+                              return { ...previous, unknown: !previous.unknown };
+                            })}
+                            className="mt-1 flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm text-[#0A1628] transition-colors hover:bg-white"
+                          >
+                            <span>Review</span>
+                            <span className={`text-xs ${resultStatusFilter.unknown ? "text-[#2DA4A9]" : "text-[#9AA9B5]"}`}>{resultStatusFilter.unknown ? "On" : "Off"}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setResultStatusFilter((previous) => {
+                              const enabledCount = Object.values(previous).filter(Boolean).length;
+                              if (previous.pass && enabledCount === 1) return previous;
+                              return { ...previous, pass: !previous.pass };
+                            })}
+                            className="mt-1 flex w-full items-center justify-between rounded-lg px-2 py-2 text-left text-sm text-[#0A1628] transition-colors hover:bg-white"
+                          >
+                            <span>Passing</span>
+                            <span className={`text-xs ${resultStatusFilter.pass ? "text-[#2DA4A9]" : "text-[#9AA9B5]"}`}>{resultStatusFilter.pass ? "On" : "Off"}</span>
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
                     <button
                       type="button"
                       onClick={() => requestProtectedAction("qr")}
@@ -3052,7 +3760,8 @@ export default function Home() {
                   </div>
                 </div>
 
-                <motion.div className="mx-auto mt-8" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+                <motion.div className="mx-auto mt-8" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}>
+                  <div className="overflow-hidden rounded-2xl border border-[#DCE6EE] bg-[rgba(248,250,252,0.84)] pt-6 shadow-[0_10px_30px_rgba(115,146,176,0.08)] backdrop-blur-sm">
                   <div className="print-hidden flex items-end justify-center">
                     <div className="relative" style={{ width: 240, height: 148 }}>
                     <svg viewBox="0 0 240 148" className="h-full w-full">
@@ -3068,12 +3777,13 @@ export default function Home() {
                       <motion.path
                         d="M 20 128 A 100 100 0 0 1 220 128"
                         fill="none"
-                        stroke={finalScore >= 75 ? "#16A34A" : finalScore >= 50 ? "#D97706" : "#DC2626"}
+                        stroke={gaugeColor}
                         strokeWidth="16"
                         strokeLinecap="round"
-                        initial={{ pathLength: 0 }}
-                        animate={{ pathLength: displayScore / 100 }}
-                        transition={{ duration: 1.1, ease: "easeOut" }}
+                        initial={{ pathLength: 0, opacity: 0 }}
+                        animate={{ pathLength: gaugeTargetProgress }}
+                        transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
+                        style={{ opacity: gaugeTargetProgress > 0 ? 1 : 0 }}
                       />
                       {/* Tick marks at 25 / 50 / 75 */}
                       {[25, 50, 75].map((p) => {
@@ -3108,10 +3818,34 @@ export default function Home() {
                     </svg>
                     </div>
                   </div>
-                  <a href={`https://${reportUrl}`} target="_blank" rel="noopener noreferrer" className="mx-auto mt-3 flex max-w-[220px] items-center justify-center gap-1 break-all text-center text-xs text-[#5B6776] hover:text-[#1A2B3C] transition-colors">
+                  <a href={`https://${reportUrl}`} target="_blank" rel="noopener noreferrer" className="mx-auto mb-10 mt-2 flex max-w-[220px] items-center justify-center gap-1 break-all text-center text-xs text-[#5B6776] hover:text-[#1A2B3C] transition-colors">
                     <span>{displayReportUrl}</span>
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3 w-3 flex-shrink-0"><path fillRule="evenodd" d="M4.25 5.5a.75.75 0 0 0-.75.75v8.5c0 .414.336.75.75.75h8.5a.75.75 0 0 0 .75-.75v-4a.75.75 0 0 1 1.5 0v4A2.25 2.25 0 0 1 12.75 17h-8.5A2.25 2.25 0 0 1 2 14.75v-8.5A2.25 2.25 0 0 1 4.25 4h5a.75.75 0 0 1 0 1.5h-5Zm7.25-.75a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0V6.31l-5.22 5.22a.75.75 0 1 1-1.06-1.06l5.22-5.22H12.25a.75.75 0 0 1-.75-.75Z" clipRule="evenodd" /></svg>
                   </a>
+                  {/* Card action buttons */}
+                  <div className="mt-4 flex divide-x divide-[#E6EBF0] border-t border-[#E6EBF0]">
+                    <button
+                      type="button"
+                      onClick={handleDownloadIntent}
+                      className="report-btn-rounded flex flex-1 items-center justify-center gap-2 rounded-bl-2xl py-3 text-xs font-medium text-[#5B6776] transition-colors hover:bg-[#F8FAFB] hover:text-[#0A1628]"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                        <path fillRule="evenodd" d="M10 3a.75.75 0 0 1 .75.75v7.44l2.47-2.47a.75.75 0 1 1 1.06 1.06l-3.75 3.75a.75.75 0 0 1-1.06 0L5.72 9.78a.75.75 0 0 1 1.06-1.06L9.25 11.19V3.75A.75.75 0 0 1 10 3ZM3.75 15a.75.75 0 0 0 0 1.5h12.5a.75.75 0 0 0 0-1.5H3.75Z" clipRule="evenodd" />
+                      </svg>
+                      Download Report
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openSharePrompt}
+                      className="report-btn-rounded flex flex-1 items-center justify-center gap-2 rounded-br-2xl py-3 text-xs font-medium text-[#5B6776] transition-colors hover:bg-[#F8FAFB] hover:text-[#0A1628]"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                        <path d="M13 4.5a2.5 2.5 0 1 1 .702 1.737L6.97 9.604a2.518 2.518 0 0 1 0 .792l6.733 3.367a2.5 2.5 0 1 1-.671 1.341l-6.733-3.367a2.5 2.5 0 1 1 0-3.474l6.733-3.366A2.52 2.52 0 0 1 13 4.5Z" />
+                      </svg>
+                      Share Report
+                    </button>
+                  </div>
+                  </div>
                 </motion.div>
 
                 {isTradeshowMode ? (
@@ -3120,14 +3854,14 @@ export default function Home() {
 
                 {previousScanResult ? (
                   <motion.div
-                    className="mt-8 border border-[#E6EBF0] bg-white p-5"
+                    className="mt-8 rounded-2xl border border-[#DCE6EE] bg-[rgba(248,250,252,0.84)] p-5 shadow-[0_10px_30px_rgba(115,146,176,0.08)] backdrop-blur-sm"
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                   >
                     <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">Score comparison</p>
                     <div className="mt-3 flex items-center gap-4">
                       <span className="text-2xl font-medium text-[#94A3B8]">{previousScanResult.score}</span>
-                      <ArrowRightIcon className="h-5 w-5 text-[#94A3B8]" aria-hidden="true" />
+                      <ChevronRightIcon className="h-5 w-5 text-[#94A3B8]" aria-hidden="true" />
                       <span className={`text-2xl font-medium ${scanResult.score > previousScanResult.score ? "text-[#16A34A]" : scanResult.score < previousScanResult.score ? "text-[#DC2626]" : "text-[#0A1628]"}`}>
                         {scanResult.score}
                       </span>
@@ -3163,10 +3897,14 @@ export default function Home() {
                   </motion.div>
                 ) : null}
 
+                {/* Category Grade Summary removed as requested */}
+
+                {/* ── Detail Cards (only shown after unlock) ── */}
+                {isReportUnlocked || isTradeshowMode ? (
                 <div className="relative mt-12">
                   <motion.div className="relative space-y-0">
                   {detailedPainGroups.map(({ painLevel, checks }, categoryIndex) => (
-                    <motion.section key={painLevel} className="pb-8 pt-6 md:pb-10 md:pt-7" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: categoryIndex * 0.04 }}>
+                    <motion.section key={painLevel} className="pb-8 pt-6 md:pb-10 md:pt-7" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: categoryIndex * 0.06, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
                       <button
                         type="button"
                         onClick={() => {
@@ -3178,56 +3916,48 @@ export default function Home() {
                         className="mb-6 flex w-full cursor-pointer items-center gap-4 text-left"
                         aria-expanded={!collapsedPainGroups[painLevel]}
                       >
-                        <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full ${PAIN_LEVEL_ICON_STYLES[painLevel]}`}><PainLevelIcon painLevel={painLevel} /></span>
-                        <h3 className="text-base uppercase tracking-[0.08em] text-[#0A1628] md:text-lg">{PAIN_LEVEL_LABELS[painLevel]}</h3>
-                        <div className="h-px flex-1 bg-[#E6EBF0]" />
+                        <h3 className="text-[22px] font-medium tracking-[-0.03em] text-[#0A1628] md:text-[26px]">{PAIN_LEVEL_LABELS[painLevel]}</h3>
+                        <div className="h-px flex-1 bg-[#B8C4D1]" />
                         <ChevronDownIcon className={`h-4 w-4 text-[#6B7B8D] transition-transform ${collapsedPainGroups[painLevel] ? "rotate-180" : ""}`} aria-hidden="true" />
                       </button>
                       {!collapsedPainGroups[painLevel] ? (
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
+                      <div className="overflow-hidden rounded-2xl border border-[#DCE6EE] bg-[rgba(248,250,252,0.84)] shadow-[0_10px_30px_rgba(115,146,176,0.08)] backdrop-blur-sm">
                         {checks.map((check, index) => (
                           <motion.article
                             key={check.id}
-                            className="flip-card group relative flex min-h-[220px] flex-col cursor-pointer transition-shadow md:aspect-square md:min-h-0"
+                            className="flip-card group relative cursor-pointer transition-colors"
                             onClick={() => openCheckDetails(check.id)}
-                            initial={{ opacity: 0, y: 12 }}
+                            initial={{ opacity: 0, y: 14 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.04 }}
+                            transition={{ delay: index * 0.05, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                           >
-                            <div className={`flex h-full flex-col border border-[#E6EBF0] bg-[#FEFFFF] p-5 md:p-6 ${
-                              check.status === "pass"
-                                ? "border-t-[3px] border-t-[#2DA4A9]"
-                                : check.status === "fail"
-                                  ? "border-t-[3px] border-t-[#DC2626]"
-                                  : "border-t-[3px] border-t-[#94A3B8]"
-                            }`}>
-                              <div className="flex items-start justify-between gap-3">
-                                <p className="flex items-center gap-1.5 text-xs uppercase tracking-[0.08em] text-[#5B6776]">
-                                  <span className="text-[#6B7B8D]"><CheckIcon check={check} /></span>
-                                  <span>{getCheckDisplayLabel(check)}</span>
-                                </p>
+                            <div className={`relative flex h-full flex-col gap-4 px-5 py-5 transition-colors hover:bg-[rgba(255,255,255,0.38)] md:flex-row md:items-start md:gap-6 md:px-6 md:py-6 ${index < checks.length - 1 ? "border-b border-[#DCE6EE]" : ""}`}>
+                              <div className="min-w-0 flex-1 pr-8">
+                                <div className="flex items-start gap-3">
+                                  {(() => {
+                                    const footerMeta = getCheckFooterMeta(check);
+                                    return (
+                                      <span
+                                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] ${
+                                          check.status === "pass"
+                                            ? "bg-[#E8F7F4] text-[#0E7C66]"
+                                            : check.status === "fail"
+                                              ? "bg-[#FDECEC] text-[#B42318]"
+                                              : "bg-[#EEF2F6] text-[#667085]"
+                                        }`}
+                                      >
+                                        {footerMeta ?? (check.status === "pass" ? "Passing" : check.status === "fail" ? "Needs Fix" : "Review")}
+                                      </span>
+                                    );
+                                  })()}
+                                </div>
+                                <p className="mt-4 max-w-3xl text-lg font-medium leading-8 text-[#0A1628]">{getCheckHeadline(check)}</p>
+                                {check.estimatedImpact ? (
+                                  <p className="mt-3 max-w-3xl text-base leading-7 text-[#5B6776]">{check.estimatedImpact.replace(/^Estimated impact:\s*/i, "")}</p>
+                                ) : null}
                               </div>
-                              <p className="mt-5 text-lg font-medium leading-8 text-[#0A1628]">{getCheckHeadline(check)}</p>
-                              {check.estimatedImpact ? (
-                                <>
-                                  <p className="mt-3 text-base leading-7 text-[#5B6776]">{check.estimatedImpact.replace(/^Estimated impact:\s*/i, "")}</p>
-                                  <p className="mt-3 text-left">
-                                    <button
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        openCheckDetails(check.id);
-                                      }}
-                                      className="cursor-pointer text-base font-medium text-[#2DA4A9] underline transition-colors"
-                                    >
-                                      {check.status === "pass" ? "Why this matters" : "How do I fix this?"}
-                                    </button>
-                                  </p>
-                                </>
-                              ) : null}
-                              <div className="mt-auto flex items-center justify-between gap-3 pt-4">
-                                {(() => { const footerMeta = getCheckFooterMeta(check); return footerMeta ? <span className="text-[11px] text-[#94A3B8]">{footerMeta}</span> : <span />; })()}
-                                <ArrowRightIcon className="flip-hint-icon h-4 w-4 shrink-0 text-[#9AA9B5] transition-colors group-hover:text-[#2DA4A9]" aria-hidden="true" />
+                              <div className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2">
+                                <ChevronRightIcon className="flip-hint-icon h-4 w-4 shrink-0 text-[#9AA9B5] transition-colors group-hover:text-[#2DA4A9]" aria-hidden="true" />
                               </div>
                             </div>
                           </motion.article>
@@ -3237,9 +3967,268 @@ export default function Home() {
                     </motion.section>
                   ))}
                   </motion.div>
+
+
                 </div>
+                ) : null}
 
                 <AnimatePresence>
+                  {showSharePrompt && !isTradeshowMode ? (
+                    <motion.div
+                      className="print-hidden fixed inset-0 z-50 flex items-center justify-center bg-[#0A1628]/55 px-4 py-6 backdrop-blur-[2px]"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onClick={() => setShowSharePrompt(false)}
+                    >
+                      <motion.div
+                        className="relative w-full max-w-[560px] overflow-hidden rounded-2xl border border-[#E6EBF0] bg-[#fafcfd] shadow-[0_24px_80px_rgba(10,22,40,0.24)]"
+                        initial={{ opacity: 0, y: 24, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 16, scale: 0.97 }}
+                        transition={{ type: "spring", damping: 26, stiffness: 300 }}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setShowSharePrompt(false)}
+                          className="absolute right-4 top-4 inline-flex h-11 w-11 items-center justify-center text-2xl leading-none text-[#9AA9B5] transition-colors hover:text-[#0A1628]"
+                          aria-label="Close share prompt"
+                        >
+                          <XMarkIcon className="h-7 w-7" aria-hidden="true" />
+                        </button>
+
+                        <div className="p-6 sm:p-8">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">Want a copy of this report?</p>
+                            <p className="mt-3 text-2xl leading-9 text-[#0A1628]">Send this report to your inbox</p>
+                            <p className="mt-3 text-base leading-7 text-[#5B6776]">
+                              Enter an email and we&apos;ll send the full report there. If you just need the link, you can copy it below instead.
+                            </p>
+                            <div className="mt-6 grid w-full grid-cols-1 gap-3">
+                              <input
+                                type="email"
+                                inputMode="email"
+                                autoComplete="email"
+                                autoCapitalize="none"
+                                spellCheck={false}
+                                value={shareEmail}
+                                onChange={(event) => {
+                                  setShareEmail(event.target.value);
+                                  if (sharePromptNotice) {
+                                    setSharePromptNotice("");
+                                  }
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    void submitSharePrompt();
+                                  }
+                                }}
+                                placeholder="Email address"
+                                className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] ${
+                                  sharePromptNotice ? "border-[#DC2626] focus:border-[#DC2626]" : "border-[#C4D3E2] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                                }`}
+                              />
+                              {sharePromptNotice ? <p className="-mt-1 text-left text-base text-[#B42318]">{sharePromptNotice}</p> : null}
+                            </div>
+                            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                              <button
+                                type="button"
+                                onClick={() => void submitSharePrompt()}
+                                className="report-btn-rounded inline-flex min-h-12 flex-1 items-center justify-center bg-[#2DA4A9] px-5 py-3 text-base text-white transition-colors hover:bg-[#24858A] disabled:cursor-not-allowed disabled:opacity-70"
+                                disabled={isSubmittingSharePrompt}
+                              >
+                                {isSubmittingSharePrompt ? "Sending..." : "Send Report"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void copyShareLink()}
+                                className="report-btn-rounded inline-flex min-h-12 flex-1 items-center justify-center border border-[#D1DCE8] px-5 py-3 text-base text-[#0A1628] transition-colors hover:border-[#2DA4A9] hover:text-[#2DA4A9]"
+                              >
+                                {copied ? "Link Copied" : "Copy Share Link"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  ) : null}
+
+                  {showEmailPrompt && !isTradeshowMode ? (
+                    <motion.div
+                      className="print-hidden fixed inset-0 z-50 flex items-center justify-center bg-[#0A1628]/55 px-4 py-6 backdrop-blur-[2px]"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onClick={() => setShowEmailPrompt(false)}
+                    >
+                      <motion.div
+                        className="relative w-full max-w-[560px] overflow-hidden rounded-2xl border border-[#E6EBF0] bg-[#fafcfd] shadow-[0_24px_80px_rgba(10,22,40,0.24)]"
+                        initial={{ opacity: 0, y: 24, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 16, scale: 0.97 }}
+                        transition={{ type: "spring", damping: 26, stiffness: 300 }}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setShowEmailPrompt(false)}
+                          className="absolute right-4 top-4 inline-flex h-11 w-11 items-center justify-center text-2xl leading-none text-[#9AA9B5] transition-colors hover:text-[#0A1628]"
+                          aria-label="Close callback prompt"
+                        >
+                          <XMarkIcon className="h-7 w-7" aria-hidden="true" />
+                        </button>
+
+                        <div className="p-6 sm:p-8">
+                          <div>
+                            {emailPromptMode === "email" ? (
+                              <>
+                                <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">Take this report with you</p>
+                                <p className="mt-3 text-2xl leading-9 text-[#0A1628]">Get your priority fix checklist by email</p>
+                                <p className="mt-3 text-base leading-7 text-[#5B6776]">
+                                  Enter your email and we&apos;ll send this full report plus the top fixes to tackle first.
+                                </p>
+                                <div className="mt-6 grid w-full grid-cols-1 gap-3">
+                                  <input
+                                    type="email"
+                                    inputMode="email"
+                                    autoComplete="email"
+                                    autoCapitalize="none"
+                                    spellCheck={false}
+                                    value={engagementEmail}
+                                    onChange={(event) => {
+                                      setEngagementEmail(event.target.value);
+                                      if (engagementPromptNotice) {
+                                        setEngagementPromptNotice("");
+                                      }
+                                    }}
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        void submitEngagementPrompt();
+                                      }
+                                    }}
+                                    placeholder="Email address"
+                                    className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] ${
+                                      engagementPromptNotice ? "border-[#DC2626] focus:border-[#DC2626]" : "border-[#C4D3E2] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                                    }`}
+                                  />
+                                  {engagementPromptNotice ? <p className="-mt-1 text-left text-base text-[#B42318]">{engagementPromptNotice}</p> : null}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => void submitEngagementPrompt()}
+                                  className="report-btn-rounded mt-6 inline-flex min-h-12 w-full items-center justify-center bg-[#2DA4A9] px-5 py-3 text-base text-white transition-colors hover:bg-[#24858A] disabled:cursor-not-allowed disabled:opacity-70"
+                                  disabled={isSubmittingEngagementPrompt}
+                                >
+                                  {isSubmittingEngagementPrompt ? "Sending..." : "Send My Report"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={openCallbackPromptStep}
+                                  className="report-btn-rounded mt-3 inline-flex min-h-10 w-full items-center justify-center border border-[#D1DCE8] px-5 py-2 text-base text-[#0A1628] transition-colors hover:border-[#2DA4A9] hover:text-[#2DA4A9]"
+                                >
+                                  Prefer a callback instead?
+                                </button>
+                                <p className="mt-3 text-center text-xs leading-relaxed text-[#5B6776]">
+                                  No spam. We only send your report and occasional tips. Unsubscribe anytime.
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">Need a second set of eyes?</p>
+                                <p className="mt-3 text-2xl leading-9 text-[#0A1628]">Want us to take a look and call you back?</p>
+                                <p className="mt-3 text-base leading-7 text-[#5B6776]">
+                                  We&apos;ll pull up your site before we dial. Leave your name, email, and phone number and we&apos;ll reach out after reviewing the report.
+                                </p>
+                                <div className="mt-6 grid w-full grid-cols-1 gap-3">
+                                  <input
+                                    type="text"
+                                    autoComplete="name"
+                                    value={callbackName}
+                                    onChange={(event) => {
+                                      setCallbackName(event.target.value);
+                                      if (callbackPromptNotice) {
+                                        setCallbackPromptNotice("");
+                                      }
+                                    }}
+                                    placeholder="Name"
+                                    className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] ${
+                                      callbackPromptNotice ? "border-[#DC2626] focus:border-[#DC2626]" : "border-[#C4D3E2] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                                    }`}
+                                  />
+                                  <input
+                                    type="email"
+                                    inputMode="email"
+                                    autoComplete="email"
+                                    autoCapitalize="none"
+                                    spellCheck={false}
+                                    value={callbackEmail}
+                                    onChange={(event) => {
+                                      setCallbackEmail(event.target.value);
+                                      if (callbackPromptNotice) {
+                                        setCallbackPromptNotice("");
+                                      }
+                                    }}
+                                    placeholder="Email address"
+                                    className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] ${
+                                      callbackPromptNotice ? "border-[#DC2626] focus:border-[#DC2626]" : "border-[#C4D3E2] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                                    }`}
+                                  />
+                                  <input
+                                    type="tel"
+                                    inputMode="tel"
+                                    autoComplete="tel"
+                                    value={callbackPhone}
+                                    onChange={(event) => {
+                                      setCallbackPhone(formatPhoneInput(event.target.value));
+                                      if (callbackPromptNotice) {
+                                        setCallbackPromptNotice("");
+                                      }
+                                    }}
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        void submitCallbackPrompt();
+                                      }
+                                    }}
+                                    placeholder="Phone number"
+                                    className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] ${
+                                      callbackPromptNotice ? "border-[#DC2626] focus:border-[#DC2626]" : "border-[#C4D3E2] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                                    }`}
+                                  />
+                                  {callbackPromptNotice ? <p className="-mt-1 text-left text-base text-[#B42318]">{callbackPromptNotice}</p> : null}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => void submitCallbackPrompt()}
+                                  className="report-btn-rounded mt-6 inline-flex min-h-12 w-full items-center justify-center bg-[#2DA4A9] px-5 py-3 text-base text-white transition-colors hover:bg-[#24858A] disabled:cursor-not-allowed disabled:opacity-70"
+                                  disabled={isSubmittingCallbackPrompt}
+                                >
+                                  {isSubmittingCallbackPrompt ? "Sending..." : "Request a Callback"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEmailPromptMode("email")}
+                                  className="report-btn-rounded mt-3 inline-flex min-h-10 w-full items-center justify-center border border-[#D1DCE8] px-5 py-2 text-base text-[#0A1628] transition-colors hover:border-[#2DA4A9] hover:text-[#2DA4A9]"
+                                >
+                                  Back to email option
+                                </button>
+                                <p className="mt-3 text-center text-xs leading-relaxed text-[#5B6776]">
+                                  By submitting this form, you agree to hear from Bucky Solutions about this report.{' '}
+                                  <a href="https://www.buckysolutions.com/privacy-policy/" target="_blank" rel="noreferrer" className="text-[#2DA4A9]">
+                                    Privacy Policy
+                                  </a>
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  ) : null}
+
                   {pendingProtectedAction ? (
                     <motion.div
                       className="print-hidden fixed inset-0 z-50 flex items-center justify-center bg-[#0A1628]/55 px-4 py-6 backdrop-blur-[2px]"
@@ -3249,11 +4238,11 @@ export default function Home() {
                       onClick={() => setPendingProtectedAction(null)}
                     >
                       <motion.div
-                        className="relative w-full max-w-[640px] overflow-hidden border border-[#E6EBF0] bg-[#fafcfd] shadow-[0_24px_80px_rgba(10,22,40,0.24)]"
-                        initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                        className="relative w-full max-w-[640px] overflow-hidden rounded-2xl border border-[#DCE6EE] bg-[rgba(248,250,252,0.92)] shadow-[0_24px_80px_rgba(10,22,40,0.24)] backdrop-blur-sm"
+                        initial={{ opacity: 0, y: 24, scale: 0.96 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 18, scale: 0.98 }}
-                        transition={{ duration: 0.18, ease: "easeOut" }}
+                        exit={{ opacity: 0, y: 16, scale: 0.97 }}
+                        transition={{ type: "spring", damping: 26, stiffness: 300 }}
                         onClick={(event) => event.stopPropagation()}
                       >
                         <button
@@ -3266,11 +4255,11 @@ export default function Home() {
                         </button>
 
                         <div className="p-6 sm:p-8">
-                          <div className="pr-10">
+                          <div>
                             <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">One quick step</p>
-                            <p className="mt-3 text-2xl leading-9 text-[#0A1628]">Email this report to yourself</p>
+                            <p className="mt-3 text-2xl leading-9 text-[#0A1628]">Get your full report</p>
                             <p className="mt-3 text-base leading-7 text-[#5B6776]">
-                              Enter your email and we&apos;ll send a copy of this audit to your inbox right away. You&apos;ll also unlock the share link, QR code, and print options.
+                              Enter your email and we&apos;ll send the complete breakdown — every check, what&apos;s failing, and how to fix it — straight to your inbox.
                             </p>
                             <div className="mt-6 grid w-full grid-cols-1 gap-3">
                               <motion.div
@@ -3303,7 +4292,7 @@ export default function Home() {
                               onClick={() => void submitLead()}
                               className="mt-6 inline-flex min-h-12 w-full items-center justify-center bg-[#2DA4A9] px-5 py-3 text-base text-white transition-colors hover:bg-[#24858A]"
                             >
-                              {isSubmittingLead ? "Sending..." : "Send my report"}
+                              {isSubmittingLead ? "Sending..." : "Send My Free Report"}
                             </button>
                             <p className="mt-3 text-center text-xs leading-relaxed text-[#5B6776]">
                               By entering your email you agree to receive a copy of this audit and occasional tips from Bucky Solutions. You can unsubscribe at any time. See our{" "}
@@ -3326,32 +4315,33 @@ export default function Home() {
                       onClick={() => setIsQrModalOpen(false)}
                     >
                       <motion.div
-                        className="relative w-full max-w-[360px] overflow-hidden border border-[#DDE7F0] bg-[#F8FAFC] shadow-[0_24px_80px_rgba(10,22,40,0.24)]"
-                        initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                        className="relative w-full max-w-[400px] overflow-hidden rounded-2xl border border-[#E6EBF0] bg-[#fafcfd] shadow-[0_24px_80px_rgba(10,22,40,0.24)]"
+                        initial={{ opacity: 0, y: 24, scale: 0.96 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 18, scale: 0.98 }}
-                        transition={{ duration: 0.18, ease: "easeOut" }}
+                        exit={{ opacity: 0, y: 16, scale: 0.97 }}
+                        transition={{ type: "spring", damping: 26, stiffness: 300 }}
                         onClick={(event) => event.stopPropagation()}
                       >
                         <button
                           type="button"
                           onClick={() => setIsQrModalOpen(false)}
-                          className="absolute right-3 top-3 inline-flex h-10 w-10 items-center justify-center text-2xl leading-none text-[#9AA9B5] transition-colors hover:text-[#0A1628]"
+                          className="absolute right-4 top-4 inline-flex h-11 w-11 items-center justify-center text-2xl leading-none text-[#9AA9B5] transition-colors hover:text-[#0A1628]"
                           aria-label="Close QR code"
                         >
-                          <XMarkIcon className="h-6 w-6" aria-hidden="true" />
+                          <XMarkIcon className="h-7 w-7" aria-hidden="true" />
                         </button>
-                        <div className="border-b border-[#E6EBF0] bg-[linear-gradient(180deg,#ffffff_0%,#f6f9fc_100%)] px-6 py-5">
-                          <p className="text-xs uppercase tracking-[0.1em] text-[#5B6776]">Share via QR</p>
-                          <p className="mt-1 text-base text-[#0A1628]">Scan to open this report instantly.</p>
+                        <div className="border-b border-[#E6EBF0] px-6 pb-5 pt-6 sm:px-8">
+                          <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">Share Report</p>
+                          <p className="mt-2 text-2xl leading-9 text-[#0A1628]">Scan this QR code</p>
+                          <p className="mt-2 text-base leading-7 text-[#5B6776]">Open this report instantly on another device.</p>
                         </div>
-                        <div className="flex flex-col items-center px-6 pb-6 pt-5">
+                        <div className="flex flex-col items-center px-6 pb-6 pt-6 sm:px-8">
                           {qrCodeDataUrl ? (
-                            <div className="border border-[#E6EBF0] bg-white p-3 shadow-[0_8px_20px_rgba(10,22,40,0.08)]">
+                            <div className="rounded-xl border border-[#E6EBF0] bg-white p-3 shadow-[0_8px_20px_rgba(10,22,40,0.08)]">
                               <Image src={qrCodeDataUrl} alt="QR code to open this audit report" width={176} height={176} className="h-[176px] w-[176px]" unoptimized />
                             </div>
                           ) : isGeneratingQrCode ? (
-                            <div className="flex h-[202px] w-[202px] items-center justify-center border border-[#E6EBF0] bg-white text-base text-[#5B6776]">
+                            <div className="flex h-[202px] w-[202px] items-center justify-center rounded-xl border border-[#E6EBF0] bg-white text-base text-[#5B6776]">
                               Preparing QR code...
                             </div>
                           ) : (
@@ -3361,9 +4351,9 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() => void copyShareLink()}
-                              className="mt-4 inline-flex items-center justify-center border border-[#D1DCE8] px-3 py-1.5 text-xs text-[#0A1628] transition-colors hover:border-[#2DA4A9] hover:text-[#2DA4A9]"
+                              className="report-btn-rounded mt-5 inline-flex min-h-10 w-full items-center justify-center border border-[#D1DCE8] px-4 py-2 text-base text-[#0A1628] transition-colors hover:border-[#2DA4A9] hover:text-[#2DA4A9]"
                             >
-                              {copied ? "Copied" : "Copy share link"}
+                              {copied ? "Copied" : "Copy Share Link"}
                             </button>
                           ) : null}
                         </div>
@@ -3494,19 +4484,11 @@ export default function Home() {
                       onClick={() => setFlippedCardId(null)}
                     >
                       <motion.div
-                        className={`relative w-full max-w-[640px] overflow-hidden border border-[#E6EBF0] bg-[#fafcfd] shadow-[0_24px_80px_rgba(10,22,40,0.24)] ${
-                          showFixContent
-                            ? activeCheck.status === "fail"
-                              ? "border-t-[3px] border-t-[#DC2626]"
-                              : activeCheck.status === "pass"
-                                ? "border-t-[3px] border-t-[#2DA4A9]"
-                                : "border-t-[3px] border-t-[#94A3B8]"
-                            : ""
-                        }`}
-                        initial={{ opacity: 0, y: 18, scale: 0.98 }}
+                        className="relative w-full max-w-[640px] overflow-hidden rounded-2xl border border-[#DCE6EE] bg-[rgba(248,250,252,0.92)] shadow-[0_24px_80px_rgba(10,22,40,0.24)] backdrop-blur-sm"
+                        initial={{ opacity: 0, y: 24, scale: 0.96 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 18, scale: 0.98 }}
-                        transition={{ duration: 0.18, ease: "easeOut" }}
+                        exit={{ opacity: 0, y: 16, scale: 0.97 }}
+                        transition={{ type: "spring", damping: 26, stiffness: 300 }}
                         onClick={(event) => event.stopPropagation()}
                       >
                         <button
@@ -3519,18 +4501,20 @@ export default function Home() {
                         </button>
 
                         <div className="p-6 sm:p-8">
-                          {showFixContent ? (
+                          {showFixContent && !showCheckHelpForm ? (
                             <>
-                              <div className="pr-10">
+                              <div>
                                 <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">{getCheckDisplayLabel(activeCheck)}</p>
                               </div>
                               <p className="mt-3 text-xl font-medium leading-8 text-[#0A1628]">{getCheckHeadline(activeCheck)}</p>
                             </>
                           ) : null}
-                          {showFixContent ? (
+                          {showFixContent && !showCheckHelpForm ? (
                             <div className="mt-5">
                               <p className="text-base leading-7 text-[#5B6776]">
-                                {activeCheck.status === "pass" ? activeCheckBenefit : activeCheckDirectFix}
+                                {activeCheck.status === "pass"
+                                  ? activeCheckBenefit
+                                  : renderInlineReviewLinkedDetails(activeCheck, activeCheckDirectFix)}
                               </p>
                 
                               {activeCheck.id === "pagespeed-mobile" && scanResult?.mobileTrafficPercent ? (
@@ -3640,8 +4624,91 @@ export default function Home() {
                             </div>
                           ) : null}
 
+                          {showFixContent && showCheckHelpForm ? (
+                            <div>
+                              {checkHelpSubmitted ? (
+                                <div className="space-y-3">
+                                  <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">Request received</p>
+                                  <p className="text-2xl leading-9 text-[#0A1628]">We&apos;ll follow up on this issue shortly</p>
+                                  <p className="text-base leading-7 text-[#5B6776]">Thanks. We&apos;ll review this check and reach out with next steps.</p>
+                                  <div className="mt-4 flex justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowCheckHelpForm(false)}
+                                      className="report-btn-rounded inline-flex min-h-10 items-center justify-center border border-[#D1DCE8] px-4 py-2 text-base text-[#0A1628] transition-colors hover:border-[#2DA4A9] hover:text-[#2DA4A9]"
+                                    >
+                                      Close
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-3">
+                                  <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">{getCheckDisplayLabel(activeCheck)}</p>
+                                  <p className="text-2xl leading-9 text-[#0A1628]">Tell us where to reach you</p>
+                                  <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <input
+                                      type="text"
+                                      autoComplete="name"
+                                      value={checkHelpName}
+                                      onChange={(event) => {
+                                        setCheckHelpName(event.target.value);
+                                        if (checkHelpNotice) {
+                                          setCheckHelpNotice("");
+                                        }
+                                      }}
+                                      placeholder="Name"
+                                      className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] ${
+                                        checkHelpNotice ? "border-[#DC2626] focus:border-[#DC2626]" : "border-[#C4D3E2] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                                      }`}
+                                    />
+                                    <input
+                                      type="tel"
+                                      inputMode="tel"
+                                      autoComplete="tel"
+                                      value={checkHelpPhone}
+                                      onChange={(event) => {
+                                        setCheckHelpPhone(formatPhoneInput(event.target.value));
+                                        if (checkHelpNotice) {
+                                          setCheckHelpNotice("");
+                                        }
+                                      }}
+                                      onKeyDown={(event) => {
+                                        if (event.key === "Enter") {
+                                          event.preventDefault();
+                                          void submitCheckHelpRequest();
+                                        }
+                                      }}
+                                      placeholder="Phone"
+                                      className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] ${
+                                        checkHelpNotice ? "border-[#DC2626] focus:border-[#DC2626]" : "border-[#C4D3E2] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                                      }`}
+                                    />
+                                  </div>
+                                  {checkHelpNotice ? <p className="text-sm text-[#B42318]">{checkHelpNotice}</p> : null}
+                                  <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowCheckHelpForm(false)}
+                                      className="report-btn-rounded inline-flex min-h-10 items-center justify-center border border-[#D1DCE8] px-4 py-2 text-base text-[#0A1628] transition-colors hover:border-[#2DA4A9] hover:text-[#2DA4A9]"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void submitCheckHelpRequest()}
+                                      disabled={isSubmittingCheckHelp}
+                                      className="report-btn-rounded inline-flex min-h-10 items-center justify-center bg-[#2DA4A9] px-4 py-2 text-base text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
+                                    >
+                                      {isSubmittingCheckHelp ? "Sending..." : "Request Help"}
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+
                           {!showFixContent ? (
-                              <div className="pr-10">
+                              <div>
                                 <p className="text-xs uppercase tracking-[0.08em] text-[#5B6776]">One quick step</p>
                                 <p className="mt-3 text-2xl leading-9 text-[#0A1628]">See all of your fixes</p>
                                 <p className="mt-3 text-base leading-7 text-[#5B6776]">
@@ -3697,37 +4764,48 @@ export default function Home() {
                           ) : null}
                         </div>
 
-                        {showFixContent ? (
-                          <div className="flex flex-col gap-3 border-t border-[#E6EBF0] px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-8">
-                            <p className="hidden text-base text-[#5B6776] sm:block">
-                              {activeCheck.status === "fail"
-                                ? "Need this fixed for you?"
-                                : activeCheck.status === "pass"
-                                  ? "Want to strengthen this area even more?"
-                                  : "Want help validating this area?"}
-                            </p>
-                            <a
-                              href={activeCheckCta.href}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex w-full items-center justify-center bg-[#2DA4A9] px-4 py-2 text-base text-white transition-opacity hover:opacity-90 sm:w-auto"
-                            >
-                              {activeCheckCta.buttonLabel}
-                            </a>
+                        {showFixContent && !showCheckHelpForm ? (
+                          <div className="border-t border-[#E6EBF0] px-6 py-4 sm:px-8">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                              <p className="hidden text-base text-[#5B6776] sm:block">
+                                {activeCheck.status === "fail"
+                                  ? "Need this fixed for you?"
+                                  : activeCheck.status === "pass"
+                                    ? "Want to strengthen this area even more?"
+                                    : "Want help validating this area?"}
+                              </p>
+                              {activeCheck.status === "pass" ? (
+                                <a
+                                  href={activeCheckCta.href}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="report-btn-rounded inline-flex w-full items-center justify-center bg-[#2DA4A9] px-4 py-2 text-base text-white transition-opacity hover:opacity-90 sm:w-auto"
+                                >
+                                  {activeCheckCta.buttonLabel}
+                                </a>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowCheckHelpForm(true);
+                                    setCheckHelpSubmitted(false);
+                                    setCheckHelpNotice("");
+                                    setCheckHelpName(name);
+                                    setCheckHelpPhone("");
+                                  }}
+                                  className="report-btn-rounded inline-flex w-full items-center justify-center bg-[#2DA4A9] px-4 py-2 text-base text-white transition-opacity hover:opacity-90 sm:w-auto"
+                                >
+                                  {activeCheckCta.buttonLabel}
+                                </button>
+                              )}
+                            </div>
                           </div>
                         ) : null}
                       </motion.div>
                     </motion.div>
                   ) : null}
-                </AnimatePresence>
 
-                <AnimatePresence>
-                  {IS_REVIEW_COACH_ENABLED && isReviewCoachOpen && (
-                    <motion.div key="review-coach" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ duration: 0.22, ease: "easeOut" }}>
-                      <ReviewCoachPanel propertyName={propertyName || reportUrl} isVisible={isReviewCoachOpen} />
-                    </motion.div>
-                  )}
                 </AnimatePresence>
 
                 <a

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID?.trim();
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
@@ -74,32 +75,44 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("h-full", "antialiased", dmSans.variable, "font-sans", geist.variable)}>
-      {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ? (
-        <>
-          <Script
-            src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}`}
-            strategy="afterInteractive"
-          />
-          <Script id="ga-init" strategy="afterInteractive">
-            {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}');`}
-          </Script>
-        </>
-      ) : null}
-      {META_PIXEL_ID ? (
-        <>
-          <Script
-            src="https://connect.facebook.net/en_US/fbevents.js"
-            strategy="lazyOnload"
-          />
-          <Script id="meta-pixel-init" strategy="lazyOnload">
-            {`window.fbq=window.fbq||function(){(window.fbq.q=window.fbq.q||[]).push(arguments)};window._fbq=window.fbq;window.fbq.loaded=true;window.fbq.version='2.0';window.fbq('init','${META_PIXEL_ID}');window.fbq('track','PageView');`}
-          </Script>
-        </>
-      ) : null}
+    <html
+      lang="en-US"
+      suppressHydrationWarning
+      className={cn("h-full", "antialiased", dmSans.variable, "font-sans", geist.variable)}
+    >
       <body className="min-h-full flex flex-col">
+        {IS_PRODUCTION ? (
+          <>
+            <Script id="hs-conversations-settings" strategy="afterInteractive">
+              {`window.hsConversationsSettings = window.hsConversationsSettings || {}; window.hsConversationsSettings.loadImmediately = false;`}
+            </Script>
+            <Script
+              id="hs-script-loader"
+              src="https://js-na2.hs-scripts.com/245580588.js"
+              strategy="afterInteractive"
+            />
+          </>
+        ) : null}
+        {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ? (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script id="ga-init" strategy="afterInteractive">
+              {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}');`}
+            </Script>
+          </>
+        ) : null}
+        {IS_PRODUCTION && META_PIXEL_ID ? (
+          <>
+            <Script id="meta-pixel-init" strategy="afterInteractive">
+              {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${META_PIXEL_ID}');fbq('track','PageView');`}
+            </Script>
+          </>
+        ) : null}
         {children}
-        {META_PIXEL_ID ? (
+        {IS_PRODUCTION && META_PIXEL_ID ? (
           <noscript>
             <img
               height="1"

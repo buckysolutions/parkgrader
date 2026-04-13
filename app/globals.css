@@ -98,10 +98,6 @@
 .flip-card:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(10, 22, 40, 0.08); }
 .flip-hint-icon { transition: transform 0.2s ease; }
 .flip-card:hover .flip-hint-icon { transform: translateX(2px); }
-.flip-card,
-.flip-card > div {
-  border-radius: 0 !important;
-}
 
 @keyframes ai-gradient-shift {
   0% {
@@ -153,6 +149,14 @@ input[type="button"],
 input[type="submit"],
 input[type="reset"] {
   border-radius: 0 !important;
+}
+
+.btn-rounded {
+  border-radius: 12px !important;
+}
+
+.report-btn-rounded {
+  border-radius: 12px !important;
 }
 
 input,
