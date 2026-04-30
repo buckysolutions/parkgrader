@@ -301,6 +301,38 @@ const CHECK_ICON_BY_ID: Record<string, HeroIcon> = {
   "checkin-checkout-times": ClockIcon,
 };
 
+const REVIEW_CHECK_IDS = new Set([
+  "google-rating",
+  "review-count",
+  "negative-review-risk",
+  "local-review-competitiveness",
+]);
+
+const stripReviewChecksFromScan = (scan: ScanResponse): ScanResponse => {
+  const checks = scan.checks.filter((check) => !REVIEW_CHECK_IDS.has(check.id));
+  const categoryByName = new Map(scan.categories.map((category) => [category.name, category]));
+  const categories = scan.categories.map((category) => {
+    const categoryChecks = checks.filter((check) => check.category === category.name);
+    const total = categoryChecks.reduce((sum, check) => sum + check.weight, 0);
+    const passed = categoryChecks.reduce((sum, check) => sum + (check.pass ? check.weight : 0), 0);
+    const score = total === 0 ? 0 : Math.round((passed / total) * 100);
+    return {
+      name: category.name,
+      score,
+      passed,
+      total,
+      categoryWeight: categoryByName.get(category.name)?.categoryWeight ?? category.categoryWeight,
+    };
+  });
+
+  return {
+    ...scan,
+    checks,
+    categories,
+    topFails: scan.topFails?.filter((id) => !REVIEW_CHECK_IDS.has(id)),
+  };
+};
+
 const normalizeUrl = (raw: string): string => {
   const value = raw.trim();
   if (!value) {
@@ -476,21 +508,6 @@ const buildDemoScanResult = (mode: Exclude<DemoMode, null>): ScanResponse => {
       effort: "Low",
       impact: "High",
       serviceKey: "rate_page",
-    },
-    {
-      id: "google-rating",
-      name: "Google rating",
-      category: "Can Guests Find You?",
-      status: good ? "pass" : "fail",
-      pass: good,
-      finding: good ? "Google rating is above 4.0." : "Google rating is below 4.0.",
-      details: good
-        ? "Strong rating helps guests trust your park quickly when comparing options on Maps."
-        : "Guests often filter to 4+ stars on Maps. Improve rating momentum by fixing recurring complaints, replying quickly, and asking happy guests for fresh reviews.",
-      weight: 1,
-      effort: "Medium",
-      impact: "High",
-      serviceKey: "google_business",
     },
     {
       id: "mobile-viewport",
@@ -2507,7 +2524,7 @@ export default function Home() {
         return;
       }
       setPreviousScanResult(scanResult);
-      setScanResult(payload);
+      setScanResult(stripReviewChecksFromScan(payload));
       setReportUrl(payload.url);
     } catch (error) {
       if (requestId !== scanRequestRef.current) {
@@ -2649,7 +2666,7 @@ export default function Home() {
     hydratedFromSavedReportRef.current = true;
     setReportId(snapshot.reportId);
     setReportUrl(snapshot.reportUrl);
-    setScanResult(snapshot.scanResult);
+    setScanResult(stripReviewChecksFromScan(snapshot.scanResult));
     setAiFixDraftByCheckId(snapshot.aiFixDraftByCheckId ?? {});
     setLocalReviewCompareByCheckId(snapshot.localReviewCompareByCheckId ?? {});
     setPreviousScanResult(snapshot.previousScanResult ?? null);
@@ -3479,7 +3496,7 @@ export default function Home() {
                     whileHover={{ y: -1 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={beginAssessment}
-                    className="btn-rounded mx-auto mt-8 block min-h-12 w-full bg-[#2DA4A9] px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-[#24858A] lg:mx-0"
+                    className="btn-rounded mx-auto mt-8 block min-h-14 w-full bg-[#2DA4A9] px-6 py-4 text-base font-semibold text-white transition-colors hover:bg-[#24858A] lg:mx-0"
                   >
                     Get My Free Audit
                   </motion.button>

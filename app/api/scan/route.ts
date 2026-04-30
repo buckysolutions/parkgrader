@@ -234,6 +234,7 @@ const platformCatalog = [
   "BookingPal",
   "Firefly",
   "fireflyreservations",
+  "Roomstay",
 ];
 
 const normalizeUrl = (raw: string): string | null => {
@@ -471,6 +472,13 @@ type ApifyReviewData = {
   totalReviewCount: number | null;
   error?: string;
 };
+
+const REVIEW_CHECK_IDS = new Set([
+  "google-rating",
+  "review-count",
+  "negative-review-risk",
+  "local-review-competitiveness",
+]);
 
 const REVIEW_THEME_DEFINITIONS: Array<{ key: string; label: string; keywords: string[]; action: string }> = [
   {
@@ -1343,7 +1351,7 @@ export async function GET(request: NextRequest) {
       hostRoot,
       `${titleHead} ${hostNoWww}`.trim(),
     ];
-    const apifyReviewsPromise = fetchApifyReviews(apifyQueries, apifyApiKey);
+    const apifyReviewsPromise = Promise.resolve<ApifyReviewData | null>(null);
 
     if (!isLikelyOutdoorHospitalitySite({
       hostname: websiteUrl.hostname,
@@ -1453,7 +1461,7 @@ export async function GET(request: NextRequest) {
     const keywordContains = (parts: string[]) => parts.some((part) => loweredHtml.includes(part));
 
     const ratesFound = hrefContains(["/rates", "/pricing", "/reservations"]) || keywordContains(["rates", "pricing", "$", "nightly"]);
-    const bookingLinks = links.filter((href) => /book|reserve|availability|campspot|hipcamp|reserveamerica|roverpass|dockwa|resnexus|newbook|lodgify|streamline|rezfusion|roverpass|staylist/i.test(href));
+    const bookingLinks = links.filter((href) => /book|reserve|availability|checkout|campspot|hipcamp|reserveamerica|roverpass|dockwa|resnexus|newbook|lodgify|streamline|rezfusion|staylist|roomstay/i.test(href));
     // Also detect inline booking forms (date-picker widgets with no outbound <a> link).
     const hasInlineBookingForm = /<form[^>]*>[\s\S]*?(?:arrival|departure|check[ -]?in|check[ -]?out|select dates|adults|children|guests)[\s\S]*?<\/form>/i.test(html);
     const primaryBookingLink = bookingLinks[0] ? new URL(bookingLinks[0], websiteUrl).toString() : null;
@@ -1606,6 +1614,18 @@ export async function GET(request: NextRequest) {
       measure("apifyReviews", () => apifyReviewsPromise),
     ]);
     const bookingLandingHtml = bookingLandingResult.html;
+    const bookingLandingPlatform = platformCatalog.find((platform) => bookingLandingHtml.includes(platform.toLowerCase())) ?? null;
+    const bookingLandingHasReservationFlow = bookingLandingResult.reachable && (
+      /reservation|select your date|choose accommodation|arrival|departure|check[ -]?in|check[ -]?out|guests|adults|children|availability|confirmation|powered by/i.test(bookingLandingHtml) ||
+      /roomstay/i.test(bookingLandingHtml)
+    );
+    const hasBookingSystem = Boolean(
+      detectedPlatform ||
+      bookingLandingPlatform ||
+      hasInlineBookingForm ||
+      hasExternalBookingLink ||
+      bookingLandingHasReservationFlow
+    );
     const fullSiteText = `${loweredHtml} ${subpageText}`;
     const deepSurface = `${loweredHtml} ${bookingLandingHtml} ${subpageText}`;
 
@@ -2004,17 +2024,31 @@ export async function GET(request: NextRequest) {
         id: "booking-platform",
         name: "Online booking system",
         category: "Can Guests Book Online?",
-        status: detectedPlatform || hasInlineBookingForm || hasExternalBookingLink ? "pass" : "fail",
-        confidence: detectedPlatform ? "CONFIRMED" : hasInlineBookingForm || hasExternalBookingLink ? "INFERRED" : "CONFIRMED",
-        evidence: detectedPlatform ? `Detected platform: ${detectedPlatform}.` : hasInlineBookingForm ? "Inline booking form found." : hasExternalBookingLink ? "External booking link found." : "No booking system detected.",
+        status: hasBookingSystem ? "pass" : "fail",
+        confidence: detectedPlatform || bookingLandingPlatform || bookingLandingHasReservationFlow ? "CONFIRMED" : hasInlineBookingForm || hasExternalBookingLink ? "INFERRED" : "CONFIRMED",
+        evidence: detectedPlatform
+          ? `Detected platform: ${detectedPlatform}.`
+          : bookingLandingPlatform
+            ? `Detected booking platform on reservation page: ${bookingLandingPlatform}.`
+            : bookingLandingHasReservationFlow
+              ? "Reservation flow found on booking landing page."
+              : hasInlineBookingForm
+                ? "Inline booking form found."
+                : hasExternalBookingLink
+                  ? "External booking link found."
+                  : "No booking system detected.",
         finding: detectedPlatform
           ? `Detected ${detectedPlatform}.`
+          : bookingLandingPlatform
+            ? `Detected ${bookingLandingPlatform} on the reservation page.`
+            : bookingLandingHasReservationFlow
+              ? "Reservation flow found on the booking page."
           : hasInlineBookingForm
             ? "A booking widget was found on your homepage."
             : hasExternalBookingLink
               ? "Online booking link found (external reservation system)."
               : "No online booking system found.",
-        details: detectedPlatform || hasInlineBookingForm || hasExternalBookingLink
+        details: hasBookingSystem
           ? "Guests can reserve online. That's table stakes in 2026."
           : "Guests want to book at 10pm on a Sunday when you're not by the phone. Without online booking, those reservations go to a competitor who has one.",
         effort: "High",
@@ -2526,8 +2560,10 @@ export async function GET(request: NextRequest) {
     ];
 
 
+    const checksWithoutReviews = checks.filter((check) => !REVIEW_CHECK_IDS.has(check.id));
+
     const categoryScores = (Object.keys(config.categoryWeights) as CheckCategory[]).map((category) => {
-      const categoryChecks = checks.filter((check) => check.category === category);
+      const categoryChecks = checksWithoutReviews.filter((check) => check.category === category);
       const totalWeight = categoryChecks.reduce((sum, check) => sum + check.weight, 0);
       const passedWeight = categoryChecks.reduce((sum, check) => sum + (check.pass ? check.weight : 0), 0);
       const score = totalWeight === 0 ? 0 : Math.round((passedWeight / totalWeight) * 100);
@@ -2576,13 +2612,13 @@ export async function GET(request: NextRequest) {
     }
     lostBookingsEstimate = Math.min(35, lostBookingsEstimate);
 
-    const enrichedChecks = checks.map((check) => ({
+    const enrichedChecks = checksWithoutReviews.map((check) => ({
       ...check,
       estimatedImpact: getEstimatedImpactForCheck(check),
       benchmark: getDifficultyForCheck(check),
     }));
 
-    const topFails = checks
+    const topFails = checksWithoutReviews
       .filter((check) => check.status === "fail")
       .sort((left, right) => {
         const impactScore = { Low: 1, Medium: 2, High: 3 };

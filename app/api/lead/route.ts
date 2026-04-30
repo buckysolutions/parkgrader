@@ -106,6 +106,24 @@ const isInternalTestDomain = (domain: string): boolean => domain.toLowerCase() =
 
 const isInternalTestEmail = (email: string): boolean => email.toLowerCase().endsWith(`@${INTERNAL_TEST_DOMAIN}`);
 
+const getLeadIntentBucket = (leadIntent: string): "help" | "engaged" | "unknown" => {
+  const intent = leadIntent.trim().toLowerCase();
+
+  if (!intent) {
+    return "unknown";
+  }
+
+  if (intent === "callback-request" || intent.startsWith("check-help:")) {
+    return "help";
+  }
+
+  if (intent === "engagement-email" || intent === "share-report") {
+    return "engaged";
+  }
+
+  return "unknown";
+};
+
 // Normalize domain from URL (e.g., "https://www.example.com/path" -> "example.com")
 const normalizeDomain = (url: string): string => {
   try {
@@ -268,6 +286,7 @@ const sendLeadCaptureWebhook = async (
     name: payload.name,
     phone: payload.phone,
     lead_intent: payload.lead_intent,
+    intent_bucket: getLeadIntentBucket(payload.lead_intent),
     url: payload.url,
     company_name: companyName,
     hubspot_contact_id: hubspotContactId,
@@ -820,6 +839,8 @@ const sendGoogleChatAuditNotification = async (
     reportId: string;
     companyId: string;
     companyName: string;
+    leadIntent: string;
+    intentBucket: "help" | "engaged" | "unknown";
   },
 ) => {
   const appBaseUrl =
@@ -868,6 +889,18 @@ const sendGoogleChatAuditNotification = async (
                   decoratedText: {
                     topLabel: "Primary Challenge",
                     text: details.primaryChallenge,
+                  },
+                },
+                {
+                  decoratedText: {
+                    topLabel: "Lead Intent",
+                    text: details.leadIntent || "(not provided)",
+                  },
+                },
+                {
+                  decoratedText: {
+                    topLabel: "Intent Bucket",
+                    text: details.intentBucket,
                   },
                 },
                 {
@@ -1180,6 +1213,7 @@ const upsertHubSpotLead = async (payload: Required<LeadPayload>): Promise<Upsert
 
   if (webhookUrl && companyResult.wasNewAudit && !isTestDomain && !isTestEmail) {
     try {
+      const intentBucket = getLeadIntentBucket(payload.lead_intent);
       await sendGoogleChatAuditNotification(webhookUrl, {
         domain,
         auditCount: companyResult.nextAuditCount,
@@ -1190,6 +1224,8 @@ const upsertHubSpotLead = async (payload: Required<LeadPayload>): Promise<Upsert
         reportId: payload.report_id,
         companyId: companyResult.companyId,
         companyName: payload.property_name,
+        leadIntent: payload.lead_intent,
+        intentBucket,
       });
       notified = true;
     } catch (error) {
