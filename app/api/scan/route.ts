@@ -1009,7 +1009,7 @@ export async function GET(request: NextRequest) {
     // Look up previous scan in parallel with API calls
     const supabaseUrl = process.env.SUPABASE_URL?.trim() ?? "";
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
-    const previousScanPromise: Promise<ScanResponse | null> = (async () => {
+    const previousScanPromise: Promise<unknown> = (async () => {
       if (!supabaseUrl || !serviceRoleKey) return null;
       try {
         const controller = new AbortController();
@@ -1030,7 +1030,7 @@ export async function GET(request: NextRequest) {
           if (rows.length > 0 && rows[0].report_snapshot) {
             const snap = rows[0].report_snapshot as Record<string, unknown>;
             if (snap && typeof snap.scanResult === "object" && snap.scanResult !== null) {
-              return snap.scanResult as ScanResponse;
+              return snap.scanResult as Record<string, unknown>;
             }
           }
         }
