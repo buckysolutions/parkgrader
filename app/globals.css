@@ -155,8 +155,81 @@ input[type="reset"] {
   border-radius: 12px !important;
 }
 
+/* ── Glow card ── */
+@keyframes glow-orbit {
+  0%   { transform: translate(-20%, -30%) scale(0.8); opacity: 0.25; }
+  25%  { transform: translate(40%, 10%) scale(1.3); opacity: 0.55; }
+  50%  { transform: translate(20%, 60%) scale(1.0); opacity: 0.30; }
+  75%  { transform: translate(-30%, 20%) scale(1.4); opacity: 0.50; }
+  100% { transform: translate(-20%, -30%) scale(0.8); opacity: 0.25; }
+}
+
+.glow-card {
+  position: relative;
+  z-index: 1;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.6);
+}
+
+.glow-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 16px;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    rgba(255, 255, 255, 0.25) 0%,
+    transparent 60%
+  );
+}
+
+.glow-blob {
+  position: absolute;
+  top: 10%;
+  left: 15%;
+  width: 120px;
+  height: 120px;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(45, 164, 169, 0.45) 0%, rgba(45, 164, 169, 0.12) 40%, transparent 70%);
+  filter: blur(20px);
+  animation: glow-orbit 8s ease-in-out infinite;
+}
+
+/* ── Shared glass card ── */
+.glass-card {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.6),
+    0 4px 16px rgba(10, 22, 40, 0.03);
+}
+
+.glass-card > :not(.glow-blob) {
+  position: relative;
+  z-index: 1;
+}
+
+.glow-card > :not(.glow-blob) {
+  position: relative;
+  z-index: 1;
+}
+
 .report-btn-rounded {
   border-radius: 12px !important;
+}
+
+.question-btn {
+  border-radius: 16px !important;
 }
 
 input,

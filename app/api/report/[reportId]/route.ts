@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 type SupabaseAuditRow = {
   report_snapshot?: unknown;
   score?: number | null;
+  email?: string | null;
 };
 
 export async function GET(
@@ -24,7 +25,7 @@ export async function GET(
   }
 
   const response = await fetch(
-    `${supabaseUrl}/rest/v1/parkgrader_audits?select=report_snapshot,score&report_id=eq.${encodeURIComponent(normalizedReportId)}&limit=1`,
+    `${supabaseUrl}/rest/v1/parkgrader_audits?select=report_snapshot,score,email&report_id=eq.${encodeURIComponent(normalizedReportId)}&limit=1`,
     {
       method: "GET",
       headers: {
@@ -54,5 +55,5 @@ export async function GET(
     }
   }
 
-  return NextResponse.json({ snapshot });
+  return NextResponse.json({ snapshot, email: row?.email ?? null });
 }

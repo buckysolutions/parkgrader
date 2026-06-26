@@ -8,15 +8,15 @@ type LeadPayload = {
   property_name?: string;
   url?: string;
   score?: number;
-  property_type?: string;
+  booking_platform?: string;
   primary_challenge?: string;
-  property_size?: string;
   scan_date?: string;
   report_id?: string;
   hubspot_contact_id?: string;
   report_snapshot?: unknown;
   send_email_copy?: boolean;
   lead_intent?: string;
+  loom_requested?: boolean;
 };
 
 type UpsertResult = {
@@ -259,6 +259,41 @@ const getTopFixes = (payload: Required<LeadPayload>): { topFix1: string; topFix2
   };
 };
 
+const scoreToLetterGrade = (score: number): string => {
+  if (score >= 90) return "A";
+  if (score >= 75) return "B";
+  if (score >= 55) return "C";
+  if (score >= 35) return "D";
+  return "F";
+};
+
+const getTopFailingCheckName = (payload: Required<LeadPayload>): string => {
+  const snapshot = toSnapshotLike(payload.report_snapshot);
+  const checks = snapshot?.scanResult?.checks ?? [];
+  for (const check of checks) {
+    if (check.status === "fail" || check.pass === false) {
+      return check.name?.trim() || "Unknown issue";
+    }
+  }
+  return "No failing checks";
+};
+
+const getTopFailingCheckNamesFromSnapshot = (snapshot: unknown, limit: number): string[] => {
+  const snap = toSnapshotLike(snapshot);
+  const checks = snap?.scanResult?.checks ?? [];
+  const names: string[] = [];
+  for (const check of checks) {
+    if (check.status === "fail" || check.pass === false) {
+      const name = check.name?.trim();
+      if (name && !names.includes(name)) {
+        names.push(name);
+        if (names.length >= limit) break;
+      }
+    }
+  }
+  return names;
+};
+
 const sendLeadCaptureWebhook = async (
   payload: Required<LeadPayload>,
   hubspotContactId: string | null,
@@ -312,166 +347,63 @@ const sendLeadCaptureWebhook = async (
   return true;
 };
 
-const escapeHtml = (value: string): string =>
-  value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+const getTopIssueFromSnapshot = (payload: Required<LeadPayload>): { name: string; explanation: string } => {
+  const snapshot = toSnapshotLike(payload.report_snapshot);
+  const checks = snapshot?.scanResult?.checks ?? [];
 
-const buildAuditEmailHtml = (details: {
-  fullName: string;
-  email: string;
-  propertyName: string;
+  // Categories in priority order for finding top issue
+  const categoryOrder = [
+    "Would a Guest Book Here?",
+    "Can a Guest Find Basic Info?",
+    "Will Google Send Guests?",
+  ];
+
+  for (const category of categoryOrder) {
+    const failingChecks = checks
+      .filter((check) => (check.status === "fail" || check.pass === false) && (check as Record<string, unknown>).category === category)
+      .sort((a, b) => ((b as Record<string, unknown>).weight as number ?? 0) - ((a as Record<string, unknown>).weight as number ?? 0));
+
+    if (failingChecks.length > 0) {
+      const top = failingChecks[0];
+      return {
+        name: (top.name?.trim() || top.id?.trim() || "Unknown issue"),
+        explanation: ((top as Record<string, unknown>).finding as string)?.trim() || ((top as Record<string, unknown>).details as string)?.trim() || "This issue may be turning guests away.",
+      };
+    }
+  }
+
+  return {
+    name: "Website improvements needed",
+    explanation: "Several issues were found that may be affecting your bookings.",
+  };
+};
+
+const buildAuditEmailText = (details: {
+  url: string;
+  grade: string;
   reportLink: string;
-  aiSummary: string;
+  topIssueName: string;
+  topIssueExplanation: string;
 }): string => {
-  const email = escapeHtml(details.email);
-  const propertyName = escapeHtml(details.propertyName || "your property");
-  const reportLink = escapeHtml(details.reportLink);
-  const aiSummary = escapeHtml(details.aiSummary);
+  return `Hi there,
 
-  return `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8" />
-  </head>
-  <body>
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="-webkit-font-smoothing: antialiased; color: #444444; background-color: #e3e3e3; table-layout: fixed; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;" bgcolor="#e3e3e3">
-      <tbody>
-        <tr>
-          <td align="center" style="-webkit-font-smoothing: antialiased; color: #444444; padding: 30px 0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-            <table width="600" cellpadding="0" cellspacing="0" border="0" style="-webkit-font-smoothing: antialiased; color: #444444; background-color: #f2f4f7; border-top: 4px solid #2da4a9; border-collapse: separate; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;" bgcolor="#f2f4f7">
-              <tbody>
-                <tr>
-                  <td style="-webkit-font-smoothing: antialiased; color: #444444; padding: 40px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="-webkit-font-smoothing: antialiased; color: #444444; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-                      <tbody>
-                        <tr>
-                          <td align="left" style="-webkit-font-smoothing: antialiased; color: #444444; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-                            <img src="https://assets.buckysolutions.com/parkgrader_logo.svg" alt="ParkGrader Logo" width="170" style="display: block; border: 0;" />
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                    <div style="height: 40px;"><br /></div>
-                    <p style="-webkit-font-smoothing: antialiased; line-height: 24px; margin: 0px; font-size: 16px;">Your ParkGrader audit is ready.</p>
-                    <p style="-webkit-font-smoothing: antialiased; line-height: 24px; margin: 15px 0px 0px; font-size: 16px;">
-                      We reviewed your website and identified a few areas that may be reducing guest confidence or making it harder for people to book.
-                    </p>
-                    <p style="-webkit-font-smoothing: antialiased; line-height: 24px; margin: 15px 0px 0px; font-size: 16px;">${aiSummary}</p>
-                    <p style="-webkit-font-smoothing: antialiased; line-height: 24px; margin: 15px 0px 0px; font-size: 16px;">
-                      If you have questions about your results, the best way to get feedback is to reply to this email.
-                    </p>
-                    <div style="height: 26px;"><br /></div>
-                    <h2 style="color: #1a1a1a; font-weight: 600; font-size: 16px; margin: 0 0 10px 0;">View your report</h2>
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 6px;"><tbody><tr><td>
-                      <a href="${reportLink}" style="display:inline-block; background:#2da4a9; color:#ffffff; text-decoration:none; font-size:14px; font-weight:700; padding:12px 18px;">Open report</a>
-                    </td></tr></tbody></table>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="background-color: #edeff2; padding: 40px;" bgcolor="#edeff2">
-                    <img src="https://assets.buckysolutions.com/bucky%2Bicon%2B.png" alt="Icon" width="22" style="margin-bottom: 15px;" />
-                    <p style="line-height: 16px; margin: 0px; font-size: 11px; color: rgb(153, 153, 153);">This message was sent automatically by ParkGrader.</p>
-                    <p style="line-height: 16px; margin: 8px 0 0 0; font-size: 11px; color: rgb(153, 153, 153);">Registered location: Bucky Solutions LLC., 7901 4th St N STE 300, St. Petersburg FL 33702</p>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </body>
-</html>`;
-};
+You just ran a free audit on ${details.url} and I wanted to personally follow up.
 
-const buildFallbackAuditSummary = (payload: Required<LeadPayload>): string => {
-  const snapshot = toSnapshotLike(payload.report_snapshot);
-  const checks = snapshot?.scanResult?.checks ?? [];
-  const topFailNames = checks
-    .filter((check) => check.status === "fail" || check.pass === false)
-    .map((check) => check.name?.trim())
-    .filter(Boolean)
-    .slice(0, 2) as string[];
+Your site scored ${details.grade} and the biggest issue we found was:
 
-  if (topFailNames.length >= 2) {
-    return `Some parts of your site are already working well, but issues like ${topFailNames[0]} and ${topFailNames[1]} may still be causing guests to hesitate before booking.`;
-  }
+${details.topIssueName}: ${details.topIssueExplanation}
 
-  if (topFailNames.length === 1) {
-    return `Your site has solid foundations, but ${topFailNames[0]} appears to be a key issue that may be creating booking friction.`;
-  }
+Your full report with all the fixes is here:
+${details.reportLink}
 
-  return "Your site has several strengths, and a few smaller improvements could make the booking process even more straightforward for guests.";
-};
+I also put together a quick personal video walking through your specific site  -  reply YES to this email and I'll send it over. Takes me 5 minutes and costs you nothing.
 
-const generateAuditSummaryWithGemini = async (payload: Required<LeadPayload>): Promise<string> => {
-  const geminiApiKey = process.env.GEMINI_API_KEY?.trim() ?? "";
-  if (!geminiApiKey) {
-    return buildFallbackAuditSummary(payload);
-  }
+Brian
+Founder, ParkGrader.com
+parkgrader.com
 
-  const snapshot = toSnapshotLike(payload.report_snapshot);
-  const checks = snapshot?.scanResult?.checks ?? [];
-  const topFailNames = checks
-    .filter((check) => check.status === "fail" || check.pass === false)
-    .map((check) => check.name?.trim())
-    .filter(Boolean)
-    .slice(0, 4);
-
-  const geminiModel = process.env.GEMINI_MODEL || "gemini-2.0-flash-lite";
-  const prompt = [
-    "Write ONE short paragraph (2 sentences max) for an automated audit email.",
-    "Tone: professional, helpful, plain-English, not salesy.",
-    "Goal: explain what likely needs fixing and why it matters for bookings.",
-    "Do NOT use bullet points, headings, emojis, or placeholders.",
-    "Do NOT mention AI, model, or scoring formulas.",
-    `Property: ${payload.property_name || normalizeDomain(payload.url) || "this property"}`,
-    `Top observed issues: ${topFailNames.length ? topFailNames.join(", ") : "not specified"}`,
-  ].join("\n");
-
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent?key=${encodeURIComponent(geminiApiKey)}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: prompt }],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.5,
-            maxOutputTokens: 140,
-          },
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      return buildFallbackAuditSummary(payload);
-    }
-
-    const data = (await response.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join(" ").trim() ?? "";
-    if (!text) {
-      return buildFallbackAuditSummary(payload);
-    }
-
-    return text.replace(/\s+/g, " ").trim();
-  } catch {
-    return buildFallbackAuditSummary(payload);
-  }
+---
+You ran a free audit at parkgrader.com. Reply to unsubscribe.`;
 };
 
 const sendAuditCopyEmail = async (payload: Required<LeadPayload>): Promise<EmailCopyResult> => {
@@ -490,29 +422,30 @@ const sendAuditCopyEmail = async (payload: Required<LeadPayload>): Promise<Email
   }
 
   const reportLink = `${baseUrl.replace(/\/$/, "")}/r/${encodeURIComponent(payload.report_id)}`;
-  const aiSummary = await generateAuditSummaryWithGemini(payload);
-  const html = buildAuditEmailHtml({
-    fullName: payload.name,
-    email: payload.email,
-    propertyName: payload.property_name,
+  const domain = normalizeDomain(payload.url) || payload.url || "your website";
+  const grade = scoreToLetterGrade(payload.score);
+  const topIssue = getTopIssueFromSnapshot(payload);
+  const textBody = buildAuditEmailText({
+    url: `https://${domain}`,
+    grade,
     reportLink,
-    aiSummary,
+    topIssueName: topIssue.name,
+    topIssueExplanation: topIssue.explanation,
   });
 
   const ses = new SESv2Client({ region });
   const fromEmailAddress = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
-  const replyToAddress = "help@buckysolutions.com";
 
   const command = new SendEmailCommand({
     FromEmailAddress: fromEmailAddress,
     ...(configurationSetName ? { ConfigurationSetName: configurationSetName } : {}),
     Destination: { ToAddresses: [payload.email] },
-    ReplyToAddresses: [replyToAddress],
+    ReplyToAddresses: [fromEmail],
     Content: {
       Simple: {
-        Subject: { Data: "Your ParkGrader audit report", Charset: "UTF-8" },
+        Subject: { Data: (() => { const c = payload.primary_challenge; if (c === "not-enough-bookings") return `Why ${domain} might be losing bookings`; if (c === "too-many-calls") return `How to stop answering the same questions all day`; if (c === "bad-reviews") return `Your Google rating is costing you guests`; if (c === "wrong-expectations") return `Why guests arrive and feel misled`; if (c === "website-outdated") return `What guests see when they land on ${domain}`; return `Your ParkGrader report for ${domain}`; })(), Charset: "UTF-8" },
         Body: {
-          Html: { Data: html, Charset: "UTF-8" },
+          Text: { Data: textBody, Charset: "UTF-8" },
         },
       },
     },
@@ -626,15 +559,16 @@ const storeAuditInSupabase = async (payload: Required<LeadPayload>): Promise<Sup
         {
           report_id: payload.report_id,
           domain,
-          company_name: payload.property_name || domain,
           website_url: payload.url,
           email: payload.email || persistedEmail || null,
           contact_name: payload.name || null,
           phone: payload.phone || null,
           score: payload.score,
-          property_type: payload.property_type,
-          primary_challenge: payload.primary_challenge,
-          property_size: payload.property_size,
+          grade: scoreToLetterGrade(payload.score),
+          top_issue: getTopFailingCheckName(payload),
+          lead_intent: payload.lead_intent || null,
+          loom_requested: payload.loom_requested || false,
+          hubspot_contact_id: payload.hubspot_contact_id || null,
           scan_date: payload.scan_date,
           report_snapshot: Object.keys(mergedSnapshot).length ? mergedSnapshot : payload.report_snapshot ?? null,
           is_test: isTestDomain || isTestEmail,
@@ -654,19 +588,33 @@ const storeAuditInSupabase = async (payload: Required<LeadPayload>): Promise<Sup
   };
 };
 
-const toHubSpotContactProperties = (payload: Required<LeadPayload>) => ({
-  email: payload.email,
-  firstname: payload.name,
-  phone: payload.phone,
-  company: payload.property_name,
-  website: payload.url,
-  parkgrader_score: String(payload.score),
-  parkgrader_property_type: payload.property_type,
-  parkgrader_primary_challenge: payload.primary_challenge,
-  parkgrader_property_size: payload.property_size,
-  parkgrader_scan_date: payload.scan_date,
-  parkgrader_report_id: payload.report_id,
-});
+const toHubSpotContactProperties = (payload: Required<LeadPayload>) => {
+  const appBaseUrl =
+    process.env.APP_BASE_URL?.trim() ||
+    process.env.NEXT_PUBLIC_APP_BASE_URL?.trim() ||
+    "https://parkgrader.com";
+  const reportLink = `${appBaseUrl.replace(/\/$/, "")}/r/${encodeURIComponent(payload.report_id)}`;
+
+  return {
+    email: payload.email,
+    firstname: payload.name,
+    phone: payload.phone,
+    company: payload.property_name,
+    website: payload.url,
+    parkgrader_score: String(payload.score),
+    parkgrader_grade: scoreToLetterGrade(payload.score),
+    parkgrader_url: payload.url,
+    parkgrader_top_issue: getTopFailingCheckName(payload),
+    parkgrader_booking_platform: payload.booking_platform,
+    parkgrader_primary_challenge: payload.primary_challenge,
+    parkgrader_scan_date: payload.scan_date,
+    parkgrader_audit_date: payload.scan_date,
+    parkgrader_report_id: payload.report_id,
+    report_link: reportLink,
+    lead_intent: payload.lead_intent || "email_gate",
+    loom_requested: payload.loom_requested ? "true" : "false",
+  };
+};
 
 const toHubSpotCompanyProperties = (
   payload: Required<LeadPayload>,
@@ -681,7 +629,6 @@ const toHubSpotCompanyProperties = (
   audit_date: payload.scan_date,
   audit_score: String(payload.score),
   primary_challenge: payload.primary_challenge,
-  property_type: payload.property_type,
   report_id: payload.report_id,
 });
 
@@ -835,12 +782,14 @@ const sendGoogleChatAuditNotification = async (
     auditDate: string;
     auditScore: number;
     primaryChallenge: string;
-    propertyType: string;
+    bookingPlatform: string;
     reportId: string;
     companyId: string;
     companyName: string;
     leadIntent: string;
     intentBucket: "help" | "engaged" | "unknown";
+    reportSnapshot: unknown;
+    auditedUrl: string;
   },
 ) => {
   const appBaseUrl =
@@ -853,99 +802,135 @@ const sendGoogleChatAuditNotification = async (
     ? `https://app.hubspot.com/contacts/${encodeURIComponent(portalId)}/record/0-2/${encodeURIComponent(details.companyId)}`
     : "(set HUBSPOT_PORTAL_ID to include direct company links)";
 
+  const snapshot = toSnapshotLike(details.reportSnapshot);
+  const parkName = details.companyName || snapshot?.propertyName?.trim() || details.domain || "(not available)";
+  const grade = scoreToLetterGrade(details.auditScore);
+  const topFailingChecks = getTopFailingCheckNamesFromSnapshot(details.reportSnapshot, 3);
+
+  const auditDetailsWidgets: unknown[] = [
+    {
+      decoratedText: {
+        topLabel: "Park Name",
+        text: parkName,
+      },
+    },
+    {
+      decoratedText: {
+        topLabel: "Audited URL",
+        text: details.auditedUrl || "(not available)",
+      },
+    },
+    {
+      decoratedText: {
+        topLabel: "Score & Grade",
+        text: `${details.auditScore}/100 (${grade})`,
+      },
+    },
+  ];
+
+  if (details.leadIntent) {
+    auditDetailsWidgets.push({
+      decoratedText: {
+        topLabel: "Lead Intent",
+        text: details.leadIntent,
+      },
+    });
+  }
+
+  if (details.bookingPlatform) {
+    auditDetailsWidgets.push({
+      decoratedText: {
+        topLabel: "Booking Platform",
+        text: details.bookingPlatform,
+      },
+    });
+  }
+
+  if (details.primaryChallenge) {
+    auditDetailsWidgets.push({
+      decoratedText: {
+        topLabel: "Their Challenge",
+        text: details.primaryChallenge,
+      },
+    });
+  }
+
+  auditDetailsWidgets.push({
+    decoratedText: {
+      topLabel: "Audit Date",
+      text: details.auditDate || "(not available)",
+    },
+  });
+
+  const sections: unknown[] = [
+    {
+      header: "Audit Details",
+      collapsible: false,
+      widgets: auditDetailsWidgets,
+    },
+  ];
+
+  if (topFailingChecks.length > 0) {
+    sections.push({
+      header: "Top Failing Checks",
+      collapsible: false,
+      widgets: topFailingChecks.map((name) => ({
+        decoratedText: {
+          text: name,
+        },
+      })),
+    });
+  }
+
+  sections.push({
+    header: "Quick Links",
+    collapsible: false,
+    widgets: [
+      {
+        decoratedText: {
+          topLabel: "ParkGrader Report",
+          text: reportUrl,
+        },
+      },
+      {
+        buttonList: {
+          buttons: [
+            {
+              text: "Open ParkGrader Report",
+              onClick: {
+                openLink: {
+                  url: reportUrl,
+                },
+              },
+            },
+            ...(portalId
+              ? [
+                  {
+                    text: "Open HubSpot Company",
+                    onClick: {
+                      openLink: {
+                        url: companyRecordUrl,
+                      },
+                    },
+                  },
+                ]
+              : []),
+          ],
+        },
+      },
+    ],
+  });
+
   const cardPayload = {
     cardsV2: [
       {
         cardId: "parkgrader-audit",
         card: {
           header: {
-            title: "New ParkGrader Audit Started",
-            subtitle: `${details.companyName || details.domain} (${details.domain})`,
+            title: `ParkGrader Audit: ${parkName}`,
+            subtitle: `${details.auditedUrl}  -  Score: ${details.auditScore}/100 (${grade})`,
           },
-          sections: [
-            {
-              header: "Audit Details",
-              collapsible: false,
-              widgets: [
-                {
-                  decoratedText: {
-                    topLabel: "Audit Count",
-                    text: String(details.auditCount),
-                  },
-                },
-                {
-                  decoratedText: {
-                    topLabel: "Audit Date",
-                    text: details.auditDate,
-                  },
-                },
-                {
-                  decoratedText: {
-                    topLabel: "Audit Score",
-                    text: String(details.auditScore),
-                  },
-                },
-                {
-                  decoratedText: {
-                    topLabel: "Primary Challenge",
-                    text: details.primaryChallenge,
-                  },
-                },
-                {
-                  decoratedText: {
-                    topLabel: "Lead Intent",
-                    text: details.leadIntent || "(not provided)",
-                  },
-                },
-                {
-                  decoratedText: {
-                    topLabel: "Intent Bucket",
-                    text: details.intentBucket,
-                  },
-                },
-                {
-                  decoratedText: {
-                    topLabel: "Property Type",
-                    text: details.propertyType,
-                  },
-                },
-                {
-                  decoratedText: {
-                    topLabel: "Report ID",
-                    text: details.reportId,
-                  },
-                },
-                {
-                  decoratedText: {
-                    topLabel: "ParkGrader Report",
-                    text: reportUrl,
-                  },
-                },
-                {
-                  buttonList: {
-                    buttons: [
-                      {
-                        text: "Open ParkGrader Report",
-                        onClick: {
-                          openLink: {
-                            url: reportUrl,
-                          },
-                        },
-                      },
-                      {
-                        text: "Open HubSpot Company",
-                        onClick: {
-                          openLink: {
-                            url: companyRecordUrl,
-                          },
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          ],
+          sections,
         },
       },
     ],
@@ -1220,12 +1205,14 @@ const upsertHubSpotLead = async (payload: Required<LeadPayload>): Promise<Upsert
         auditDate: payload.scan_date,
         auditScore: payload.score,
         primaryChallenge: payload.primary_challenge,
-        propertyType: payload.property_type,
+        bookingPlatform: payload.booking_platform,
         reportId: payload.report_id,
         companyId: companyResult.companyId,
         companyName: payload.property_name,
         leadIntent: payload.lead_intent,
         intentBucket,
+        reportSnapshot: payload.report_snapshot,
+        auditedUrl: payload.url,
       });
       notified = true;
     } catch (error) {
@@ -1251,15 +1238,15 @@ export async function POST(request: NextRequest) {
       property_name: body.property_name?.trim() ?? "",
       url: body.url?.trim() ?? "",
       score: Number(body.score ?? 0),
-      property_type: body.property_type?.trim() ?? "campground",
-      primary_challenge: body.primary_challenge?.trim() ?? "converting-visitors",
-      property_size: body.property_size?.trim() ?? "25-75",
+      booking_platform: body.booking_platform?.trim() ?? "",
+      primary_challenge: body.primary_challenge?.trim() ?? "",
       scan_date: body.scan_date?.trim() ?? new Date().toISOString(),
       report_id: body.report_id?.trim() ?? `${Date.now()}`,
       hubspot_contact_id: body.hubspot_contact_id?.trim() ?? "",
       report_snapshot: body.report_snapshot,
       send_email_copy: Boolean(body.send_email_copy),
       lead_intent: body.lead_intent?.trim() ?? "",
+      loom_requested: Boolean(body.loom_requested),
     };
 
     if (!payload.url) {
@@ -1285,67 +1272,93 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    let emailAlreadyInDatabase = false;
-    if (payload.email && isValidEmail(payload.email)) {
-      const supabaseUrl = process.env.SUPABASE_URL?.trim() ?? "";
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
-
-      if (supabaseUrl && serviceRoleKey) {
-        try {
-          emailAlreadyInDatabase = await hasExistingEmailInSupabase(supabaseUrl, serviceRoleKey, payload.email);
-        } catch (error) {
-          console.error(error);
-        }
-      }
-    }
-
-    let supabase = {
-      enabled: false,
-      stored: false,
-    } as SupabaseStoreResult;
-
+    // 1. Save to Supabase FIRST  -  fail hard if it doesn't work
+    let supabaseStoreResult: SupabaseStoreResult;
     try {
-      supabase = await storeAuditInSupabase(payload);
+      supabaseStoreResult = await storeAuditInSupabase(payload);
     } catch (error) {
-      console.error(error);
+      console.error("Supabase store failed:", error);
+      const detail = error instanceof Error ? error.message : "Unknown database error";
+      return NextResponse.json(
+        {
+          message: `Save failed  -  ${detail}`,
+          supabase_error: detail,
+        },
+        { status: 500 },
+      );
     }
 
+    // 2. SES email copy after Supabase  -  soft fail if it doesn't work
     let emailCopy: EmailCopyResult = {
       attempted: false,
       sent: false,
     };
+    let emailError: string | null = null;
 
     if (payload.send_email_copy) {
       try {
         emailCopy = await sendAuditCopyEmail(payload);
       } catch (error) {
-        console.error(error);
+        console.error("SES email copy failed:", error);
+        emailError = error instanceof Error ? error.message : "Unknown email error";
       }
     }
 
-    const result = await upsertHubSpotLead(payload);
+    // 3. HubSpot fires AFTER response  -  fire-and-forget, never surface to user
+    const fireHubSpotInBackground = () => {
+      upsertHubSpotLead(payload)
+        .then(async (result) => {
+          // Google Chat notification (also fire-and-forget within HubSpot flow)
+          const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL?.trim() ?? "";
+          if (webhookUrl && !isInternalTestDomain(normalizeDomain(payload.url))) {
+            // Check Supabase for existing email to decide webhook
+            let emailAlreadyInDatabase = false;
+            const supabaseUrl = process.env.SUPABASE_URL?.trim() ?? "";
+            const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
+            if (payload.email && isValidEmail(payload.email) && supabaseUrl && serviceRoleKey) {
+              try {
+                emailAlreadyInDatabase = await hasExistingEmailInSupabase(supabaseUrl, serviceRoleKey, payload.email);
+              } catch {
+                // Non-blocking
+              }
+            }
+            if (!emailAlreadyInDatabase) {
+              try {
+                await sendLeadCaptureWebhook(payload, result.hubspotContactId);
+              } catch (webhookError) {
+                console.error("Lead capture webhook failed:", webhookError);
+              }
+            }
+          }
+        })
+        .catch((error) => {
+          console.error("HubSpot upsert failed (background):", error);
+        });
+    };
 
-    let webhookSent = false;
-    if (!emailAlreadyInDatabase) {
-      try {
-        webhookSent = await sendLeadCaptureWebhook(payload, result.hubspotContactId);
-      } catch (error) {
-        console.error(error);
-      }
-    }
+    // Fire HubSpot in the background  -  don't await
+    fireHubSpotInBackground();
 
-    return NextResponse.json({
-      stored: result.provider === "hubspot",
-      provider: result.provider,
-      notified: result.notified,
-      hubspot_contact_id: result.hubspotContactId,
-      database_enabled: supabase.enabled,
-      database_stored: supabase.stored,
+    // Build the response
+    const responseBody: Record<string, unknown> = {
+      stored: supabaseStoreResult.stored,
+      provider: "hubspot",
+      database_enabled: supabaseStoreResult.enabled,
+      database_stored: supabaseStoreResult.stored,
       email_attempted: emailCopy.attempted,
       email_sent: emailCopy.sent,
-      webhook_sent: webhookSent,
-      webhook_skipped_existing_email: emailAlreadyInDatabase,
-    });
+    };
+
+    if (emailError) {
+      responseBody.email_error = emailError;
+      responseBody.message = "Saved. Email may take a few minutes.";
+    }
+
+    if (!emailCopy.sent) {
+      responseBody.message = responseBody.message || "Saved. Email may take a few minutes.";
+    }
+
+    return NextResponse.json(responseBody, { status: 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Lead capture failed.";
     return NextResponse.json({ message }, { status: 500 });
