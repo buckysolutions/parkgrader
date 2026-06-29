@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
-
 type LeadPayload = {
   email?: string;
   name?: string;
@@ -14,7 +12,6 @@ type LeadPayload = {
   report_id?: string;
   hubspot_contact_id?: string;
   report_snapshot?: unknown;
-  send_email_copy?: boolean;
   lead_intent?: string;
   loom_requested?: boolean;
 };
@@ -23,11 +20,6 @@ type UpsertResult = {
   provider: "hubspot" | "none";
   notified: boolean;
   hubspotContactId: string | null;
-};
-
-type EmailCopyResult = {
-  attempted: boolean;
-  sent: boolean;
 };
 
 type SupabaseStoreResult = {
@@ -345,114 +337,6 @@ const sendLeadCaptureWebhook = async (
   }
 
   return true;
-};
-
-const getTopIssueFromSnapshot = (payload: Required<LeadPayload>): { name: string; explanation: string } => {
-  const snapshot = toSnapshotLike(payload.report_snapshot);
-  const checks = snapshot?.scanResult?.checks ?? [];
-
-  // Categories in priority order for finding top issue
-  const categoryOrder = [
-    "Would a Guest Book Here?",
-    "Can a Guest Find Basic Info?",
-    "Will Google Send Guests?",
-  ];
-
-  for (const category of categoryOrder) {
-    const failingChecks = checks
-      .filter((check) => (check.status === "fail" || check.pass === false) && (check as Record<string, unknown>).category === category)
-      .sort((a, b) => ((b as Record<string, unknown>).weight as number ?? 0) - ((a as Record<string, unknown>).weight as number ?? 0));
-
-    if (failingChecks.length > 0) {
-      const top = failingChecks[0];
-      return {
-        name: (top.name?.trim() || top.id?.trim() || "Unknown issue"),
-        explanation: ((top as Record<string, unknown>).finding as string)?.trim() || ((top as Record<string, unknown>).details as string)?.trim() || "This issue may be turning guests away.",
-      };
-    }
-  }
-
-  return {
-    name: "Website improvements needed",
-    explanation: "Several issues were found that may be affecting your bookings.",
-  };
-};
-
-const buildAuditEmailText = (details: {
-  url: string;
-  grade: string;
-  reportLink: string;
-  topIssueName: string;
-  topIssueExplanation: string;
-}): string => {
-  return `Hi there,
-
-You just ran a free audit on ${details.url} and I wanted to personally follow up.
-
-Your site scored ${details.grade} and the biggest issue we found was:
-
-${details.topIssueName}: ${details.topIssueExplanation}
-
-Your full report with all the fixes is here:
-${details.reportLink}
-
-I also put together a quick personal video walking through your specific site  -  reply YES to this email and I'll send it over. Takes me 5 minutes and costs you nothing.
-
-Brian
-Founder, ParkGrader.com
-parkgrader.com
-
----
-You ran a free audit at parkgrader.com. Reply to unsubscribe.`;
-};
-
-const sendAuditCopyEmail = async (payload: Required<LeadPayload>): Promise<EmailCopyResult> => {
-  if (!payload.email || !isValidEmail(payload.email) || isInternalTestEmail(payload.email)) {
-    return { attempted: false, sent: false };
-  }
-
-  const region = process.env.SES_AWS_REGION?.trim() || process.env.AWS_REGION?.trim() || "";
-  const fromEmail = process.env.SES_FROM_EMAIL?.trim() || "";
-  const fromName = process.env.SES_FROM_NAME?.trim() || "";
-  const configurationSetName = process.env.SES_CONFIGURATION_SET?.trim() || "";
-  const baseUrl = process.env.APP_BASE_URL?.trim() || process.env.NEXT_PUBLIC_APP_BASE_URL?.trim() || "";
-
-  if (!region || !fromEmail || !baseUrl) {
-    return { attempted: false, sent: false };
-  }
-
-  const reportLink = `${baseUrl.replace(/\/$/, "")}/r/${encodeURIComponent(payload.report_id)}`;
-  const domain = normalizeDomain(payload.url) || payload.url || "your website";
-  const grade = scoreToLetterGrade(payload.score);
-  const topIssue = getTopIssueFromSnapshot(payload);
-  const textBody = buildAuditEmailText({
-    url: `https://${domain}`,
-    grade,
-    reportLink,
-    topIssueName: topIssue.name,
-    topIssueExplanation: topIssue.explanation,
-  });
-
-  const ses = new SESv2Client({ region });
-  const fromEmailAddress = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
-
-  const command = new SendEmailCommand({
-    FromEmailAddress: fromEmailAddress,
-    ...(configurationSetName ? { ConfigurationSetName: configurationSetName } : {}),
-    Destination: { ToAddresses: [payload.email] },
-    ReplyToAddresses: [fromEmail],
-    Content: {
-      Simple: {
-        Subject: { Data: (() => { const c = payload.primary_challenge; if (c === "not-enough-bookings") return `Why ${domain} might be losing bookings`; if (c === "too-many-calls") return `How to stop answering the same questions all day`; if (c === "bad-reviews") return `Your Google rating is costing you guests`; if (c === "wrong-expectations") return `Why guests arrive and feel misled`; if (c === "website-outdated") return `What guests see when they land on ${domain}`; return `Your ParkGrader report for ${domain}`; })(), Charset: "UTF-8" },
-        Body: {
-          Text: { Data: textBody, Charset: "UTF-8" },
-        },
-      },
-    },
-  });
-
-  await ses.send(command);
-  return { attempted: true, sent: true };
 };
 
 const getSupabaseHeaders = (serviceRoleKey: string) => ({
@@ -1244,7 +1128,6 @@ export async function POST(request: NextRequest) {
       report_id: body.report_id?.trim() ?? `${Date.now()}`,
       hubspot_contact_id: body.hubspot_contact_id?.trim() ?? "",
       report_snapshot: body.report_snapshot,
-      send_email_copy: Boolean(body.send_email_copy),
       lead_intent: body.lead_intent?.trim() ?? "",
       loom_requested: Boolean(body.loom_requested),
     };
@@ -1264,8 +1147,6 @@ export async function POST(request: NextRequest) {
         notified: false,
         database_enabled: false,
         database_stored: false,
-        email_attempted: false,
-        email_sent: false,
         webhook_sent: false,
         webhook_skipped_existing_email: false,
         bypass_mode: true,
@@ -1288,34 +1169,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. SES email copy after Supabase  -  soft fail if it doesn't work
-    let emailCopy: EmailCopyResult = {
-      attempted: false,
-      sent: false,
-    };
-    let emailError: string | null = null;
+    // 2. Webhooks + HubSpot fire AFTER response  -  fire-and-forget, never surface to user
+    const fireWebhooksInBackground = () => {
+      const domain = normalizeDomain(payload.url);
+      const isTestDomain = domain ? isInternalTestDomain(domain) : false;
+      const isTestEmail = payload.email ? isInternalTestEmail(payload.email) : false;
 
-    if (payload.send_email_copy) {
-      try {
-        emailCopy = await sendAuditCopyEmail(payload);
-      } catch (error) {
-        console.error("SES email copy failed:", error);
-        emailError = error instanceof Error ? error.message : "Unknown email error";
+      // Google Chat notification  -  independent of HubSpot
+      const googleChatUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL?.trim() ?? "";
+      if (googleChatUrl && !isTestDomain && !isTestEmail) {
+        // Fire immediately, don't wait for HubSpot
+        (async () => {
+          try {
+            const intentBucket = getLeadIntentBucket(payload.lead_intent);
+            await sendGoogleChatAuditNotification(googleChatUrl, {
+              domain: domain ?? "",
+              auditCount: 0,
+              auditDate: payload.scan_date,
+              auditScore: payload.score,
+              primaryChallenge: payload.primary_challenge,
+              bookingPlatform: payload.booking_platform,
+              reportId: payload.report_id,
+              companyId: "",
+              companyName: payload.property_name,
+              leadIntent: payload.lead_intent,
+              intentBucket,
+              reportSnapshot: payload.report_snapshot,
+              auditedUrl: payload.url,
+            });
+          } catch (error) {
+            console.error("Google Chat notification failed:", error);
+          }
+        })();
       }
-    }
 
-    // 3. HubSpot fires AFTER response  -  fire-and-forget, never surface to user
-    const fireHubSpotInBackground = () => {
-      upsertHubSpotLead(payload)
-        .then(async (result) => {
-          // Google Chat notification (also fire-and-forget within HubSpot flow)
-          const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL?.trim() ?? "";
-          if (webhookUrl && !isInternalTestDomain(normalizeDomain(payload.url))) {
-            // Check Supabase for existing email to decide webhook
+      // Lead capture webhook (n8n)  -  also independent
+      const leadCaptureUrl = process.env.LEAD_CAPTURE_WEBHOOK_URL?.trim() ?? "";
+      if (leadCaptureUrl && payload.email && isValidEmail(payload.email) && !isTestEmail && !isTestDomain) {
+        (async () => {
+          try {
+            // Check Supabase for existing email
             let emailAlreadyInDatabase = false;
             const supabaseUrl = process.env.SUPABASE_URL?.trim() ?? "";
             const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
-            if (payload.email && isValidEmail(payload.email) && supabaseUrl && serviceRoleKey) {
+            if (supabaseUrl && serviceRoleKey) {
               try {
                 emailAlreadyInDatabase = await hasExistingEmailInSupabase(supabaseUrl, serviceRoleKey, payload.email);
               } catch {
@@ -1323,21 +1220,22 @@ export async function POST(request: NextRequest) {
               }
             }
             if (!emailAlreadyInDatabase) {
-              try {
-                await sendLeadCaptureWebhook(payload, result.hubspotContactId);
-              } catch (webhookError) {
-                console.error("Lead capture webhook failed:", webhookError);
-              }
+              await sendLeadCaptureWebhook(payload, null);
             }
+          } catch (webhookError) {
+            console.error("Lead capture webhook failed:", webhookError);
           }
-        })
-        .catch((error) => {
-          console.error("HubSpot upsert failed (background):", error);
-        });
+        })();
+      }
+
+      // HubSpot upsert  -  still fire-and-forget if configured
+      upsertHubSpotLead(payload).catch((error) => {
+        console.error("HubSpot upsert failed (background):", error);
+      });
     };
 
-    // Fire HubSpot in the background  -  don't await
-    fireHubSpotInBackground();
+    // Fire webhooks and HubSpot in the background  -  don't await
+    fireWebhooksInBackground();
 
     // Build the response
     const responseBody: Record<string, unknown> = {
@@ -1345,18 +1243,7 @@ export async function POST(request: NextRequest) {
       provider: "hubspot",
       database_enabled: supabaseStoreResult.enabled,
       database_stored: supabaseStoreResult.stored,
-      email_attempted: emailCopy.attempted,
-      email_sent: emailCopy.sent,
     };
-
-    if (emailError) {
-      responseBody.email_error = emailError;
-      responseBody.message = "Saved. Email may take a few minutes.";
-    }
-
-    if (!emailCopy.sent) {
-      responseBody.message = responseBody.message || "Saved. Email may take a few minutes.";
-    }
 
     return NextResponse.json(responseBody, { status: 200 });
   } catch (error) {

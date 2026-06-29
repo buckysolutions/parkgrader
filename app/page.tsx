@@ -98,7 +98,6 @@ type ReportSnapshot = {
 };
 
 type SaveAuditSessionOptions = {
-  sendEmailCopy?: boolean;
   nameOverride?: string;
   phoneOverride?: string;
   leadIntent?: string;
@@ -418,8 +417,6 @@ export default function Home() {
   const [isTradeshowMode, setIsTradeshowMode] = useState(false);
   const [isWebsiteMode, setIsWebsiteMode] = useState(false);
   const [loomRequested, setLoomRequested] = useState(false);
-  const [tradeshowConsentEmailCopy, setTradeshowConsentEmailCopy] = useState(false);
-  const [tradeshowConsentMarketing, setTradeshowConsentMarketing] = useState(false);
   const [isReportUnlocked, setIsReportUnlocked] = useState(true);
   const [urlInputShakeCount, setUrlInputShakeCount] = useState(0);
   const [emailInputShakeCount, setEmailInputShakeCount] = useState(0);
@@ -461,7 +458,7 @@ export default function Home() {
   const reportSectionRef = useRef<HTMLDivElement | null>(null);
   const capturedAuditReportsRef = useRef<Set<string>>(new Set());
   const hydratedFromSavedReportRef = useRef(false);
-  const saveAuditSessionRef = useRef<((leadEmail?: string, options?: SaveAuditSessionOptions) => Promise<{ stored: boolean; emailSent: boolean; email: string }>) | null>(null);
+  const saveAuditSessionRef = useRef<((leadEmail?: string, options?: SaveAuditSessionOptions) => Promise<{ stored: boolean; email: string }>) | null>(null);
 
 
   const bookingPlatform = answers.booking_platform ?? "";
@@ -556,11 +553,8 @@ export default function Home() {
         scan_date: savedAt,
         report_id: nextReportId,
         report_snapshot: reportSnapshotPayload,
-        send_email_copy: Boolean(options?.sendEmailCopy),
         lead_intent: options?.leadIntent || undefined,
         hubspot_contact_id: hubspotContactId || undefined,
-        tradeshow_consent_email: isTradeshowMode ? tradeshowConsentEmailCopy : undefined,
-        tradeshow_consent_marketing: isTradeshowMode ? tradeshowConsentMarketing : undefined,
         loom_requested: loomRequested || undefined,
       };
 
@@ -583,7 +577,6 @@ export default function Home() {
 
       const result = (await response.json()) as {
         stored?: boolean;
-        email_sent?: boolean;
         message?: string;
         supabase_error?: string;
       };
@@ -593,7 +586,6 @@ export default function Home() {
 
       return {
         stored: Boolean(result.stored),
-        emailSent: Boolean(result.email_sent),
         email: normalizedEmail,
       };
     },
@@ -613,8 +605,6 @@ export default function Home() {
       bookingPlatform,
       primaryChallenge,
       syncReportPath,
-      tradeshowConsentEmailCopy,
-      tradeshowConsentMarketing,
       loomRequested,
     ],
   );
@@ -753,8 +743,6 @@ export default function Home() {
     setCopied(false);
     setReportId("");
     setDisplayScore(0);
-    setTradeshowConsentEmailCopy(false);
-    setTradeshowConsentMarketing(false);
     setContactSearch("");
     setContactSearchResults([]);
     setIsContactSearchOpen(false);
@@ -957,7 +945,7 @@ export default function Home() {
 
     void (async () => {
       try {
-        await saveAuditSession(undefined, { sendEmailCopy: false });
+        await saveAuditSession(undefined);
       } catch (error) {
         capturedAuditReportsRef.current.delete(reportId);
         console.error("ParkGrader audit capture failed", error);
@@ -1060,14 +1048,12 @@ export default function Home() {
     setSharePromptNotice("");
 
     try {
-      const result = await saveAuditSession(normalizedEmail, { sendEmailCopy: true, leadIntent: "share-report" });
+      const result = await saveAuditSession(normalizedEmail, { leadIntent: "share-report" });
       setEmail(normalizedEmail);
       setEmailConfirmation(
         isInternalTestEmail(normalizedEmail)
-          ? `Test mode is on for ${normalizedEmail}. No email was sent.`
-          : result.emailSent
-            ? `A copy of this report has been sent to ${normalizedEmail}.`
-            : `We saved your report, but could not send email right now. Use the share link below.`,
+          ? `Test mode is on for ${normalizedEmail}.`
+          : `We saved your report for ${normalizedEmail}. Use the share link below.`,
       );
       setShowSharePrompt(false);
       await copyShareLink();
@@ -1096,14 +1082,12 @@ export default function Home() {
     setEngagementPromptNotice("");
 
     try {
-      const result = await saveAuditSession(normalizedEmail, { sendEmailCopy: true, leadIntent: "engagement-email" });
+      const result = await saveAuditSession(normalizedEmail, { leadIntent: "engagement-email" });
       setEmail(normalizedEmail);
       setEmailConfirmation(
         isInternalTestEmail(normalizedEmail)
-          ? `Test mode is on for ${normalizedEmail}. No email was sent.`
-          : result.emailSent
-            ? `A copy of this report has been sent to ${normalizedEmail}.`
-            : `We saved your report, but could not send email right now. Use the share link below.`,
+          ? `Test mode is on for ${normalizedEmail}.`
+          : `We saved your report for ${normalizedEmail}. Use the share link below.`,
       );
       setShowEmailPrompt(false);
       trackEvent("email_submitted", { intent: "email_report" });
@@ -1146,7 +1130,6 @@ export default function Home() {
 
     try {
       await saveAuditSession(normalizedEmail, {
-        sendEmailCopy: false,
         nameOverride: normalizedName,
         phoneOverride: normalizedPhone,
         leadIntent: "callback-request",
@@ -1189,14 +1172,12 @@ export default function Home() {
     syncReportPath(nextReportId);
 
     try {
-      const result = await saveAuditSession(normalizedEmail, { sendEmailCopy: true });
-      console.log("ParkGrader email confirmation queued for", normalizedEmail);
+      const result = await saveAuditSession(normalizedEmail);
+      console.log("ParkGrader report saved for", normalizedEmail);
       setEmailConfirmation(
         isInternalTestEmail(normalizedEmail)
-          ? `Test mode is on for ${normalizedEmail}. No email was sent.`
-          : result.emailSent
-            ? `A copy of this report has been sent to ${normalizedEmail}.`
-            : `We saved your report, but could not send email right now. Use the share link below.`,
+          ? `Test mode is on for ${normalizedEmail}.`
+          : `We saved your report for ${normalizedEmail}. Use the share link below.`,
       );
       setLeadNotice(
         result.stored
@@ -1207,11 +1188,11 @@ export default function Home() {
       setShowEmailPrompt(false);
       setStep("report");
     } catch (error) {
-      console.log("ParkGrader email confirmation placeholder for", normalizedEmail);
+      console.log("ParkGrader report saved for", normalizedEmail);
       setEmailConfirmation(
         isInternalTestEmail(normalizedEmail)
-          ? `Test mode is on for ${normalizedEmail}. No email was sent.`
-          : `A copy of this report has been sent to ${normalizedEmail}.`,
+          ? `Test mode is on for ${normalizedEmail}.`
+          : `We saved your report for ${normalizedEmail}.`,
       );
       setLeadNotice(error instanceof Error ? error.message : "Lead capture failed.");
       setIsReportUnlocked(true);
@@ -1240,7 +1221,7 @@ export default function Home() {
     setInlineGateNotice("");
 
     try {
-      const result = await saveAuditSession(normalizedEmail, { sendEmailCopy: true, leadIntent: "inline_gate" });
+      const result = await saveAuditSession(normalizedEmail, { leadIntent: "inline_gate" });
       setEmail(normalizedEmail);
       setHasSubmittedEmailGate(true);
       setShowFixList(true);
