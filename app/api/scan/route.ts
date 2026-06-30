@@ -623,21 +623,6 @@ export async function GET(request: NextRequest) {
       .replace(/\s+/g, " ")
       .slice(0, 2500);
 
-    if (!isLikelyOutdoorHospitalitySite({
-      hostname: websiteUrl.hostname,
-      title,
-      description,
-      bodySnippet,
-      industry,
-    })) {
-      return NextResponse.json(
-        {
-          message: "ParkGrader only supports campground, RV park, marina, glamping, and cabin property websites.",
-        },
-        { status: 400 },
-      );
-    }
-
     if (validateOnly) {
       return NextResponse.json({ ok: true, url: canonicalHost });
     }
