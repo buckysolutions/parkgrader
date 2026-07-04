@@ -447,6 +447,7 @@ export default function Home() {
   const [callbackPromptNotice, setCallbackPromptNotice] = useState("");
   const [isSubmittingCallbackPrompt, setIsSubmittingCallbackPrompt] = useState(false);
   const [hasSubmittedEmailGate, setHasSubmittedEmailGate] = useState(false);
+  const [inlineGateName, setInlineGateName] = useState("");
   const [inlineGateEmail, setInlineGateEmail] = useState("");
   const [inlineGateNotice, setInlineGateNotice] = useState("");
   const [isSubmittingInlineGate, setIsSubmittingInlineGate] = useState(false);
@@ -458,6 +459,9 @@ export default function Home() {
   const reportSectionRef = useRef<HTMLDivElement | null>(null);
   const capturedAuditReportsRef = useRef<Set<string>>(new Set());
   const hydratedFromSavedReportRef = useRef(false);
+  const trackedSharedReportRef = useRef<Set<string>>(new Set());
+  const inlineGateFiredRef = useRef(false);
+  const inlineGateRef = useRef<HTMLDivElement | null>(null);
   const saveAuditSessionRef = useRef<((leadEmail?: string, options?: SaveAuditSessionOptions) => Promise<{ stored: boolean; email: string }>) | null>(null);
 
 
@@ -500,7 +504,14 @@ export default function Home() {
     if (typeof window === "undefined") {
       return;
     }
-    window.history.replaceState({}, "", `/r/${encodeURIComponent(nextReportId)}`);
+    const pagePath = `/r/${encodeURIComponent(nextReportId)}`;
+    window.history.replaceState({}, "", pagePath);
+    // GA4 doesn't auto-track replaceState — manually fire a virtual page_view
+    const measurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() ?? "";
+    const gtag = (window as unknown as { gtag?: Function }).gtag;
+    if (measurementId && gtag) {
+      gtag("config", measurementId, { page_path: pagePath, page_title: document.title });
+    }
   }, []);
 
   const resetToLandingPage = useCallback(() => {
@@ -754,9 +765,11 @@ export default function Home() {
     setHasTriggeredEmailPrompt(false);
     setHasSubmittedEmailGate(false);
     setShowFixList(false);
+    setInlineGateName("");
     setInlineGateEmail("");
     setInlineGateNotice("");
     setEmailGateConfirmation("");
+    inlineGateFiredRef.current = false;
     hydratedFromSavedReportRef.current = false;
     loadingStartRef.current = null;
     if (typeof window !== "undefined") {
@@ -810,7 +823,10 @@ export default function Home() {
     setShowFixList(Boolean(supabaseEmail));
     syncReportPath(snapshot.reportId);
     setStep("report");
-    trackEvent("shared_report_viewed", { report_id: snapshot.reportId });
+    if (!trackedSharedReportRef.current.has(snapshot.reportId)) {
+      trackedSharedReportRef.current.add(snapshot.reportId);
+      trackEvent("shared_report_viewed", { report_id: snapshot.reportId });
+    }
   }, [isTradeshowMode, syncReportPath]);
 
   useEffect(() => {
@@ -953,6 +969,36 @@ export default function Home() {
     })();
   }, [demoMode, reportId, reportUrl, saveAuditSession, scanResult, step]);
 
+  // Fire email_gate_shown when inline gate scrolls into view (Bug 1 fix)
+  useEffect(() => {
+    if (step !== "report" || isTradeshowMode || hasSubmittedEmailGate) {
+      return;
+    }
+    const gateEl = inlineGateRef.current;
+    if (!gateEl || inlineGateFiredRef.current) {
+      return;
+    }
+    // Small delay so the DOM has settled after the step transition
+    const timer = window.setTimeout(() => {
+      if (inlineGateFiredRef.current) return;
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (entries[0]?.isIntersecting && !inlineGateFiredRef.current) {
+            inlineGateFiredRef.current = true;
+            trackEvent("email_gate_shown", { trigger: "scroll", report_id: reportId });
+            observer.disconnect();
+          }
+        },
+        { threshold: 0.1 },
+      );
+      observer.observe(inlineGateRef.current!);
+    }, 500);
+    return () => {
+      clearTimeout(timer);
+      // observer.disconnect() is handled inside the callback
+    };
+  }, [hasSubmittedEmailGate, isTradeshowMode, reportId, step]);
+
   useEffect(() => {
     if (step !== "report") {
       return;
@@ -1019,7 +1065,7 @@ export default function Home() {
     setEngagementEmail(email);
     setEngagementPromptNotice("");
     setShowEmailPrompt(true);
-    trackEvent("email_gate_shown", { trigger: (window as unknown as { __emailGateTrigger?: string }).__emailGateTrigger || "scroll" });
+    trackEvent("email_gate_shown", { trigger: (window as unknown as { __emailGateTrigger?: string }).__emailGateTrigger || "scroll", report_id: reportId });
   }, [email]);
 
   const openCallbackPromptStep = useCallback(() => {
@@ -1090,7 +1136,7 @@ export default function Home() {
           : `We saved your report for ${normalizedEmail}. Use the share link below.`,
       );
       setShowEmailPrompt(false);
-      trackEvent("email_submitted", { intent: "email_report" });
+      trackEvent("email_submitted", { intent: "email_report", report_id: reportId });
     } catch (error) {
       setEngagementPromptNotice(error instanceof Error ? error.message : "Unable to send report.");
     } finally {
@@ -1221,12 +1267,12 @@ export default function Home() {
     setInlineGateNotice("");
 
     try {
-      const result = await saveAuditSession(normalizedEmail, { leadIntent: "inline_gate" });
+      const result = await saveAuditSession(normalizedEmail, { nameOverride: inlineGateName.trim(), leadIntent: "inline_gate" });
       setEmail(normalizedEmail);
       setHasSubmittedEmailGate(true);
       setShowFixList(true);
       setEmailGateConfirmation(`Report sent to ${normalizedEmail}.`);
-      trackEvent("email_submitted", { method: "inline_gate" });
+      trackEvent("email_submitted", { method: "inline_gate", report_id: reportId });
     } catch (error) {
       setInlineGateNotice(error instanceof Error ? error.message : "Unable to save. Please try again.");
     } finally {
@@ -1882,14 +1928,22 @@ export default function Home() {
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.3, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                     >
-                      <div className="relative">
+                      <div className="relative" ref={inlineGateRef}>
                         <div className="glow-blob" />
                         <div className="glow-card px-8 py-10 text-center">
                           <p className="text-[1.75rem] font-medium leading-tight text-[#0A1628]">See exactly what to fix next</p>
                           <p className="mx-auto mt-2 max-w-md text-base leading-7 text-[#5B6776]">
                             We&apos;ll email your report, prioritized fix list, and a short video showing the biggest opportunities on your specific site.
                           </p>
-                          <div className="mt-6 mx-auto w-full max-w-sm">
+                          <div className="mt-6 mx-auto w-full max-w-sm space-y-4">
+                            <input
+                              type="text"
+                              autoComplete="name"
+                              value={inlineGateName}
+                              onChange={(event) => setInlineGateName(event.target.value)}
+                              placeholder="Your name"
+                              className="h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] border-[#D1D5DB] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                            />
                             <input
                               type="email"
                               inputMode="email"
