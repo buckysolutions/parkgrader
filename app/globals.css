@@ -235,7 +235,7 @@ input[type="reset"] {
 input,
 textarea,
 select {
-  border-radius: 0 !important;
+  border-radius: 0;
 }
 
 h1,

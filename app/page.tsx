@@ -447,11 +447,9 @@ export default function Home() {
   const [callbackPromptNotice, setCallbackPromptNotice] = useState("");
   const [isSubmittingCallbackPrompt, setIsSubmittingCallbackPrompt] = useState(false);
   const [hasSubmittedEmailGate, setHasSubmittedEmailGate] = useState(false);
-  const [inlineGateName, setInlineGateName] = useState("");
   const [inlineGateEmail, setInlineGateEmail] = useState("");
   const [inlineGateNotice, setInlineGateNotice] = useState("");
   const [isSubmittingInlineGate, setIsSubmittingInlineGate] = useState(false);
-  const [showFixList, setShowFixList] = useState(false);
   const landingInputRef = useRef<HTMLInputElement | null>(null);
   const scanRequestRef = useRef(0);
   const loadingStartRef = useRef<number | null>(null);
@@ -763,8 +761,6 @@ export default function Home() {
     setShowEmailPrompt(false);
     setHasTriggeredEmailPrompt(false);
     setHasSubmittedEmailGate(false);
-    setShowFixList(false);
-    setInlineGateName("");
     setInlineGateEmail("");
     setInlineGateNotice("");
     inlineGateFiredRef.current = false;
@@ -818,7 +814,7 @@ export default function Home() {
     // If email exists in Supabase, this report was previously unlocked.
     // If null, the gate must persist across all reloads until email is submitted.
     setHasSubmittedEmailGate(Boolean(supabaseEmail));
-    setShowFixList(Boolean(supabaseEmail));
+    setInlineGateEmail(supabaseEmail ?? "");
     syncReportPath(snapshot.reportId);
     setStep("report");
     if (!trackedSharedReportRef.current.has(snapshot.reportId)) {
@@ -1265,7 +1261,7 @@ export default function Home() {
     setInlineGateNotice("");
 
     try {
-      const result = await saveAuditSession(normalizedEmail, { nameOverride: inlineGateName.trim(), leadIntent: "inline_gate" });
+      const result = await saveAuditSession(normalizedEmail, { leadIntent: "inline_gate" });
       setEmail(normalizedEmail);
       setHasSubmittedEmailGate(true);
       trackEvent("email_submitted", { method: "inline_gate", report_id: reportId });
@@ -1929,9 +1925,10 @@ export default function Home() {
                                 <motion.circle
                                   cx="22" cy="22" r="20"
                                   stroke="#2DA4A9" strokeWidth="3"
+                                  strokeLinecap="round"
                                   fill="none"
-                                  initial={{ pathLength: 0 }}
-                                  animate={{ pathLength: 1 }}
+                                  initial={{ pathLength: 0, rotate: -90 }}
+                                  animate={{ pathLength: 1, rotate: -90 }}
                                   transition={{ duration: 0.5, delay: 0.3, ease: "easeInOut" }}
                                 />
                                 <motion.path
@@ -1951,7 +1948,7 @@ export default function Home() {
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.5, duration: 0.4 }}
                             >
-                              Report sent!
+                              We'll take a look!
                             </motion.p>
                             <motion.p
                               className="mx-auto mt-3 max-w-md text-base leading-7 text-[#5B6776]"
@@ -1959,8 +1956,7 @@ export default function Home() {
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.6, duration: 0.4 }}
                             >
-                              Check your inbox at <span className="font-medium text-[#0A1628]">{inlineGateEmail}</span>.<br />
-                              We&apos;ll email your full report, prioritized fix list, and a short video walking through the biggest opportunities on your site.
+                              We&apos;ll personally review your site and send a short video with your fix list to <span className="font-medium text-[#0A1628]">{inlineGateEmail}</span>, usually within 24 hours. In the meantime, scroll up to explore your results.
                             </motion.p>
                           </div>
                         </div>
@@ -1976,19 +1972,11 @@ export default function Home() {
                         <div className="relative" ref={inlineGateRef}>
                           <div className="glow-blob" />
                           <div className="glow-card px-8 py-10 text-center">
-                            <p className="text-[1.75rem] font-medium leading-tight text-[#0A1628]">See exactly what to fix next</p>
+                            <p className="text-[1.75rem] font-medium leading-tight text-[#0A1628]">Get a personalized video review</p>
                             <p className="mx-auto mt-2 max-w-md text-base leading-7 text-[#5B6776]">
-                              We&apos;ll email your report, prioritized fix list, and a short video showing the biggest opportunities on your specific site.
+                              We&apos;ll look at your results, record a short walkthrough of your biggest opportunities, and send it with your <span className="font-semibold text-[#4A5A6A]">fix list</span> and <span className="font-semibold text-[#4A5A6A]">full report</span>, usually within 24 hours.
                             </p>
-                            <div className="mt-6 mx-auto w-full max-w-sm space-y-4">
-                              <input
-                                type="text"
-                                autoComplete="name"
-                                value={inlineGateName}
-                                onChange={(event) => setInlineGateName(event.target.value)}
-                                placeholder="Your name"
-                                className="h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] border-[#D1D5DB] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
-                              />
+                            <div className="mt-6 mx-auto w-full max-w-sm">
                               <input
                                 type="email"
                                 inputMode="email"
@@ -2008,9 +1996,9 @@ export default function Home() {
                                     void submitInlineGate();
                                   }
                                 }}
-                                placeholder="Email address"
-                                className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] ${
-                                  inlineGateNotice ? "border-[#DC2626] focus:border-[#DC2626]" : "border-[#D1D5DB] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                                placeholder="Your email"
+                                className={`h-12 w-full !rounded-[12px] border bg-white px-4 text-base text-[#0A1628] outline-none transition-all placeholder:text-[#8C97A8] hover:border-[#F57D52]/40 focus:shadow-[0_0_0_3px_rgba(245,125,82,0.12)] ${
+                                  inlineGateNotice ? "border-[#DC2626] focus:border-[#DC2626] focus:shadow-[0_0_0_3px_rgba(220,38,38,0.10)]" : "border-[#C4CCD4] focus:border-[#F57D52]"
                                 }`}
                               />
                               {inlineGateNotice ? <p className="mt-2 text-left text-base text-[#B42318]">{inlineGateNotice}</p> : null}
@@ -2018,45 +2006,19 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() => void submitInlineGate()}
-                              className="report-btn-rounded mt-6 inline-flex min-h-12 w-full max-w-sm items-center justify-center bg-[#2DA4A9] px-5 py-3 text-base font-medium text-white transition-all hover:bg-[#24858A] hover:shadow-[0_0_28px_rgba(45,164,169,0.30)] disabled:cursor-not-allowed disabled:opacity-70"
+                              className="report-btn-rounded mt-6 inline-flex min-h-12 w-full max-w-sm items-center justify-center bg-[#F57D52] px-5 py-3 text-base font-medium text-white transition-all hover:bg-[#E0683E] hover:shadow-[0_0_28px_rgba(245,125,82,0.35)] disabled:cursor-not-allowed disabled:opacity-70"
                               disabled={isSubmittingInlineGate}
                             >
-                              {isSubmittingInlineGate ? "Sending..." : "Email My Report + Video"}
+                              {isSubmittingInlineGate ? "Saving..." : "Send Me the Video"}
                             </button>
+                            <p className="mt-3 flex items-center justify-center gap-1.5 text-sm text-[#8C97A8]">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#8c97a8" viewBox="0 0 256 256"><path d="M117.25,157.92a60,60,0,1,0-66.5,0A95.83,95.83,0,0,0,3.53,195.63a8,8,0,1,0,13.4,8.74,80,80,0,0,1,134.14,0,8,8,0,0,0,13.4-8.74A95.83,95.83,0,0,0,117.25,157.92ZM40,108a44,44,0,1,1,44,44A44.05,44.05,0,0,1,40,108Zm210.14,98.7a8,8,0,0,1-11.07-2.33A79.83,79.83,0,0,0,172,168a8,8,0,0,1,0-16,44,44,0,1,0-16.34-84.87,8,8,0,1,1-5.94-14.85,60,60,0,0,1,55.53,105.64,95.83,95.83,0,0,1,47.22,37.71A8,8,0,0,1,250.14,206.7Z"></path></svg>
+                              Join 500+ campground owners
+                            </p>
                           </div>
                         </div>
                       </motion.section>
                     )
-                  ) : null}
-
-                  {/* Your Fix List — only on shared report reloads where email was previously saved */}
-                  {showFixList && failingChecks.length > 0 ? (
-                    <motion.section
-                      className="mt-8 pb-6 pt-2 md:pb-8 md:pt-4"
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-                    >
-                      <div className="glass-card overflow-hidden rounded-2xl px-6 py-6">
-                        <h3 className="text-[22px] font-medium tracking-[-0.03em] text-[#0A1628]">Your Fix List</h3>
-                        <p className="mt-2 text-base text-[#5B6776]">
-                          Here&apos;s what to tackle first, in order of impact.
-                        </p>
-                        <div className="mt-5 space-y-4">
-                          {failingChecks.map((check, i) => (
-                            <div key={check.id}>
-                              {i > 0 ? <div className="mb-4 h-px bg-[#E6EBF0]" /> : null}
-                              <p className="text-base font-medium text-[#0A1628]">
-                                {i + 1}. {getCheckDisplayLabel(check)}
-                              </p>
-                              <p className="mt-1 text-base leading-7 text-[#5B6776]">
-                                {check.details || check.finding}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </motion.section>
                   ) : null}
 
                 </div>

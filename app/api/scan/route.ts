@@ -180,10 +180,15 @@ const getIndustry = (value: string | null): IndustryKey => {
   }
 };
 
-const extractMeta = (html: string, property: "title" | "description"): string => {
+const extractMeta = (html: string, property: "title" | "description" | "og:site_name"): string => {
   if (property === "title") {
     const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
     return titleMatch?.[1]?.trim() ?? "";
+  }
+
+  if (property === "og:site_name") {
+    const match = html.match(/<meta[^>]*property=["']og:site_name["'][^>]*content=["']([^"']*)["'][^>]*>/i);
+    return match?.[1]?.trim() ?? "";
   }
 
   const descriptionMatch = html.match(
@@ -966,17 +971,11 @@ export async function GET(request: NextRequest) {
       ? "Responsive design settings detected  -  your site adapts to phone screens"
       : "Missing responsive settings  -  your site may appear tiny and zoomed out on phones";
 
-    // Extract a business name from the page title for the Places search
-    const cleanTitle = title
-      .replace(/\s*[-–|]\s*.*$/, "")
-      .replace(/\s*(?:campground|RV park|RV resort|marina|glamping|cabin|lodge|resort|hotel|motel).*$/i, "")
-      .trim();
-    // Try to pull city/state from the page text
-    const cityStatePattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*),\s*([A-Z]{2})\b/;
-    const cityStateMatch = textOnly.match(cityStatePattern);
-    const cityState = cityStateMatch ? `${cityStateMatch[1]}, ${cityStateMatch[2]}` : "";
-    if (cleanTitle && cleanTitle.length >= 3) {
-      placesSearchQuery = `${cleanTitle} ${cityState || placesSearchQuery}`.trim();
+    // Build a Places search query from the domain and, if available, the site name
+    // from og:site_name meta (much more reliable than parsing SEO titles).
+    const ogSiteName = extractMeta(html, "og:site_name");
+    if (ogSiteName) {
+      placesSearchQuery = `${ogSiteName} ${placesSearchQuery}`;
     }
     // Include phone number in the search , Google Places matches phone numbers to listings
     if (scrapedPhoneDigits.length === 10) {
@@ -1236,17 +1235,17 @@ export async function GET(request: NextRequest) {
         status: gbpRatingStatus,
         evidence: gbpRatingEvidence,
         finding: !placesMatched
-          ? "Google listing not found. Claim your free listing."
+          ? "We couldn't automatically verify your Google listing"
           : (gbpRating ?? 0) >= 4.0
             ? "Google rating is strong"
             : "Google rating is below 4 stars",
         details: !placesMatched
-          ? "Go to business.google.com and claim your free listing. It takes 5 minutes and helps guests find you."
+          ? "Our scanner wasn't able to match your site to a Google Business Profile. This is common and doesn't mean your listing is missing — it could be listed under a slightly different name or website."
           : (gbpRating ?? 0) >= 4.0
             ? "A 4 star or above rating keeps you visible when guests are comparing options."
             : "Most guests filter out anything under 4 stars when comparing parks.",
         steps: !placesMatched
-          ? ["Go to business.google.com and search for your park by name. Click 'Claim this business' and follow the steps.", "Once verified, fill in your hours, photos, and description. This is free and takes about 10 minutes."]
+          ? ["Search Google Maps for your park name and make sure your website is listed correctly on your profile.", "If you don't have a Google Business Profile yet, go to business.google.com and create one — it's free and takes about 10 minutes."]
           : (gbpRating ?? 0) >= 4.0
             ? ["Your rating is solid , keep it that way by asking happy guests to leave a review at checkout."]
             : [
@@ -1264,17 +1263,17 @@ export async function GET(request: NextRequest) {
         status: gbpReviewsStatus,
         evidence: gbpReviewsEvidence,
         finding: !placesMatched
-          ? "Google listing not found. Claim your free listing."
+          ? "We couldn't automatically verify your Google listing"
           : (gbpReviewCount ?? 0) >= 25
             ? "Healthy review volume"
             : "Not enough Google reviews",
         details: !placesMatched
-          ? "Claim your Google Maps listing at business.google.com. Then our scanner can check your reviews."
+          ? "Our scanner wasn't able to match your site to a Google Business Profile. This is common and doesn't mean your listing is missing — it could be listed under a slightly different name or website."
           : (gbpReviewCount ?? 0) >= 25
             ? "Hundreds of reviews builds instant trust with guests who have never heard of you."
             : "Parks with under 25 reviews look unproven to guests who don't know you.",
         steps: !placesMatched
-          ? ["Same as above , go to business.google.com and claim your free listing first. Everything else builds from there."]
+          ? ["Search Google Maps for your park name and make sure your website is listed correctly on your profile.", "If you don't have a Google Business Profile yet, go to business.google.com and create one — it's free and takes about 10 minutes."]
           : (gbpReviewCount ?? 0) >= 25
             ? ["You're in great shape. Keep asking guests for reviews , a steady flow looks better than a one-time burst."]
             : [

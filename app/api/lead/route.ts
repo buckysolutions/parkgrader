@@ -64,19 +64,6 @@ type HubSpotSearchResponse = {
   }>;
 };
 
-type HubSpotContactSearchResponse = {
-  results?: Array<{
-    id: string;
-    properties?: {
-      email?: string;
-      company?: string;
-      website?: string;
-      firstname?: string;
-      lastname?: string;
-    };
-  }>;
-};
-
 const isValidEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 const hasEnabledQueryFlag = (value: string | null): boolean => {
@@ -98,22 +85,18 @@ const isInternalTestDomain = (domain: string): boolean => domain.toLowerCase() =
 
 const isInternalTestEmail = (email: string): boolean => email.toLowerCase().endsWith(`@${INTERNAL_TEST_DOMAIN}`);
 
-const getLeadIntentBucket = (leadIntent: string): "help" | "engaged" | "unknown" => {
+const getLeadIntentBucket = (leadIntent: string): "email_capture" | "help" | "other" => {
   const intent = leadIntent.trim().toLowerCase();
-
-  if (!intent) {
-    return "unknown";
-  }
 
   if (intent === "callback-request" || intent.startsWith("check-help:")) {
     return "help";
   }
 
-  if (intent === "engagement-email" || intent === "share-report") {
-    return "engaged";
+  if (intent === "inline_gate") {
+    return "email_capture";
   }
 
-  return "unknown";
+  return "other";
 };
 
 // Normalize domain from URL (e.g., "https://www.example.com/path" -> "example.com")
@@ -145,26 +128,6 @@ const getHubSpotErrorMessage = async (response: Response, fallbackMessage: strin
   } catch {
     return body;
   }
-};
-
-const extractMissingPropertyNames = (message: string): string[] => {
-  const matches = message.matchAll(/Property "([^"]+)" does not exist/g);
-  return Array.from(matches, (match) => match[1]);
-};
-
-const removeMissingProperties = (
-  properties: Record<string, string | undefined>,
-  missingPropertyNames: string[],
-): Record<string, string | undefined> => {
-  if (!missingPropertyNames.length) {
-    return properties;
-  }
-
-  const next = { ...properties };
-  for (const key of missingPropertyNames) {
-    delete next[key];
-  }
-  return next;
 };
 
 const normalizeText = (value: string): string => value.trim().toLowerCase();
@@ -214,7 +177,7 @@ const getWebhookCompanyName = (payload: Required<LeadPayload>): string => {
   return "Unknown Company";
 };
 
-const getTopFixes = (payload: Required<LeadPayload>): { topFix1: string; topFix2: string } => {
+const getAllFixes = (payload: Required<LeadPayload>): string[] => {
   const snapshot = toSnapshotLike(payload.report_snapshot);
   const checks = snapshot?.scanResult?.checks ?? [];
   const topFails = snapshot?.scanResult?.topFails ?? [];
@@ -227,28 +190,23 @@ const getTopFixes = (payload: Required<LeadPayload>): { topFix1: string; topFix2
 
   const labels: string[] = [];
 
+  // First, collect from topFails (sorted by weight)
   for (const failId of topFails) {
     const check = checkById.get(failId);
     const label = check?.name?.trim();
     if (!label || labels.includes(label)) continue;
     labels.push(label);
-    if (labels.length >= 2) break;
   }
 
-  if (labels.length < 2) {
-    for (const check of checks) {
-      const isFail = check.status === "fail" || check.pass === false;
-      const label = check.name?.trim() ?? "";
-      if (!isFail || !label || labels.includes(label)) continue;
-      labels.push(label);
-      if (labels.length >= 2) break;
-    }
+  // Then, append any remaining failing checks not already covered
+  for (const check of checks) {
+    const isFail = check.status === "fail" || check.pass === false;
+    const label = check.name?.trim() ?? "";
+    if (!isFail || !label || labels.includes(label)) continue;
+    labels.push(label);
   }
 
-  return {
-    topFix1: labels[0] ?? "booking clarity",
-    topFix2: labels[1] ?? "mobile speed",
-  };
+  return labels.length > 0 ? labels : ["booking clarity", "mobile speed"];
 };
 
 const scoreToLetterGrade = (score: number): string => {
@@ -306,22 +264,20 @@ const sendLeadCaptureWebhook = async (
     process.env.NEXT_PUBLIC_APP_BASE_URL?.trim() ||
     "https://parkgrader.com";
   const parkgraderReportUrl = `${appBaseUrl.replace(/\/$/, "")}/r/${encodeURIComponent(payload.report_id)}`;
-  const { topFix1, topFix2 } = getTopFixes(payload);
+  const fixes = getAllFixes(payload);
 
   const webhookBody = {
     email: payload.email,
-    name: payload.name,
-    phone: payload.phone,
     lead_intent: payload.lead_intent,
-    intent_bucket: getLeadIntentBucket(payload.lead_intent),
     url: payload.url,
     company_name: companyName,
     hubspot_contact_id: hubspotContactId,
     parkgrader_report_url: parkgraderReportUrl,
-    top_fix_1: topFix1,
-    top_fix_2: topFix2,
+    fixes,
     report_id: payload.report_id,
     scan_date: payload.scan_date,
+    booking_platform: payload.booking_platform,
+    primary_challenge: payload.primary_challenge,
   };
 
   const response = await fetch(webhookUrl, {
@@ -375,14 +331,19 @@ const hasExistingEmailInSupabase = async (
   supabaseUrl: string,
   serviceRoleKey: string,
   email: string,
+  excludeReportId?: string,
 ): Promise<boolean> => {
   const normalizedEmail = email.trim().toLowerCase();
   if (!normalizedEmail || !isValidEmail(normalizedEmail)) {
     return false;
   }
 
-  const response = await fetch(
-    `${supabaseUrl}/rest/v1/parkgrader_audits?select=report_id&email=eq.${encodeURIComponent(normalizedEmail)}&limit=1`,
+  let url = `${supabaseUrl}/rest/v1/parkgrader_audits?select=report_id&email=eq.${encodeURIComponent(normalizedEmail)}&limit=1`;
+  if (excludeReportId) {
+    url += `&report_id=neq.${encodeURIComponent(excludeReportId)}`;
+  }
+
+  const response = await fetch(url,
     {
       method: "GET",
       headers: {
@@ -469,34 +430,6 @@ const storeAuditInSupabase = async (payload: Required<LeadPayload>): Promise<Sup
   return {
     enabled: true,
     stored: true,
-  };
-};
-
-const toHubSpotContactProperties = (payload: Required<LeadPayload>) => {
-  const appBaseUrl =
-    process.env.APP_BASE_URL?.trim() ||
-    process.env.NEXT_PUBLIC_APP_BASE_URL?.trim() ||
-    "https://parkgrader.com";
-  const reportLink = `${appBaseUrl.replace(/\/$/, "")}/r/${encodeURIComponent(payload.report_id)}`;
-
-  return {
-    email: payload.email,
-    firstname: payload.name,
-    phone: payload.phone,
-    company: payload.property_name,
-    website: payload.url,
-    parkgrader_score: String(payload.score),
-    parkgrader_grade: scoreToLetterGrade(payload.score),
-    parkgrader_url: payload.url,
-    parkgrader_top_issue: getTopFailingCheckName(payload),
-    parkgrader_booking_platform: payload.booking_platform,
-    parkgrader_primary_challenge: payload.primary_challenge,
-    parkgrader_scan_date: payload.scan_date,
-    parkgrader_audit_date: payload.scan_date,
-    parkgrader_report_id: payload.report_id,
-    report_link: reportLink,
-    lead_intent: payload.lead_intent || "email_gate",
-    loom_requested: payload.loom_requested ? "true" : "false",
   };
 };
 
@@ -671,7 +604,6 @@ const sendGoogleChatAuditNotification = async (
     companyId: string;
     companyName: string;
     leadIntent: string;
-    intentBucket: "help" | "engaged" | "unknown";
     reportSnapshot: unknown;
     auditedUrl: string;
   },
@@ -780,6 +712,14 @@ const sendGoogleChatAuditNotification = async (
         buttonList: {
           buttons: [
             {
+              text: "Open Website",
+              onClick: {
+                openLink: {
+                  url: details.auditedUrl.startsWith("http") ? details.auditedUrl : `https://${details.auditedUrl}`,
+                },
+              },
+            },
+            {
               text: "Open ParkGrader Report",
               onClick: {
                 openLink: {
@@ -833,197 +773,6 @@ const sendGoogleChatAuditNotification = async (
   }
 };
 
-const associateContactToCompany = async (
-  accessToken: string,
-  contactId: string,
-  companyId: string
-): Promise<void> => {
-  const response = await fetch(
-    `https://api.hubapi.com/crm/v3/objects/contacts/${encodeURIComponent(contactId)}/associations/companies/${encodeURIComponent(companyId)}/contact_to_company`,
-    {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-    },
-  );
-
-  if (!response.ok) {
-    console.error(await getHubSpotErrorMessage(response, "Contact-company association failed."));
-  }
-};
-
-const findHubSpotContactByCompanySignals = async (
-  accessToken: string,
-  payload: Required<LeadPayload>,
-  domain: string,
-): Promise<string | null> => {
-  const searchRequests = [
-    {
-      filterGroups: [{ filters: [{ propertyName: "website", operator: "CONTAINS_TOKEN", value: domain }] }],
-      properties: ["company", "website", "email", "firstname", "lastname"],
-      limit: 10,
-    },
-    ...(payload.property_name
-      ? [
-          {
-            filterGroups: [{ filters: [{ propertyName: "company", operator: "EQ", value: payload.property_name }] }],
-            properties: ["company", "website", "email", "firstname", "lastname"],
-            limit: 10,
-          },
-        ]
-      : []),
-  ];
-
-  for (const requestBody of searchRequests) {
-    const response = await fetch("https://api.hubapi.com/crm/v3/objects/contacts/search", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      continue;
-    }
-
-    const payloadResult = (await response.json()) as HubSpotContactSearchResponse;
-    const contacts = payloadResult.results ?? [];
-    if (!contacts.length) {
-      continue;
-    }
-
-    const normalizedDomain = normalizeText(domain);
-    const normalizedCompany = normalizeText(payload.property_name);
-
-    const strongMatch = contacts.find((contact) => {
-      const contactCompany = normalizeText(contact.properties?.company ?? "");
-      const contactWebsite = normalizeText(contact.properties?.website ?? "");
-      const companyMatches = normalizedCompany && contactCompany === normalizedCompany;
-      const websiteMatches = normalizedDomain && contactWebsite.includes(normalizedDomain);
-      return companyMatches || websiteMatches;
-    });
-
-    if (strongMatch) {
-      return strongMatch.id;
-    }
-
-    return contacts[0]?.id ?? null;
-  }
-
-  return null;
-};
-
-const findHubSpotContactIdByEmail = async (accessToken: string, email: string): Promise<string | null> => {
-  const response = await fetch("https://api.hubapi.com/crm/v3/objects/contacts/search", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      filterGroups: [{ filters: [{ propertyName: "email", operator: "EQ", value: email }] }],
-      properties: ["email"],
-      limit: 1,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(await getHubSpotErrorMessage(response, "HubSpot contact lookup failed."));
-  }
-
-  const result = (await response.json()) as { results?: Array<{ id: string }> };
-  return result.results?.[0]?.id ?? null;
-};
-
-const updateHubSpotLead = async (accessToken: string, contactId: string, payload: Required<LeadPayload>) => {
-  const url = `https://api.hubapi.com/crm/v3/objects/contacts/${encodeURIComponent(contactId)}`;
-  const initialProperties = toHubSpotContactProperties(payload);
-
-  const response = await fetch(url, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ properties: initialProperties }),
-  });
-
-  if (response.ok) {
-    return;
-  }
-
-  const errorMessage = await getHubSpotErrorMessage(response, "HubSpot lead update failed.");
-  const missingPropertyNames = extractMissingPropertyNames(errorMessage);
-
-  if (!missingPropertyNames.length) {
-    throw new Error(errorMessage);
-  }
-
-  const fallbackProperties = removeMissingProperties(initialProperties, missingPropertyNames);
-  const fallbackResponse = await fetch(url, {
-    method: "PATCH",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ properties: fallbackProperties }),
-  });
-
-  if (!fallbackResponse.ok) {
-    throw new Error(await getHubSpotErrorMessage(fallbackResponse, "HubSpot lead update failed."));
-  }
-};
-
-const createHubSpotLead = async (accessToken: string, payload: Required<LeadPayload>) => {
-  const url = "https://api.hubapi.com/crm/v3/objects/contacts";
-  const initialProperties = {
-    ...toHubSpotContactProperties(payload),
-    parkgrader_sequence_status: "Replied",
-  };
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ properties: initialProperties }),
-  });
-
-  if (response.ok) {
-    const data = (await response.json()) as { id: string };
-    return data.id;
-  }
-
-  const errorMessage = await getHubSpotErrorMessage(response, "HubSpot lead creation failed.");
-  const missingPropertyNames = extractMissingPropertyNames(errorMessage);
-
-  if (!missingPropertyNames.length) {
-    throw new Error(errorMessage);
-  }
-
-  const fallbackProperties = removeMissingProperties(initialProperties, missingPropertyNames);
-  const fallbackResponse = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ properties: fallbackProperties }),
-  });
-
-  if (!fallbackResponse.ok) {
-    throw new Error(await getHubSpotErrorMessage(fallbackResponse, "HubSpot lead creation failed."));
-  }
-
-  const data = (await fallbackResponse.json()) as { id: string };
-  return data.id;
-};
-
 const upsertHubSpotLead = async (payload: Required<LeadPayload>): Promise<UpsertResult> => {
   const accessToken = process.env.HUBSPOT_ACCESS_TOKEN;
   if (!accessToken) {
@@ -1034,7 +783,9 @@ const upsertHubSpotLead = async (payload: Required<LeadPayload>): Promise<Upsert
     };
   }
 
-  // Always upsert Company first (based on domain from URL)
+  // Upsert Company only (based on domain from URL). We intentionally
+  // skip contacts because anyone can run an audit and we don't want
+  // to mix up contact records across different businesses.
   const domain = normalizeDomain(payload.url);
   if (!domain) {
     return {
@@ -1048,42 +799,12 @@ const upsertHubSpotLead = async (payload: Required<LeadPayload>): Promise<Upsert
   const isTestEmail = payload.email ? isInternalTestEmail(payload.email) : false;
   const companyResult = await upsertHubSpotCompany(accessToken, domain, payload);
 
-  let upsertedContactId: string | null = null;
-
-  // Only upsert Contact if email is valid
-  if (payload.email && isValidEmail(payload.email) && !isTestEmail) {
-    const directContactId = payload.hubspot_contact_id?.startsWith("company-") ? "" : payload.hubspot_contact_id;
-    let contactId = directContactId || (await findHubSpotContactIdByEmail(accessToken, payload.email));
-
-    if (!contactId) {
-      contactId = await findHubSpotContactByCompanySignals(accessToken, payload, domain);
-    }
-
-    let newContactId = contactId;
-    if (contactId) {
-      await updateHubSpotLead(accessToken, contactId, payload);
-      upsertedContactId = contactId;
-    } else {
-      newContactId = await createHubSpotLead(accessToken, payload);
-      upsertedContactId = newContactId;
-    }
-
-    // Try to associate contact to company (non-blocking)
-    if (newContactId) {
-      const company = await findHubSpotCompanyByDomain(accessToken, domain);
-      if (company) {
-        await associateContactToCompany(accessToken, newContactId, company.id);
-      }
-    }
-  }
-
-  const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL?.trim() ?? "";
+  // Send Google Chat notification now that we have the real company ID
+  const googleChatUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL?.trim() ?? "";
   let notified = false;
-
-  if (webhookUrl && companyResult.wasNewAudit && !isTestDomain && !isTestEmail) {
+  if (googleChatUrl && companyResult.wasNewAudit && !isTestDomain && !isTestEmail) {
     try {
-      const intentBucket = getLeadIntentBucket(payload.lead_intent);
-      await sendGoogleChatAuditNotification(webhookUrl, {
+      await sendGoogleChatAuditNotification(googleChatUrl, {
         domain,
         auditCount: companyResult.nextAuditCount,
         auditDate: payload.scan_date,
@@ -1094,20 +815,19 @@ const upsertHubSpotLead = async (payload: Required<LeadPayload>): Promise<Upsert
         companyId: companyResult.companyId,
         companyName: payload.property_name,
         leadIntent: payload.lead_intent,
-        intentBucket,
         reportSnapshot: payload.report_snapshot,
         auditedUrl: payload.url,
       });
       notified = true;
     } catch (error) {
-      console.error(error);
+      console.error("Google Chat notification failed:", error);
     }
   }
 
   return {
     provider: "hubspot",
     notified,
-    hubspotContactId: upsertedContactId,
+    hubspotContactId: null,
   };
 };
 
@@ -1175,13 +895,13 @@ export async function POST(request: NextRequest) {
       const isTestDomain = domain ? isInternalTestDomain(domain) : false;
       const isTestEmail = payload.email ? isInternalTestEmail(payload.email) : false;
 
-      // Google Chat notification  -  independent of HubSpot
+      // Google Chat notification — only when HubSpot is NOT configured
+      // (when HubSpot is configured, upsertHubSpotLead handles it with real company ID)
+      const hubspotToken = process.env.HUBSPOT_ACCESS_TOKEN?.trim() ?? "";
       const googleChatUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL?.trim() ?? "";
-      if (googleChatUrl && !isTestDomain && !isTestEmail) {
-        // Fire immediately, don't wait for HubSpot
+      if (googleChatUrl && !hubspotToken && !isTestDomain && !isTestEmail) {
         (async () => {
           try {
-            const intentBucket = getLeadIntentBucket(payload.lead_intent);
             await sendGoogleChatAuditNotification(googleChatUrl, {
               domain: domain ?? "",
               auditCount: 0,
@@ -1208,13 +928,13 @@ export async function POST(request: NextRequest) {
       if (leadCaptureUrl && payload.email && isValidEmail(payload.email) && !isTestEmail && !isTestDomain) {
         (async () => {
           try {
-            // Check Supabase for existing email
+            // Check Supabase for existing email on OTHER reports (not this one)
             let emailAlreadyInDatabase = false;
             const supabaseUrl = process.env.SUPABASE_URL?.trim() ?? "";
             const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
             if (supabaseUrl && serviceRoleKey) {
               try {
-                emailAlreadyInDatabase = await hasExistingEmailInSupabase(supabaseUrl, serviceRoleKey, payload.email);
+                emailAlreadyInDatabase = await hasExistingEmailInSupabase(supabaseUrl, serviceRoleKey, payload.email, payload.report_id);
               } catch {
                 // Non-blocking
               }
