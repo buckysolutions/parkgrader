@@ -451,7 +451,6 @@ export default function Home() {
   const [inlineGateEmail, setInlineGateEmail] = useState("");
   const [inlineGateNotice, setInlineGateNotice] = useState("");
   const [isSubmittingInlineGate, setIsSubmittingInlineGate] = useState(false);
-  const [emailGateConfirmation, setEmailGateConfirmation] = useState("");
   const [showFixList, setShowFixList] = useState(false);
   const landingInputRef = useRef<HTMLInputElement | null>(null);
   const scanRequestRef = useRef(0);
@@ -768,7 +767,6 @@ export default function Home() {
     setInlineGateName("");
     setInlineGateEmail("");
     setInlineGateNotice("");
-    setEmailGateConfirmation("");
     inlineGateFiredRef.current = false;
     hydratedFromSavedReportRef.current = false;
     loadingStartRef.current = null;
@@ -1270,8 +1268,6 @@ export default function Home() {
       const result = await saveAuditSession(normalizedEmail, { nameOverride: inlineGateName.trim(), leadIntent: "inline_gate" });
       setEmail(normalizedEmail);
       setHasSubmittedEmailGate(true);
-      setShowFixList(true);
-      setEmailGateConfirmation(`Report sent to ${normalizedEmail}.`);
       trackEvent("email_submitted", { method: "inline_gate", report_id: reportId });
     } catch (error) {
       setInlineGateNotice(error instanceof Error ? error.message : "Unable to save. Please try again.");
@@ -1824,17 +1820,6 @@ export default function Home() {
                 {/* ── Detail Cards ── */}
                 {isReportUnlocked || isTradeshowMode ? (
                 <div className="relative mt-12">
-                  {/* Confirmation banner */}
-                  {emailGateConfirmation ? (
-                    <motion.div
-                      className="mb-6 rounded-xl border border-[#2DA4A9]/30 bg-[#E6F7F8] px-5 py-4 text-center"
-                      initial={{ opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                    >
-                      <p className="text-base font-medium text-[#0A1628]">{emailGateConfirmation}</p>
-                    </motion.div>
-                  ) : null}
-
                   {/* Report summary */}
                   <div className="mb-6 text-left">
                     <p className="text-[1.5rem] font-medium leading-tight text-[#0A1628]">
@@ -1921,69 +1906,130 @@ export default function Home() {
                   </div>
 
                   {/* Email capture — bottom of report, non-dismissible */}
-                  {!hasSubmittedEmailGate && !isTradeshowMode ? (
-                    <motion.section
-                      className="mt-10 px-1"
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                    >
-                      <div className="relative" ref={inlineGateRef}>
-                        <div className="glow-blob" />
-                        <div className="glow-card px-8 py-10 text-center">
-                          <p className="text-[1.75rem] font-medium leading-tight text-[#0A1628]">See exactly what to fix next</p>
-                          <p className="mx-auto mt-2 max-w-md text-base leading-7 text-[#5B6776]">
-                            We&apos;ll email your report, prioritized fix list, and a short video showing the biggest opportunities on your specific site.
-                          </p>
-                          <div className="mt-6 mx-auto w-full max-w-sm space-y-4">
-                            <input
-                              type="text"
-                              autoComplete="name"
-                              value={inlineGateName}
-                              onChange={(event) => setInlineGateName(event.target.value)}
-                              placeholder="Your name"
-                              className="h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] border-[#D1D5DB] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
-                            />
-                            <input
-                              type="email"
-                              inputMode="email"
-                              autoComplete="email"
-                              autoCapitalize="none"
-                              spellCheck={false}
-                              value={inlineGateEmail}
-                              onChange={(event) => {
-                                setInlineGateEmail(event.target.value);
-                                if (inlineGateNotice) {
-                                  setInlineGateNotice("");
-                                }
-                              }}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  void submitInlineGate();
-                                }
-                              }}
-                              placeholder="Email address"
-                              className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] ${
-                                inlineGateNotice ? "border-[#DC2626] focus:border-[#DC2626]" : "border-[#D1D5DB] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
-                              }`}
-                            />
-                            {inlineGateNotice ? <p className="mt-2 text-left text-base text-[#B42318]">{inlineGateNotice}</p> : null}
+                  {!isTradeshowMode ? (
+                    hasSubmittedEmailGate ? (
+                      /* Thank-you state — shown inline where form was */
+                      <motion.section
+                        className="mt-10 px-1"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                      >
+                        <div className="relative">
+                          <div className="glow-blob" />
+                          <div className="glow-card px-8 py-10 text-center">
+                            {/* Animated checkmark */}
+                            <motion.div
+                              className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-[#E6F7F8]"
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              transition={{ type: "spring", damping: 12, stiffness: 260, delay: 0.15 }}
+                            >
+                              <svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <motion.circle
+                                  cx="22" cy="22" r="20"
+                                  stroke="#2DA4A9" strokeWidth="3"
+                                  fill="none"
+                                  initial={{ pathLength: 0 }}
+                                  animate={{ pathLength: 1 }}
+                                  transition={{ duration: 0.5, delay: 0.3, ease: "easeInOut" }}
+                                />
+                                <motion.path
+                                  d="M13 22.5l6 6L31 16"
+                                  stroke="#2DA4A9" strokeWidth="3"
+                                  strokeLinecap="round" strokeLinejoin="round"
+                                  fill="none"
+                                  initial={{ pathLength: 0 }}
+                                  animate={{ pathLength: 1 }}
+                                  transition={{ duration: 0.4, delay: 0.65, ease: "easeInOut" }}
+                                />
+                              </svg>
+                            </motion.div>
+                            <motion.p
+                              className="text-[1.75rem] font-medium leading-tight text-[#0A1628]"
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.5, duration: 0.4 }}
+                            >
+                              Report sent!
+                            </motion.p>
+                            <motion.p
+                              className="mx-auto mt-3 max-w-md text-base leading-7 text-[#5B6776]"
+                              initial={{ opacity: 0, y: 8 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: 0.6, duration: 0.4 }}
+                            >
+                              Check your inbox at <span className="font-medium text-[#0A1628]">{inlineGateEmail}</span>.<br />
+                              We&apos;ll email your full report, prioritized fix list, and a short video walking through the biggest opportunities on your site.
+                            </motion.p>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => void submitInlineGate()}
-                            className="report-btn-rounded mt-6 inline-flex min-h-12 w-full max-w-sm items-center justify-center bg-[#2DA4A9] px-5 py-3 text-base font-medium text-white transition-all hover:bg-[#24858A] hover:shadow-[0_0_28px_rgba(45,164,169,0.30)] disabled:cursor-not-allowed disabled:opacity-70"
-                            disabled={isSubmittingInlineGate}
-                          >
-                            {isSubmittingInlineGate ? "Sending..." : "Email My Report + Video"}
-                          </button>
                         </div>
-                      </div>
-                    </motion.section>
+                      </motion.section>
+                    ) : (
+                      /* Form state */
+                      <motion.section
+                        className="mt-10 px-1"
+                        initial={{ opacity: 0, y: 12 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                      >
+                        <div className="relative" ref={inlineGateRef}>
+                          <div className="glow-blob" />
+                          <div className="glow-card px-8 py-10 text-center">
+                            <p className="text-[1.75rem] font-medium leading-tight text-[#0A1628]">See exactly what to fix next</p>
+                            <p className="mx-auto mt-2 max-w-md text-base leading-7 text-[#5B6776]">
+                              We&apos;ll email your report, prioritized fix list, and a short video showing the biggest opportunities on your specific site.
+                            </p>
+                            <div className="mt-6 mx-auto w-full max-w-sm space-y-4">
+                              <input
+                                type="text"
+                                autoComplete="name"
+                                value={inlineGateName}
+                                onChange={(event) => setInlineGateName(event.target.value)}
+                                placeholder="Your name"
+                                className="h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] border-[#D1D5DB] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                              />
+                              <input
+                                type="email"
+                                inputMode="email"
+                                autoComplete="email"
+                                autoCapitalize="none"
+                                spellCheck={false}
+                                value={inlineGateEmail}
+                                onChange={(event) => {
+                                  setInlineGateEmail(event.target.value);
+                                  if (inlineGateNotice) {
+                                    setInlineGateNotice("");
+                                  }
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    void submitInlineGate();
+                                  }
+                                }}
+                                placeholder="Email address"
+                                className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-base text-[#0A1628] outline-none transition-colors placeholder:text-[#8C97A8] ${
+                                  inlineGateNotice ? "border-[#DC2626] focus:border-[#DC2626]" : "border-[#D1D5DB] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                                }`}
+                              />
+                              {inlineGateNotice ? <p className="mt-2 text-left text-base text-[#B42318]">{inlineGateNotice}</p> : null}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void submitInlineGate()}
+                              className="report-btn-rounded mt-6 inline-flex min-h-12 w-full max-w-sm items-center justify-center bg-[#2DA4A9] px-5 py-3 text-base font-medium text-white transition-all hover:bg-[#24858A] hover:shadow-[0_0_28px_rgba(45,164,169,0.30)] disabled:cursor-not-allowed disabled:opacity-70"
+                              disabled={isSubmittingInlineGate}
+                            >
+                              {isSubmittingInlineGate ? "Sending..." : "Email My Report + Video"}
+                            </button>
+                          </div>
+                        </div>
+                      </motion.section>
+                    )
                   ) : null}
 
-                  {/* Your Fix List  -  shown after email submit */}
+                  {/* Your Fix List — only on shared report reloads where email was previously saved */}
                   {showFixList && failingChecks.length > 0 ? (
                     <motion.section
                       className="mt-8 pb-6 pt-2 md:pb-8 md:pt-4"
