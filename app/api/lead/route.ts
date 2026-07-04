@@ -913,7 +913,6 @@ export async function POST(request: NextRequest) {
               companyId: "",
               companyName: payload.property_name,
               leadIntent: payload.lead_intent,
-              intentBucket,
               reportSnapshot: payload.report_snapshot,
               auditedUrl: payload.url,
             });
