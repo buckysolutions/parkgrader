@@ -1471,8 +1471,8 @@ export default function Home() {
                             }
                           }}
                           placeholder="e.g. happycampsrvpark.com"
-                          className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-lg font-semibold text-[#0A1628] text-center lg:text-left outline-none transition-colors placeholder:font-normal placeholder:text-[#6E7C90] ${
-                            scanError ? "border-[#DC2626]" : "border-[#5B6776] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
+                          className={`h-12 w-full !rounded-[12px] border bg-white px-4 text-base text-[#0A1628] outline-none transition-all placeholder:text-[#8C97A8] ${
+                            scanError ? "border-[#DC2626] focus:border-[#DC2626] focus:shadow-[0_0_0_3px_rgba(220,38,38,0.10)]" : "border-[#C4CCD4] hover:border-[#2DA4A9]/40 focus:border-[#2DA4A9] focus:shadow-[0_0_0_3px_rgba(45,164,169,0.12)]"
                           }`}
                         />
                       )}
@@ -1483,9 +1483,9 @@ export default function Home() {
                     whileHover={{ y: -1 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={beginAssessment}
-                    className="btn-rounded mx-auto mt-8 block min-h-14 w-full bg-[#2DA4A9] px-6 py-4 text-base font-semibold text-white transition-colors hover:bg-[#24858A] lg:mx-0"
+                    className="btn-rounded mx-auto mt-4 block min-h-12 w-full bg-[#2DA4A9] px-6 py-3 text-base font-semibold text-white transition-colors hover:bg-[#24858A] lg:mx-0"
                   >
-                    Find My Booking Leaks
+                    Get My Free Report
                   </motion.button>
                 </div>
               </div>
