@@ -1,52 +1,64 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
+const PARKGRADER_LOGO = "https://assets.buckysolutions.com/parkgrader_logo.svg";
+
 const navItems = [
-  { href: "overview", label: "Overview", icon: "◉" },
-  { href: "incidents", label: "Incidents", icon: "⚠" },
-  { href: "notifications", label: "Notifications", icon: "✉" },
+  { href: "overview", label: "Overview" },
+  { href: "incidents", label: "Incidents" },
+  { href: "notifications", label: "Notifications" },
 ];
 
 function AdminNav() {
+  const pathname = usePathname();
   const params = useSearchParams();
   const key = params.get("admin_key") ?? "";
   const keyParam = key ? `?admin_key=${encodeURIComponent(key)}` : "";
 
+  function isActive(href: string) {
+    if (href === "overview" && (pathname === "/monitoring" || pathname === "/monitoring/overview")) return true;
+    return pathname === `/monitoring/${href}`;
+  }
+
   return (
-    <aside className="fixed left-0 top-0 z-40 flex h-full w-56 flex-col border-r border-[#E6EBF0] bg-[#0A1628] text-white">
-      {/* Brand */}
-      <div className="border-b border-white/10 px-5 py-5">
-        <Link href={`/monitoring${keyParam}`} className="text-lg font-bold tracking-tight">
-          <span className="text-[#2DA4A9]">Park</span>Grader
+    <header className="sticky top-0 z-40 border-b border-[#E6EBF0] bg-white/80 backdrop-blur-lg">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
+        {/* Logo */}
+        <Link
+          href={`/monitoring/overview${keyParam}`}
+          className="flex items-center gap-2"
+        >
+          <img
+            src={PARKGRADER_LOGO}
+            alt="ParkGrader"
+            className="h-7 w-auto"
+          />
+          <span className="text-[11px] font-medium tracking-wide text-[#8C97A8]">
+            Monitoring
+          </span>
         </Link>
-        <p className="mt-0.5 text-[11px] text-white/50">Monitoring</p>
-      </div>
 
-      {/* Nav links */}
-      <nav className="flex-1 px-3 py-4">
-        <ul className="space-y-1">
+        {/* Nav */}
+        <nav className="flex items-center gap-1">
           {navItems.map((item) => (
-            <li key={item.href}>
-              <Link
-                href={`/monitoring/${item.href}${keyParam}`}
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
-              >
-                <span className="text-xs">{item.icon}</span>
-                {item.label}
-              </Link>
-            </li>
+            <Link
+              key={item.href}
+              href={`/monitoring/${item.href}${keyParam}`}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                isActive(item.href)
+                  ? "bg-[#2DA4A9]/10 text-[#2DA4A9]"
+                  : "text-[#5B6776] hover:bg-gray-100 hover:text-[#0A1628]"
+              }`}
+            >
+              {item.label}
+            </Link>
           ))}
-        </ul>
-      </nav>
-
-      {/* Footer */}
-      <div className="border-t border-white/10 px-5 py-4">
-        <p className="text-[10px] text-white/30">ParkGrader v1.0</p>
+        </nav>
       </div>
-    </aside>
+    </header>
   );
 }
 
@@ -56,11 +68,11 @@ export default function MonitoringLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-[#F8FAFC]">
+    <div className="min-h-screen bg-[#F8FAFC]" style={{ fontFamily: "var(--font-dm-sans), sans-serif" }}>
       <Suspense fallback={null}>
         <AdminNav />
       </Suspense>
-      <main className="ml-56 p-6">{children}</main>
+      <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
     </div>
   );
 }
