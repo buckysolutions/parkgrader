@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Existing table — managed by the original Supabase setup.
+// Prisma will NOT manage this table. It's listed here so Prisma
+// knows it exists and won't report schema drift.
+model parkgrader_audits {
+  id                 BigInt    @id @default(autoincrement())
+  report_id          String    @unique
+  domain             String
+  website_url        String
+  email              String?
+  score              Int
+  scan_date          DateTime  @db.Timestamptz(6)
+  is_test            Boolean   @default(false)
+  created_at         DateTime  @default(now()) @db.Timestamptz(6)
+  report_snapshot    Json?
+  contact_name       String?
+  phone              String?
+  grade              String?
+  top_issue          String?
+  lead_intent        String?
+  loom_requested     Boolean   @default(false)
+  follow_up_sent     Boolean   @default(false)
+  follow_up_sent_at  DateTime? @db.Timestamptz(6)
+  hubspot_contact_id String?
+  utm_source         String?
+
+  @@index([domain])
+  @@index([is_test])
+  @@index([scan_date(sort: Desc)])
+}
+
+// ── Monitoring System Models ──────────────────────────────────────────
+
+model MonitoringWebsite {
+  id                  String   @id @default(uuid())
+  businessName        String
+  domain              String   @unique
+  homepageUrl         String
+  bookingUrl          String?
+  contactUrl          String?
+  monitoringEnabled   Boolean  @default(true)
+  monitoringFrequency Int      @default(60)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  checks        MonitoringCheck[]
+  incidents     MonitoringIncident[]
+  notifications MonitoringNotification[]
+  settings      MonitoringSettings?
+
+  @@map("monitoring_websites")
+  @@index([monitoringEnabled])
+}
+
+model MonitoringCheck {
+  id               String   @id @default(uuid())
+  websiteId         String
+  checkedAt        DateTime @default(now())
+  homepageStatus   Int?
+  bookingStatus    Int?
+  responseTime     Int?
+  sslDaysRemaining Int?
+  dnsStatus        String?
+  screenshotPath   String?
+  notes            String?
+
+  website          MonitoringWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@map("monitoring_checks")
+  @@index([websiteId, checkedAt])
+}
+
+model MonitoringIncident {
+  id        String    @id @default(uuid())
+  websiteId  String
+  type      String
+  severity  String
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  resolved  Boolean   @default(false)
+  message   String
+
+  website   MonitoringWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@map("monitoring_incidents")
+  @@index([websiteId, resolved])
+  @@index([resolved])
+}
+
+model MonitoringNotification {
+  id         String    @id @default(uuid())
+  websiteId   String
+  incidentId  String?
+  type       String
+  sentAt     DateTime?
+  email      String?
+  status     String    @default("pending")
+  createdAt  DateTime  @default(now())
+
+  website    MonitoringWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@map("monitoring_notifications")
+  @@index([status])
+}
+
+model MonitoringSettings {
+  id                        String  @id @default(uuid())
+  websiteId                  String  @unique
+  notifyCustomer            Boolean @default(true)
+  notifyInternal            Boolean @default(true)
+  emailCooldown             Int     @default(60)
+  verifyFailuresBeforeAlert Boolean @default(true)
+  verificationDelayMs       Int     @default(30000)
+
+  website                   MonitoringWebsite @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+
+  @@map("monitoring_settings")
+}
