@@ -1355,16 +1355,15 @@ export default function Home() {
             <TopographicPanel />
 
             {!isWebsiteMode ? (
-              <>
+              <div className="pointer-events-none absolute left-0 right-0 top-6 z-20 flex justify-center lg:left-10 lg:right-auto lg:top-8 lg:block">
                 <Image
                   src={PARKGRADER_LOGO}
                   alt="ParkGrader"
                   width={181}
                   height={32}
-                  className="pointer-events-none absolute left-1/2 top-6 z-20 -translate-x-1/2 h-7 w-auto lg:left-10 lg:top-8 lg:translate-x-0"
+                  className="h-7 w-auto"
                 />
-
-              </>
+              </div>
             ) : null}
 
             <motion.div
@@ -1375,14 +1374,18 @@ export default function Home() {
             >
               <div className="mx-auto max-w-[52rem] px-3 pt-24 pb-6 sm:px-6 sm:pt-28 sm:pb-8 lg:mx-0 lg:max-w-xl lg:self-center lg:pt-6 lg:pb-8">
                 <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
-                  <h1 className="mt-4 text-[1.75rem] leading-[1.1] text-[#0A1628] sm:text-[2.4rem]">
+                  <p className="flex items-center justify-center gap-1.5 text-sm text-[#8C97A8] lg:justify-start">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#8c97a8" viewBox="0 0 256 256"><path d="M117.25,157.92a60,60,0,1,0-66.5,0A95.83,95.83,0,0,0,3.53,195.63a8,8,0,1,0,13.4,8.74,80,80,0,0,1,134.14,0,8,8,0,0,0,13.4-8.74A95.83,95.83,0,0,0,117.25,157.92ZM40,108a44,44,0,1,1,44,44A44.05,44.05,0,0,1,40,108Zm210.14,98.7a8,8,0,0,1-11.07-2.33A79.83,79.83,0,0,0,172,168a8,8,0,0,1,0-16,44,44,0,1,0-16.34-84.87,8,8,0,1,1-5.94-14.85,60,60,0,0,1,55.53,105.64,95.83,95.83,0,0,1,47.22,37.71A8,8,0,0,1,250.14,206.7Z"></path></svg>
+                    Join 500+ campground owners
+                  </p>
+                  <h1 className="mt-2 text-[1.75rem] leading-[1.1] text-[#0A1628] sm:text-[2.4rem]">
                     Is your campground website costing you bookings?
                   </h1>
                   <p className="mt-4 max-w-[52ch] text-lg leading-7 text-[#5B6776] sm:text-xl sm:leading-8">
                     Enter your website address below. We&apos;ll scan it in 60 seconds and show you exactly what&apos;s turning guests away.
                   </p>
                 </div>
-                <div className="mx-auto mt-9 w-full max-w-[34ch] lg:mx-0 lg:max-w-none">
+                <div className="relative z-20 mx-auto mt-9 w-full max-w-[34ch] lg:mx-0 lg:max-w-none">
                   <div className="text-left">
                     <label className="mb-2 block text-center text-xs font-medium tracking-wide text-[#5B6776] uppercase lg:text-left">Enter your park website</label>
                     <motion.div
@@ -1471,7 +1474,7 @@ export default function Home() {
                             }
                           }}
                           placeholder="e.g. happycampsrvpark.com"
-                          className={`h-12 w-full !rounded-[12px] border bg-white px-4 text-base text-[#0A1628] outline-none transition-all placeholder:text-[#8C97A8] ${
+                          className={`h-12 w-full !rounded-[12px] border bg-white px-4 text-left text-base text-[#0A1628] outline-none transition-all placeholder:text-[#8C97A8] ${
                             scanError ? "border-[#DC2626] focus:border-[#DC2626] focus:shadow-[0_0_0_3px_rgba(220,38,38,0.10)]" : "border-[#C4CCD4] hover:border-[#2DA4A9]/40 focus:border-[#2DA4A9] focus:shadow-[0_0_0_3px_rgba(45,164,169,0.12)]"
                           }`}
                         />
