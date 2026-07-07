@@ -24,7 +24,7 @@ function AdminNav() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-white/20 bg-white/40 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 border-b border-[#E6EBF0] bg-white">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
         {/* Logo */}
         <Link
