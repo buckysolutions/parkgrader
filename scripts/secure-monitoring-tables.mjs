@@ -25,7 +25,7 @@ const TABLES = [
   "monitoring_unsubscribed",
 ];
 
-function rlsSql(table: string): string {
+function rlsSql(table) {
   return [
     `ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;`,
     `ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;`,
