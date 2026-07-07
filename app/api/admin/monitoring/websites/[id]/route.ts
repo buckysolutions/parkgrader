@@ -76,8 +76,22 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
-  const website = await updateWebsite(id, body);
-  return NextResponse.json({ website });
+  await updateWebsite(id, body);
+  const website = await getWebsiteById(id);
+  return NextResponse.json({ website: website ? {
+    id: website.id,
+    businessName: website.businessName,
+    domain: website.domain,
+    homepageUrl: website.homepageUrl,
+    bookingUrl: website.bookingUrl,
+    contactUrl: website.contactUrl,
+    contactEmail: website.contactEmail,
+    monitoringEnabled: website.monitoringEnabled,
+    monitoringFrequency: website.monitoringFrequency,
+    monthlyReportsEnabled: website.monthlyReportsEnabled,
+    createdAt: website.createdAt,
+    updatedAt: website.updatedAt,
+  } : null });
 }
 
 export async function DELETE(

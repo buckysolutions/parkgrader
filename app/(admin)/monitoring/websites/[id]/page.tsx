@@ -22,17 +22,49 @@ export default function WebsiteDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Settings form
+  const [editingSettings, setEditingSettings] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({ contactEmail: "", monitoringFrequency: 60, monitoringEnabled: true });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
   useEffect(() => {
     async function load() {
       try {
         const res = await fetch(`/api/admin/monitoring/websites/${id}`);
         if (!res.ok) { setError("Website not found."); return; }
-        setData(await res.json());
+        const d = await res.json();
+        setData(d);
+        setSettingsForm({
+          contactEmail: d.website.contactEmail || "",
+          monitoringFrequency: d.website.monitoringFrequency,
+          monitoringEnabled: d.website.monitoringEnabled,
+        });
       } catch { setError("Network error."); }
       finally { setLoading(false); }
     }
     load();
   }, [id]);
+
+  async function saveSettings() {
+    setSavingSettings(true);
+    const res = await fetch(`/api/admin/monitoring/websites/${website.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settingsForm),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      setData((prev) => prev ? { ...prev, website: json.website } : prev);
+      setEditingSettings(false);
+    }
+    setSavingSettings(false);
+  }
+
+  async function deleteWebsite() {
+    await fetch(`/api/admin/monitoring/websites/${website.id}`, { method: "DELETE" });
+    window.location.href = "/monitoring";
+  }
 
   if (loading) {
     return (
@@ -107,27 +139,92 @@ export default function WebsiteDetailPage() {
         <MetricCard label="Booking Page" value={latestCheck?.bookingStatus != null ? `HTTP ${latestCheck.bookingStatus}` : "—"} ok={latestCheck?.bookingStatus != null && latestCheck.bookingStatus >= 200 && latestCheck.bookingStatus < 300} />
       </div>
 
-      {website.contactEmail && (
-        <div className="glass-card rounded-2xl bg-white p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-[#0A1628]">Monthly Reports</p>
-              <p className="text-sm text-[#8C97A8]">
-                {website.monthlyReportsEnabled
-                  ? `Monthly reports will be sent to ${website.contactEmail}`
-                  : `Monthly reports are off for ${website.contactEmail}`}
-              </p>
+      {/* Settings panel */}
+      <div className="glass-card rounded-2xl bg-white p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold tracking-tight text-[#0A1628]">Settings</h2>
+          <button onClick={() => setEditingSettings(!editingSettings)} className="btn-rounded px-4 py-1.5 text-sm font-medium text-[#2DA4A9] hover:bg-[#2DA4A9]/10">
+            {editingSettings ? "Cancel" : "Edit"}
+          </button>
+        </div>
+
+        {editingSettings ? (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[#8C97A8]">Contact Email</label>
+                <input type="email" value={settingsForm.contactEmail} onChange={(e) => setSettingsForm({ ...settingsForm, contactEmail: e.target.value })} placeholder="email@example.com" style={{ borderRadius: "12px" }} className="h-10 w-full border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628] focus:border-[#2DA4A9] focus:outline-none focus:ring-2 focus:ring-[#2DA4A9]/20" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-[#8C97A8]">Check Frequency</label>
+                <select value={settingsForm.monitoringFrequency} onChange={(e) => setSettingsForm({ ...settingsForm, monitoringFrequency: parseInt(e.target.value) })} style={{ borderRadius: "12px" }} className="h-10 w-full border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628] focus:border-[#2DA4A9] focus:outline-none">
+                  <option value={5}>Every 5 minutes</option>
+                  <option value={15}>Every 15 minutes</option>
+                  <option value={30}>Every 30 minutes</option>
+                  <option value={60}>Every hour</option>
+                  <option value={360}>Every 6 hours</option>
+                  <option value={1440}>Daily</option>
+                </select>
+              </div>
             </div>
-            <button
-              onClick={toggleMonthlyReports}
-              className={`btn-rounded px-4 py-2 text-sm font-medium transition ${
-                website.monthlyReportsEnabled
-                  ? "bg-[#16A34A] text-white hover:bg-green-700"
-                  : "bg-gray-200 text-[#5B6776] hover:bg-gray-300"
-              }`}
-            >
-              {website.monthlyReportsEnabled ? "On" : "Off"}
-            </button>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={settingsForm.monitoringEnabled} onChange={(e) => setSettingsForm({ ...settingsForm, monitoringEnabled: e.target.checked })} className="h-4 w-4 rounded border-[#C4CCD4] text-[#2DA4A9]" />
+                <span className="text-sm text-[#0A1628]">Monitoring enabled</span>
+              </label>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={saveSettings} disabled={savingSettings} className="btn-rounded bg-[#2DA4A9] px-4 py-2 text-sm font-medium text-white hover:bg-[#24858A] disabled:opacity-50">{savingSettings ? "Saving..." : "Save"}</button>
+              <button onClick={() => setConfirmDelete(true)} className="btn-rounded bg-[#DC2626] px-4 py-2 text-sm font-medium text-white hover:bg-red-700">Delete</button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-[#8C97A8]">Email</span><span className="text-[#0A1628]">{website.contactEmail || "—"}</span></div>
+            <div className="flex justify-between"><span className="text-[#8C97A8]">Frequency</span><span className="text-[#0A1628]">{freqLabel(website.monitoringFrequency)}</span></div>
+            <div className="flex justify-between"><span className="text-[#8C97A8]">Status</span><span className={website.monitoringEnabled ? "text-[#16A34A]" : "text-[#DC2626]"}>{website.monitoringEnabled ? "Active" : "Paused"}</span></div>
+          </div>
+        )}
+      </div>
+
+      {/* Monthly reports toggle */}
+      <div className="glass-card rounded-2xl bg-white p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-medium text-[#0A1628]">Monthly Reports</p>
+            <p className="text-sm text-[#8C97A8]">
+              {website.contactEmail
+                ? website.monthlyReportsEnabled
+                  ? `Monthly reports will be sent to ${website.contactEmail}`
+                  : `Monthly reports are off`
+                : "Add a contact email to enable monthly reports"}
+            </p>
+          </div>
+          <button
+            onClick={toggleMonthlyReports}
+            disabled={!website.contactEmail}
+            className={`btn-rounded px-4 py-2 text-sm font-medium transition ${
+              website.monthlyReportsEnabled
+                ? "bg-[#16A34A] text-white hover:bg-green-700"
+                : "bg-gray-200 text-[#5B6776] hover:bg-gray-300"
+            } disabled:opacity-40`}
+          >
+            {website.monthlyReportsEnabled ? "On" : "Off"}
+          </button>
+        </div>
+      </div>
+
+      {/* Confirm delete modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, width: "100vw", height: "100vh" }}>
+          <div className="absolute inset-0 bg-black/50" onClick={() => setConfirmDelete(false)} />
+          <div className="relative z-10 w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl text-center">
+            <p className="font-semibold text-[#0A1628]">Delete {website.businessName}?</p>
+            <p className="mt-2 text-sm text-[#8C97A8]">Monitoring and check history will be permanently removed.</p>
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => setConfirmDelete(false)} className="btn-rounded flex-1 border border-[#E6EBF0] bg-white px-4 py-2 text-sm font-medium text-[#5B6776]">Cancel</button>
+              <button onClick={deleteWebsite} className="btn-rounded flex-1 bg-[#DC2626] px-4 py-2 text-sm font-medium text-white hover:bg-red-700">Delete</button>
+            </div>
           </div>
         </div>
       )}
@@ -186,6 +283,16 @@ export default function WebsiteDetailPage() {
       </div>
     </div>
   );
+}
+
+function freqLabel(min: number): string {
+  if (min === 5) return "Every 5 minutes";
+  if (min === 15) return "Every 15 minutes";
+  if (min === 30) return "Every 30 minutes";
+  if (min === 60) return "Every hour";
+  if (min === 360) return "Every 6 hours";
+  if (min === 1440) return "Daily";
+  return `Every ${min} min`;
 }
 
 function MetricCard({ label, value, ok }: { label: string; value: string; ok: boolean }) {
