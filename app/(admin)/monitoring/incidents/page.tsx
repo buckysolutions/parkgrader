@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -15,7 +15,7 @@ interface Incident {
   message: string;
 }
 
-export default function IncidentsPage() {
+function IncidentsPage() {
   const params = useSearchParams();
   const filter = params.get("status") ?? "open";
 
@@ -98,5 +98,13 @@ export default function IncidentsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function IncidentsPageWrapper() {
+  return (
+    <Suspense fallback={<div className="h-64 animate-pulse rounded-2xl bg-gray-100" />}>
+      <IncidentsPage />
+    </Suspense>
   );
 }
