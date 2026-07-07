@@ -939,6 +939,16 @@ export async function POST(request: NextRequest) {
       }).catch((err) => {
         console.error("Welcome email failed:", err);
       });
+
+      // Auto-enroll in monthly reports if they submitted through the audit.
+      try {
+        const domain = new URL(payload.url).hostname.replace(/^www\./, "");
+        const { prisma } = await import("@/lib/db/prisma");
+        await prisma.monitoringWebsite.updateMany({
+          where: { domain, contactEmail: null },
+          data: { contactEmail: payload.email, monthlyReportsEnabled: true },
+        });
+      } catch { /* ignore — website may not exist in monitoring yet */ }
     }
 
     // Build the response

@@ -44,6 +44,7 @@ export type MonitoringWebsiteMinAggregateOutputType = {
   contactEmail: string | null
   monitoringEnabled: boolean | null
   monitoringFrequency: number | null
+  monthlyReportsEnabled: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -58,6 +59,7 @@ export type MonitoringWebsiteMaxAggregateOutputType = {
   contactEmail: string | null
   monitoringEnabled: boolean | null
   monitoringFrequency: number | null
+  monthlyReportsEnabled: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -72,6 +74,7 @@ export type MonitoringWebsiteCountAggregateOutputType = {
   contactEmail: number
   monitoringEnabled: number
   monitoringFrequency: number
+  monthlyReportsEnabled: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -96,6 +99,7 @@ export type MonitoringWebsiteMinAggregateInputType = {
   contactEmail?: true
   monitoringEnabled?: true
   monitoringFrequency?: true
+  monthlyReportsEnabled?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -110,6 +114,7 @@ export type MonitoringWebsiteMaxAggregateInputType = {
   contactEmail?: true
   monitoringEnabled?: true
   monitoringFrequency?: true
+  monthlyReportsEnabled?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -124,6 +129,7 @@ export type MonitoringWebsiteCountAggregateInputType = {
   contactEmail?: true
   monitoringEnabled?: true
   monitoringFrequency?: true
+  monthlyReportsEnabled?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -225,6 +231,7 @@ export type MonitoringWebsiteGroupByOutputType = {
   contactEmail: string | null
   monitoringEnabled: boolean
   monitoringFrequency: number
+  monthlyReportsEnabled: boolean
   createdAt: Date
   updatedAt: Date
   _count: MonitoringWebsiteCountAggregateOutputType | null
@@ -262,6 +269,7 @@ export type MonitoringWebsiteWhereInput = {
   contactEmail?: Prisma.StringNullableFilter<"MonitoringWebsite"> | string | null
   monitoringEnabled?: Prisma.BoolFilter<"MonitoringWebsite"> | boolean
   monitoringFrequency?: Prisma.IntFilter<"MonitoringWebsite"> | number
+  monthlyReportsEnabled?: Prisma.BoolFilter<"MonitoringWebsite"> | boolean
   createdAt?: Prisma.DateTimeFilter<"MonitoringWebsite"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"MonitoringWebsite"> | Date | string
   checks?: Prisma.MonitoringCheckListRelationFilter
@@ -280,6 +288,7 @@ export type MonitoringWebsiteOrderByWithRelationInput = {
   contactEmail?: Prisma.SortOrderInput | Prisma.SortOrder
   monitoringEnabled?: Prisma.SortOrder
   monitoringFrequency?: Prisma.SortOrder
+  monthlyReportsEnabled?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   checks?: Prisma.MonitoringCheckOrderByRelationAggregateInput
@@ -301,6 +310,7 @@ export type MonitoringWebsiteWhereUniqueInput = Prisma.AtLeast<{
   contactEmail?: Prisma.StringNullableFilter<"MonitoringWebsite"> | string | null
   monitoringEnabled?: Prisma.BoolFilter<"MonitoringWebsite"> | boolean
   monitoringFrequency?: Prisma.IntFilter<"MonitoringWebsite"> | number
+  monthlyReportsEnabled?: Prisma.BoolFilter<"MonitoringWebsite"> | boolean
   createdAt?: Prisma.DateTimeFilter<"MonitoringWebsite"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"MonitoringWebsite"> | Date | string
   checks?: Prisma.MonitoringCheckListRelationFilter
@@ -319,6 +329,7 @@ export type MonitoringWebsiteOrderByWithAggregationInput = {
   contactEmail?: Prisma.SortOrderInput | Prisma.SortOrder
   monitoringEnabled?: Prisma.SortOrder
   monitoringFrequency?: Prisma.SortOrder
+  monthlyReportsEnabled?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.MonitoringWebsiteCountOrderByAggregateInput
@@ -341,6 +352,7 @@ export type MonitoringWebsiteScalarWhereWithAggregatesInput = {
   contactEmail?: Prisma.StringNullableWithAggregatesFilter<"MonitoringWebsite"> | string | null
   monitoringEnabled?: Prisma.BoolWithAggregatesFilter<"MonitoringWebsite"> | boolean
   monitoringFrequency?: Prisma.IntWithAggregatesFilter<"MonitoringWebsite"> | number
+  monthlyReportsEnabled?: Prisma.BoolWithAggregatesFilter<"MonitoringWebsite"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"MonitoringWebsite"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"MonitoringWebsite"> | Date | string
 }
@@ -355,6 +367,7 @@ export type MonitoringWebsiteCreateInput = {
   contactEmail?: string | null
   monitoringEnabled?: boolean
   monitoringFrequency?: number
+  monthlyReportsEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   checks?: Prisma.MonitoringCheckCreateNestedManyWithoutWebsiteInput
@@ -373,6 +386,7 @@ export type MonitoringWebsiteUncheckedCreateInput = {
   contactEmail?: string | null
   monitoringEnabled?: boolean
   monitoringFrequency?: number
+  monthlyReportsEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   checks?: Prisma.MonitoringCheckUncheckedCreateNestedManyWithoutWebsiteInput
@@ -391,6 +405,7 @@ export type MonitoringWebsiteUpdateInput = {
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   monitoringEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   monitoringFrequency?: Prisma.IntFieldUpdateOperationsInput | number
+  monthlyReportsEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   checks?: Prisma.MonitoringCheckUpdateManyWithoutWebsiteNestedInput
@@ -409,6 +424,7 @@ export type MonitoringWebsiteUncheckedUpdateInput = {
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   monitoringEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   monitoringFrequency?: Prisma.IntFieldUpdateOperationsInput | number
+  monthlyReportsEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   checks?: Prisma.MonitoringCheckUncheckedUpdateManyWithoutWebsiteNestedInput
@@ -427,6 +443,7 @@ export type MonitoringWebsiteCreateManyInput = {
   contactEmail?: string | null
   monitoringEnabled?: boolean
   monitoringFrequency?: number
+  monthlyReportsEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -441,6 +458,7 @@ export type MonitoringWebsiteUpdateManyMutationInput = {
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   monitoringEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   monitoringFrequency?: Prisma.IntFieldUpdateOperationsInput | number
+  monthlyReportsEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -455,6 +473,7 @@ export type MonitoringWebsiteUncheckedUpdateManyInput = {
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   monitoringEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   monitoringFrequency?: Prisma.IntFieldUpdateOperationsInput | number
+  monthlyReportsEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -469,6 +488,7 @@ export type MonitoringWebsiteCountOrderByAggregateInput = {
   contactEmail?: Prisma.SortOrder
   monitoringEnabled?: Prisma.SortOrder
   monitoringFrequency?: Prisma.SortOrder
+  monthlyReportsEnabled?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -487,6 +507,7 @@ export type MonitoringWebsiteMaxOrderByAggregateInput = {
   contactEmail?: Prisma.SortOrder
   monitoringEnabled?: Prisma.SortOrder
   monitoringFrequency?: Prisma.SortOrder
+  monthlyReportsEnabled?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -501,6 +522,7 @@ export type MonitoringWebsiteMinOrderByAggregateInput = {
   contactEmail?: Prisma.SortOrder
   monitoringEnabled?: Prisma.SortOrder
   monitoringFrequency?: Prisma.SortOrder
+  monthlyReportsEnabled?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -580,6 +602,7 @@ export type MonitoringWebsiteCreateWithoutChecksInput = {
   contactEmail?: string | null
   monitoringEnabled?: boolean
   monitoringFrequency?: number
+  monthlyReportsEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   incidents?: Prisma.MonitoringIncidentCreateNestedManyWithoutWebsiteInput
@@ -597,6 +620,7 @@ export type MonitoringWebsiteUncheckedCreateWithoutChecksInput = {
   contactEmail?: string | null
   monitoringEnabled?: boolean
   monitoringFrequency?: number
+  monthlyReportsEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   incidents?: Prisma.MonitoringIncidentUncheckedCreateNestedManyWithoutWebsiteInput
@@ -630,6 +654,7 @@ export type MonitoringWebsiteUpdateWithoutChecksInput = {
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   monitoringEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   monitoringFrequency?: Prisma.IntFieldUpdateOperationsInput | number
+  monthlyReportsEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   incidents?: Prisma.MonitoringIncidentUpdateManyWithoutWebsiteNestedInput
@@ -647,6 +672,7 @@ export type MonitoringWebsiteUncheckedUpdateWithoutChecksInput = {
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   monitoringEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   monitoringFrequency?: Prisma.IntFieldUpdateOperationsInput | number
+  monthlyReportsEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   incidents?: Prisma.MonitoringIncidentUncheckedUpdateManyWithoutWebsiteNestedInput
@@ -664,6 +690,7 @@ export type MonitoringWebsiteCreateWithoutIncidentsInput = {
   contactEmail?: string | null
   monitoringEnabled?: boolean
   monitoringFrequency?: number
+  monthlyReportsEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   checks?: Prisma.MonitoringCheckCreateNestedManyWithoutWebsiteInput
@@ -681,6 +708,7 @@ export type MonitoringWebsiteUncheckedCreateWithoutIncidentsInput = {
   contactEmail?: string | null
   monitoringEnabled?: boolean
   monitoringFrequency?: number
+  monthlyReportsEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   checks?: Prisma.MonitoringCheckUncheckedCreateNestedManyWithoutWebsiteInput
@@ -714,6 +742,7 @@ export type MonitoringWebsiteUpdateWithoutIncidentsInput = {
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   monitoringEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   monitoringFrequency?: Prisma.IntFieldUpdateOperationsInput | number
+  monthlyReportsEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   checks?: Prisma.MonitoringCheckUpdateManyWithoutWebsiteNestedInput
@@ -731,6 +760,7 @@ export type MonitoringWebsiteUncheckedUpdateWithoutIncidentsInput = {
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   monitoringEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   monitoringFrequency?: Prisma.IntFieldUpdateOperationsInput | number
+  monthlyReportsEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   checks?: Prisma.MonitoringCheckUncheckedUpdateManyWithoutWebsiteNestedInput
@@ -748,6 +778,7 @@ export type MonitoringWebsiteCreateWithoutNotificationsInput = {
   contactEmail?: string | null
   monitoringEnabled?: boolean
   monitoringFrequency?: number
+  monthlyReportsEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   checks?: Prisma.MonitoringCheckCreateNestedManyWithoutWebsiteInput
@@ -765,6 +796,7 @@ export type MonitoringWebsiteUncheckedCreateWithoutNotificationsInput = {
   contactEmail?: string | null
   monitoringEnabled?: boolean
   monitoringFrequency?: number
+  monthlyReportsEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   checks?: Prisma.MonitoringCheckUncheckedCreateNestedManyWithoutWebsiteInput
@@ -798,6 +830,7 @@ export type MonitoringWebsiteUpdateWithoutNotificationsInput = {
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   monitoringEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   monitoringFrequency?: Prisma.IntFieldUpdateOperationsInput | number
+  monthlyReportsEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   checks?: Prisma.MonitoringCheckUpdateManyWithoutWebsiteNestedInput
@@ -815,6 +848,7 @@ export type MonitoringWebsiteUncheckedUpdateWithoutNotificationsInput = {
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   monitoringEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   monitoringFrequency?: Prisma.IntFieldUpdateOperationsInput | number
+  monthlyReportsEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   checks?: Prisma.MonitoringCheckUncheckedUpdateManyWithoutWebsiteNestedInput
@@ -832,6 +866,7 @@ export type MonitoringWebsiteCreateWithoutSettingsInput = {
   contactEmail?: string | null
   monitoringEnabled?: boolean
   monitoringFrequency?: number
+  monthlyReportsEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   checks?: Prisma.MonitoringCheckCreateNestedManyWithoutWebsiteInput
@@ -849,6 +884,7 @@ export type MonitoringWebsiteUncheckedCreateWithoutSettingsInput = {
   contactEmail?: string | null
   monitoringEnabled?: boolean
   monitoringFrequency?: number
+  monthlyReportsEnabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
   checks?: Prisma.MonitoringCheckUncheckedCreateNestedManyWithoutWebsiteInput
@@ -882,6 +918,7 @@ export type MonitoringWebsiteUpdateWithoutSettingsInput = {
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   monitoringEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   monitoringFrequency?: Prisma.IntFieldUpdateOperationsInput | number
+  monthlyReportsEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   checks?: Prisma.MonitoringCheckUpdateManyWithoutWebsiteNestedInput
@@ -899,6 +936,7 @@ export type MonitoringWebsiteUncheckedUpdateWithoutSettingsInput = {
   contactEmail?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   monitoringEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   monitoringFrequency?: Prisma.IntFieldUpdateOperationsInput | number
+  monthlyReportsEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   checks?: Prisma.MonitoringCheckUncheckedUpdateManyWithoutWebsiteNestedInput
@@ -965,6 +1003,7 @@ export type MonitoringWebsiteSelect<ExtArgs extends runtime.Types.Extensions.Int
   contactEmail?: boolean
   monitoringEnabled?: boolean
   monitoringFrequency?: boolean
+  monthlyReportsEnabled?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   checks?: boolean | Prisma.MonitoringWebsite$checksArgs<ExtArgs>
@@ -984,6 +1023,7 @@ export type MonitoringWebsiteSelectCreateManyAndReturn<ExtArgs extends runtime.T
   contactEmail?: boolean
   monitoringEnabled?: boolean
   monitoringFrequency?: boolean
+  monthlyReportsEnabled?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["monitoringWebsite"]>
@@ -998,6 +1038,7 @@ export type MonitoringWebsiteSelectUpdateManyAndReturn<ExtArgs extends runtime.T
   contactEmail?: boolean
   monitoringEnabled?: boolean
   monitoringFrequency?: boolean
+  monthlyReportsEnabled?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["monitoringWebsite"]>
@@ -1012,11 +1053,12 @@ export type MonitoringWebsiteSelectScalar = {
   contactEmail?: boolean
   monitoringEnabled?: boolean
   monitoringFrequency?: boolean
+  monthlyReportsEnabled?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type MonitoringWebsiteOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "businessName" | "domain" | "homepageUrl" | "bookingUrl" | "contactUrl" | "contactEmail" | "monitoringEnabled" | "monitoringFrequency" | "createdAt" | "updatedAt", ExtArgs["result"]["monitoringWebsite"]>
+export type MonitoringWebsiteOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "businessName" | "domain" | "homepageUrl" | "bookingUrl" | "contactUrl" | "contactEmail" | "monitoringEnabled" | "monitoringFrequency" | "monthlyReportsEnabled" | "createdAt" | "updatedAt", ExtArgs["result"]["monitoringWebsite"]>
 export type MonitoringWebsiteInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   checks?: boolean | Prisma.MonitoringWebsite$checksArgs<ExtArgs>
   incidents?: boolean | Prisma.MonitoringWebsite$incidentsArgs<ExtArgs>
@@ -1045,6 +1087,7 @@ export type $MonitoringWebsitePayload<ExtArgs extends runtime.Types.Extensions.I
     contactEmail: string | null
     monitoringEnabled: boolean
     monitoringFrequency: number
+    monthlyReportsEnabled: boolean
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["monitoringWebsite"]>
@@ -1483,6 +1526,7 @@ export interface MonitoringWebsiteFieldRefs {
   readonly contactEmail: Prisma.FieldRef<"MonitoringWebsite", 'String'>
   readonly monitoringEnabled: Prisma.FieldRef<"MonitoringWebsite", 'Boolean'>
   readonly monitoringFrequency: Prisma.FieldRef<"MonitoringWebsite", 'Int'>
+  readonly monthlyReportsEnabled: Prisma.FieldRef<"MonitoringWebsite", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"MonitoringWebsite", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"MonitoringWebsite", 'DateTime'>
 }

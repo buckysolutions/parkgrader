@@ -46,6 +46,7 @@ export async function createWebsite(data: {
   contactUrl?: string;
   contactEmail?: string;
   monitoringFrequency?: number;
+  monthlyReportsEnabled?: boolean;
 }) {
   const website = await prisma.monitoringWebsite.create({
     data: {
@@ -56,6 +57,7 @@ export async function createWebsite(data: {
       contactUrl: data.contactUrl,
       contactEmail: data.contactEmail,
       monitoringFrequency: data.monitoringFrequency ?? 60,
+      monthlyReportsEnabled: data.monthlyReportsEnabled ?? false,
     },
   });
 
@@ -76,6 +78,7 @@ export async function updateWebsite(
     contactUrl?: string;
     monitoringEnabled?: boolean;
     monitoringFrequency?: number;
+    monthlyReportsEnabled?: boolean;
   },
 ) {
   return prisma.monitoringWebsite.update({ where: { id }, data });

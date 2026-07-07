@@ -22,7 +22,7 @@ export default function OverviewPage() {
   const [error, setError] = useState("");
 
   const [showAddForm, setShowAddForm] = useState(false);
-  const [form, setForm] = useState({ businessName: "", domain: "", homepageUrl: "", bookingUrl: "", contactEmail: "", monitoringFrequency: "60" });
+  const [form, setForm] = useState({ businessName: "", domain: "", homepageUrl: "", bookingUrl: "", contactEmail: "", monitoringFrequency: "60", monthlyReportsEnabled: false });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -61,6 +61,7 @@ export default function OverviewPage() {
           bookingUrl: form.bookingUrl || undefined,
           contactEmail: form.contactEmail || undefined,
           monitoringFrequency: parseInt(form.monitoringFrequency),
+          monthlyReportsEnabled: form.monthlyReportsEnabled,
         }),
       });
       if (!res.ok) {
@@ -69,7 +70,7 @@ export default function OverviewPage() {
         return;
       }
       setShowAddForm(false);
-      setForm({ businessName: "", domain: "", homepageUrl: "", bookingUrl: "", contactEmail: "", monitoringFrequency: "60" });
+      setForm({ businessName: "", domain: "", homepageUrl: "", bookingUrl: "", contactEmail: "", monitoringFrequency: "60", monthlyReportsEnabled: false });
       await loadData();
     } catch {
       setFormError("Network error");
@@ -161,6 +162,15 @@ export default function OverviewPage() {
                 </select>
               </div>
             </div>
+            <label className="mt-4 flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.monthlyReportsEnabled}
+                onChange={(e) => setForm({ ...form, monthlyReportsEnabled: e.target.checked })}
+                className="h-4 w-4 rounded border-[#C4CCD4] text-[#2DA4A9] focus:ring-[#2DA4A9]"
+              />
+              <span className="text-sm text-[#0A1628]">Send monthly monitoring reports to this contact</span>
+            </label>
             <div className="mt-5 flex gap-3">
               <button onClick={() => setShowAddForm(false)} className="btn-rounded flex-1 border border-[#E6EBF0] bg-white px-5 py-2.5 text-sm font-medium text-[#5B6776] transition hover:bg-gray-50">Cancel</button>
               <button onClick={addWebsite} disabled={saving || !form.businessName || !form.domain || !form.homepageUrl} className="btn-rounded flex-1 bg-[#2DA4A9] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#24858A] disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Adding..." : "Add Website"}</button>

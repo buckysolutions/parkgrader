@@ -1003,6 +1003,7 @@ export const MonitoringWebsiteScalarFieldEnum = {
   contactEmail: 'contactEmail',
   monitoringEnabled: 'monitoringEnabled',
   monitoringFrequency: 'monitoringFrequency',
+  monthlyReportsEnabled: 'monthlyReportsEnabled',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

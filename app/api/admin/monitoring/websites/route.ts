@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
       monitoringEnabled: w.monitoringEnabled,
       monitoringFrequency: w.monitoringFrequency,
       contactEmail: w.contactEmail,
+      monthlyReportsEnabled: w.monthlyReportsEnabled,
       isUnsubscribed: w.contactEmail ? unsubscribedSet.has(w.contactEmail) : false,
       lastCheck: w.checks[0] ?? null,
       openIncidents: w.incidents.length,

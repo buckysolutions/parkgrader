@@ -287,6 +287,105 @@ function buildWelcomeHtml(params: {
 </html>`;
 }
 
+// ── Monthly Report Email ────────────────────────────────────────────
+
+function buildMonthlyReportHtml(params: {
+  websiteName: string;
+  domain: string;
+  month: string;
+  uptime: number;
+  avgResponseTime: number;
+  totalIncidents: number;
+  resolvedIncidents: number;
+  healthScore: number;
+  websiteUrl?: string;
+  email: string;
+}): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="x-apple-disable-message-reformatting">
+    <title>Monthly Report — ${esc(params.websiteName)}</title>
+    <style>
+        @media only screen and (max-width: 480px) {
+            .email-inner   { width: 100% !important; }
+            .email-padding { padding: 30px 20px !important; }
+            .email-logo    { margin-bottom: 28px !important; }
+            .email-btn-td  { padding: 16px 0 !important; }
+        }
+        @media only screen and (max-width: 375px) {
+            .email-padding { padding: 24px 16px !important; }
+        }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F0F0EE; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="background-color: #F0F0EE; padding: 24px 20px;">
+        <tr>
+            <td align="center" valign="top">
+
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" class="email-inner" style="max-width: 600px; background-color: #FEFDFA; border-radius: 12px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                    <tr>
+                        <td class="email-padding" style="padding: 40px 40px 30px 40px;">
+
+                            <img src="${PARKGRADER_LOGO}" alt="ParkGrader" width="180" class="email-logo" style="display: block; max-width: 180px; width: 100%; height: auto; margin-bottom: 40px; border: 0;">
+
+                            <p style="color: #888888; font-size: 16px; line-height: 24px; margin: 0 0 6px 0;">Monthly Monitoring Report</p>
+                            <p style="color: #000000; font-size: 22px; font-weight: bold; line-height: 28px; margin: 0 0 6px 0;">${esc(params.websiteName)}</p>
+                            <p style="color: #888888; font-size: 14px; line-height: 20px; margin: 0 0 30px 0;">${esc(params.month)}</p>
+
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom: 30px;">
+                                <tr>
+                                    <td align="center" style="width: 33%; padding: 12px 8px;">
+                                        <p style="font-size: 28px; font-weight: bold; color: #0A1628; margin: 0;">${params.uptime.toFixed(1)}%</p>
+                                        <p style="font-size: 12px; color: #888888; margin: 4px 0 0 0;">Uptime</p>
+                                    </td>
+                                    <td align="center" style="width: 33%; padding: 12px 8px;">
+                                        <p style="font-size: 28px; font-weight: bold; color: #0A1628; margin: 0;">${params.avgResponseTime}ms</p>
+                                        <p style="font-size: 12px; color: #888888; margin: 4px 0 0 0;">Avg Response</p>
+                                    </td>
+                                    <td align="center" style="width: 33%; padding: 12px 8px;">
+                                        <p style="font-size: 28px; font-weight: bold; color: ${params.totalIncidents > 0 ? "#DC2626" : "#16A34A"}; margin: 0;">${params.totalIncidents}</p>
+                                        <p style="font-size: 12px; color: #888888; margin: 4px 0 0 0;">Incidents</p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin: 0 0 30px 0;">
+                                <tr><td style="border-top: 1px solid #EAEAEA; font-size: 1px; line-height: 1px;">&nbsp;</td></tr>
+                            </table>
+
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom: 30px;">
+                                <tr><td style="font-size: 16px; line-height: 24px; color: #000000; padding: 0 0 6px 0;"><strong>Health score:</strong> ${params.healthScore}/100</td></tr>
+                                <tr><td style="font-size: 16px; line-height: 24px; color: #000000; padding: 0 0 6px 0;"><strong>Resolved incidents:</strong> ${params.resolvedIncidents}</td></tr>
+                                <tr><td style="font-size: 16px; line-height: 24px; color: #000000; padding: 0 0 6px 0;"><strong>Open incidents:</strong> ${params.totalIncidents - params.resolvedIncidents}</td></tr>
+                            </table>
+
+                            ${params.websiteUrl
+                              ? `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+                                    <tr><td align="center" class="email-btn-td" style="border-radius: 12px; background-color: #2da4a9;">
+                                        <a href="${esc(params.websiteUrl)}" style="display: block; width: 100%; padding: 18px 0; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: bold; border-radius: 12px;">Check your website</a>
+                                    </td></tr>
+                                </table>`
+                              : ""
+                            }
+
+                        </td>
+                    </tr>
+                </table>
+
+                ${emailFooter(params.email)}
+
+            </td>
+        </tr>
+    </table>
+
+</body>
+</html>`;
+}
+
 // ── Public API ──────────────────────────────────────────────────────
 
 export interface MonitoringAlertParams {
@@ -303,6 +402,19 @@ export interface WelcomeEmailParams {
   websiteName: string;
   websiteUrl: string;
   reportUrl?: string;
+}
+
+export interface MonthlyReportParams {
+  to: string;
+  websiteName: string;
+  domain: string;
+  month: string;
+  uptime: number;
+  avgResponseTime: number;
+  totalIncidents: number;
+  resolvedIncidents: number;
+  healthScore: number;
+  websiteUrl?: string;
 }
 
 export interface SendResult {
@@ -363,6 +475,39 @@ export async function sendWelcomeEmail(
         Simple: {
           Subject: {
             Data: `[ParkGrader] Monitoring active — ${params.websiteName}`,
+            Charset: "UTF-8",
+          },
+          Body: { Html: { Data: html, Charset: "UTF-8" } },
+        },
+      },
+    });
+
+    const result = await ses.send(command);
+    return { messageId: result.MessageId ?? null, success: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown SES error";
+    return { messageId: null, success: false, error: message };
+  }
+}
+
+export async function sendMonthlyReport(
+  params: MonthlyReportParams,
+): Promise<SendResult> {
+  const ses = getSESClient();
+  const html = buildMonthlyReportHtml({ ...params, email: params.to });
+
+  try {
+    const command = new SendEmailCommand({
+      FromEmailAddress: fromAddress(),
+      ...(process.env.SES_CONFIGURATION_SET
+        ? { ConfigurationSetName: process.env.SES_CONFIGURATION_SET }
+        : {}),
+      Destination: { ToAddresses: [params.to] },
+      ReplyToAddresses: ["help@buckysolutions.com"],
+      Content: {
+        Simple: {
+          Subject: {
+            Data: `[ParkGrader] Monthly Report — ${params.websiteName} — ${params.month}`,
             Charset: "UTF-8",
           },
           Body: { Html: { Data: html, Charset: "UTF-8" } },

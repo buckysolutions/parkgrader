@@ -151,6 +151,47 @@ function buildTestWelcome() {
   `);
 }
 
+function buildTestMonthly() {
+  return wrap(`
+    <p style="color: #888888; font-size: 16px; line-height: 24px; margin: 0 0 6px 0;">Monthly Monitoring Report</p>
+    <p style="color: #000000; font-size: 22px; font-weight: bold; line-height: 28px; margin: 0 0 6px 0;">Example Campground</p>
+    <p style="color: #888888; font-size: 14px; line-height: 20px; margin: 0 0 30px 0;">July 2026</p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom: 30px;">
+        <tr>
+            <td align="center" style="width: 33%; padding: 12px 8px;">
+                <p style="font-size: 28px; font-weight: bold; color: #0A1628; margin: 0;">99.7%</p>
+                <p style="font-size: 12px; color: #888888; margin: 4px 0 0 0;">Uptime</p>
+            </td>
+            <td align="center" style="width: 33%; padding: 12px 8px;">
+                <p style="font-size: 28px; font-weight: bold; color: #0A1628; margin: 0;">342ms</p>
+                <p style="font-size: 12px; color: #888888; margin: 4px 0 0 0;">Avg Response</p>
+            </td>
+            <td align="center" style="width: 33%; padding: 12px 8px;">
+                <p style="font-size: 28px; font-weight: bold; color: #16A34A; margin: 0;">0</p>
+                <p style="font-size: 12px; color: #888888; margin: 4px 0 0 0;">Incidents</p>
+            </td>
+        </tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin: 0 0 30px 0;">
+        <tr><td style="border-top: 1px solid #EAEAEA; font-size: 1px; line-height: 1px;">&nbsp;</td></tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom: 30px;">
+        <tr><td style="font-size: 16px; line-height: 24px; color: #000000; padding: 0 0 6px 0;"><strong>Health score:</strong> 92/100</td></tr>
+        <tr><td style="font-size: 16px; line-height: 24px; color: #000000; padding: 0 0 6px 0;"><strong>Resolved incidents:</strong> 2</td></tr>
+        <tr><td style="font-size: 16px; line-height: 24px; color: #000000; padding: 0 0 6px 0;"><strong>Open incidents:</strong> 0</td></tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+        <tr><td align="center" class="email-btn-td" style="border-radius: 12px; background-color: #2da4a9;">
+            <a href="https://example.com" style="display: block; width: 100%; padding: 18px 0; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: bold; border-radius: 12px;">Check your website</a>
+        </td></tr>
+    </table>
+  `);
+}
+
 // ── Send ────────────────────────────────────────────────────────────
 
 async function sendEmail(subject, html) {
@@ -191,12 +232,16 @@ async function main() {
     await sendEmail("ParkGrader Alert — Homepage Down", buildTestAlert());
   }
   if (type === "welcome" || type === "all") {
-    await sendEmail("ParkGrader — Monitoring Active", buildTestWelcome());
+    await sendEmail("ParkGrader — Report Ready", buildTestWelcome());
   }
-  if (!type || (type !== "alert" && type !== "welcome" && type !== "all")) {
+  if (type === "monthly" || type === "all") {
+    await sendEmail("ParkGrader — Monthly Report", buildTestMonthly());
+  }
+  if (!type || (type !== "alert" && type !== "welcome" && type !== "monthly" && type !== "all")) {
     console.log("Usage: node scripts/test-emails.mjs <type>");
     console.log("  alert    → Monitoring alert email");
-    console.log("  welcome  → Welcome / monitoring active email");
+    console.log("  welcome  → Welcome / report ready email");
+    console.log("  monthly  → Monthly monitoring report");
     console.log("  all      → Send all templates");
   }
 }

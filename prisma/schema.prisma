@@ -49,6 +49,7 @@ model MonitoringWebsite {
   contactEmail        String?
   monitoringEnabled   Boolean  @default(true)
   monitoringFrequency Int      @default(60)
+  monthlyReportsEnabled Boolean @default(false)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
