@@ -37,10 +37,19 @@ export default function LoginPage() {
 
   return (
     <div
-      className="flex min-h-screen items-center justify-center bg-[#F8FAFC]"
+      className="relative flex min-h-screen items-center justify-center overflow-hidden"
       style={{ fontFamily: "var(--font-dm-sans), sans-serif" }}
     >
-      <div className="w-full max-w-sm px-4">
+      {/* Background gradient */}
+      <div className="absolute inset-0 -z-10 overflow-hidden">
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,#f0f9f8_0%,#e9fdfe_25%,#e6f4f1_50%,#f5f0e8_75%,#fef8f0_100%)]" />
+        <div className="absolute -left-32 top-16 h-[360px] w-[360px] rounded-full bg-[#54a2a7]/20 blur-[115px]" />
+        <div className="absolute right-[-180px] top-[20%] h-[460px] w-[460px] rounded-full bg-[#00a9ba]/22 blur-[125px]" />
+        <div className="absolute bottom-[-180px] left-1/2 h-[460px] w-[680px] -translate-x-1/2 rounded-full bg-[#5abf7e]/20 blur-[135px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0.18)_42%,rgba(255,255,255,0.34)_100%)]" />
+      </div>
+
+      <div className="relative w-full max-w-sm px-4">
         {/* Logo */}
         <div className="mb-8 text-center">
           <img
