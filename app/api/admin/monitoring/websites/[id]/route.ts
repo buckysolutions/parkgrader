@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAdminKey } from "@/lib/auth/admin";
+import { createClient } from "@/lib/supabase/server";
 import {
   getWebsiteById,
   updateWebsite,
@@ -12,18 +12,18 @@ import { calculateHealthScore } from "@/lib/services/monitoring/HealthScoreServi
 
 export const runtime = "nodejs";
 
-/**
- * GET /api/admin/monitoring/websites/[id]
- *
- * Returns full website detail: info, latest check, health score,
- * settings, recent incidents, recent checks.
- */
+async function requireAuth() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!verifyAdminKey(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  if (!(await requireAuth())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
@@ -64,37 +64,26 @@ export async function GET(
   });
 }
 
-/**
- * PATCH /api/admin/monitoring/websites/[id]
- *
- * Update website fields.
- */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!verifyAdminKey(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  if (!(await requireAuth())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
   const body = await request.json();
-
   const website = await updateWebsite(id, body);
   return NextResponse.json({ website });
 }
 
-/**
- * DELETE /api/admin/monitoring/websites/[id]
- *
- * Soft-delete (disables monitoring). History is preserved.
- */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!verifyAdminKey(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  if (!(await requireAuth())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;

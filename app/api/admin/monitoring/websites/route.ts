@@ -1,21 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAdminKey } from "@/lib/auth/admin";
-import {
-  getAllWebsites,
-  createWebsite,
-} from "@/lib/services/monitoring/MonitoringService";
+import { createClient } from "@/lib/supabase/server";
+import { getAllWebsites, createWebsite } from "@/lib/services/monitoring/MonitoringService";
 
 export const runtime = "nodejs";
 
-/**
- * GET /api/admin/monitoring/websites
- *
- * List all monitored websites. Optional query params:
- *   ?search=   filter by business name or domain
- */
 export async function GET(request: NextRequest) {
-  if (!verifyAdminKey(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const search = request.nextUrl.searchParams.get("search") ?? undefined;
@@ -36,16 +29,11 @@ export async function GET(request: NextRequest) {
   });
 }
 
-/**
- * POST /api/admin/monitoring/websites
- *
- * Add a new website to monitoring. Auto-creates default settings.
- *
- * Body: { businessName, domain, homepageUrl, bookingUrl?, contactUrl?, monitoringFrequency? }
- */
 export async function POST(request: NextRequest) {
-  if (!verifyAdminKey(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const body = await request.json();

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAdminKey } from "@/lib/auth/admin";
+import { createClient } from "@/lib/supabase/server";
 import {
   getNotifications,
   updateNotificationStatus,
@@ -8,14 +8,15 @@ import { sendMonitoringAlert } from "@/lib/email/ses";
 
 export const runtime = "nodejs";
 
-/**
- * GET /api/admin/monitoring/notifications
- *
- * List notifications. Optional query param: ?status=pending|approved|sent|dismissed|snoozed
- */
+async function requireAuth() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+}
+
 export async function GET(request: NextRequest) {
-  if (!verifyAdminKey(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  if (!(await requireAuth())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const status = request.nextUrl.searchParams.get("status") ?? undefined;
@@ -23,17 +24,9 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ notifications });
 }
 
-/**
- * POST /api/admin/monitoring/notifications
- *
- * Update notification status:
- *   { id, action: "approve" | "dismiss" | "snooze" }
- *
- * "approve" also sends the email via SES.
- */
 export async function POST(request: NextRequest) {
-  if (!verifyAdminKey(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  if (!(await requireAuth())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const body = await request.json();
@@ -45,7 +38,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Fetch the notification to get website/incident details.
   const existing = await getNotifications(undefined);
   const notification = existing.find((n) => n.id === body.id);
 
@@ -58,9 +50,7 @@ export async function POST(request: NextRequest) {
 
   switch (body.action) {
     case "approve": {
-      // Send email if we have an address.
       if (notification.email) {
-        // Look up the website for alert details.
         const { getWebsiteById } = await import(
           "@/lib/services/monitoring/MonitoringService"
         );

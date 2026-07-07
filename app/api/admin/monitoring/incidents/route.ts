@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyAdminKey } from "@/lib/auth/admin";
+import { createClient } from "@/lib/supabase/server";
 import { getAllIncidents, resolveIncident } from "@/lib/services/monitoring/MonitoringService";
 
 export const runtime = "nodejs";
 
-/**
- * GET /api/admin/monitoring/incidents
- *
- * List incidents. Optional query param: ?status=open|resolved
- */
+async function requireAuth() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+}
+
 export async function GET(request: NextRequest) {
-  if (!verifyAdminKey(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  if (!(await requireAuth())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const status = request.nextUrl.searchParams.get("status") as
@@ -23,14 +24,9 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ incidents });
 }
 
-/**
- * PATCH /api/admin/monitoring/incidents
- *
- * Resolve an incident: { id, resolved: true }
- */
 export async function PATCH(request: NextRequest) {
-  if (!verifyAdminKey(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  if (!(await requireAuth())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const body = await request.json();

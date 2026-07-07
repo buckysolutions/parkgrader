@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+import { usePathname } from "next/navigation";
 
 const PARKGRADER_LOGO = "https://assets.buckysolutions.com/parkgrader_logo.svg";
 
@@ -14,32 +13,18 @@ const navItems = [
 
 function AdminNav() {
   const pathname = usePathname();
-  const params = useSearchParams();
-  const key = params.get("admin_key") ?? "";
-  const keyParam = key ? `?admin_key=${encodeURIComponent(key)}` : "";
 
   return (
     <header className="sticky top-0 z-40 border-b border-[#E6EBF0] bg-white">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
-        {/* Logo */}
-        <Link
-          href={`/monitoring${keyParam}`}
-          className="flex items-center gap-2"
-        >
-          <img
-            src={PARKGRADER_LOGO}
-            alt="ParkGrader"
-            className="h-7 w-auto"
-          />
-          <span className="text-[11px] font-medium tracking-wide text-[#8C97A8]">
-            Monitoring
-          </span>
+        <Link href="/monitoring" className="flex items-center gap-2">
+          <img src={PARKGRADER_LOGO} alt="ParkGrader" className="h-7 w-auto" />
+          <span className="text-[11px] font-medium tracking-wide text-[#8C97A8]">Monitoring</span>
         </Link>
 
-        {/* Nav */}
         <nav className="flex items-center gap-1">
           {navItems.map((item) => {
-            const fullHref = `/monitoring${item.href}${keyParam}`;
+            const href = `/monitoring${item.href}`;
             const active = item.href === ""
               ? pathname === "/monitoring"
               : pathname === `/monitoring${item.href}`;
@@ -47,7 +32,7 @@ function AdminNav() {
             return (
               <Link
                 key={item.href}
-                href={fullHref}
+                href={href}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
                   active
                     ? "bg-[#2DA4A9]/10 text-[#2DA4A9]"
@@ -74,9 +59,7 @@ export default function MonitoringLayout({
       className="min-h-screen bg-[#F8FAFC]"
       style={{ fontFamily: "var(--font-dm-sans), sans-serif" }}
     >
-      <Suspense fallback={null}>
-        <AdminNav />
-      </Suspense>
+      <AdminNav />
       <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
     </div>
   );
