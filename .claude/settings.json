@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "deny": [
+      {
+        "tool": "Read",
+        "path": "**/.env*"
+      },
+      {
+        "tool": "Bash",
+        "path": "**/.env*"
+      }
+    ]
+  }
+}

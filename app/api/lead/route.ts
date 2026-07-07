@@ -66,21 +66,6 @@ type HubSpotSearchResponse = {
 
 const isValidEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
-const hasEnabledQueryFlag = (value: string | null): boolean => {
-  if (value === null) {
-    return false;
-  }
-
-  return value === "" || value === "true" || value === "1";
-};
-
-const isBypassAuthorized = (request: NextRequest): boolean => {
-  const bypassEnabled = hasEnabledQueryFlag(request.nextUrl.searchParams.get("bypass"));
-  const providedKey = (request.nextUrl.searchParams.get("key") ?? "").trim();
-  const expectedKey = (process.env.BYPASS_KEY ?? "").trim();
-  return Boolean(bypassEnabled && expectedKey && providedKey && providedKey === expectedKey);
-};
-
 const isInternalTestDomain = (domain: string): boolean => domain.toLowerCase() === INTERNAL_TEST_DOMAIN;
 
 const isInternalTestEmail = (email: string): boolean => email.toLowerCase().endsWith(`@${INTERNAL_TEST_DOMAIN}`);
@@ -833,7 +818,6 @@ const upsertHubSpotLead = async (payload: Required<LeadPayload>): Promise<Upsert
 
 export async function POST(request: NextRequest) {
   try {
-    const bypassMode = isBypassAuthorized(request);
     const body = (await request.json()) as LeadPayload;
     const payload: Required<LeadPayload> = {
       email: body.email?.trim().toLowerCase() ?? "",
@@ -858,19 +842,6 @@ export async function POST(request: NextRequest) {
 
     if (payload.email && !isValidEmail(payload.email)) {
       return NextResponse.json({ message: "Invalid email format." }, { status: 400 });
-    }
-
-    if (bypassMode) {
-      return NextResponse.json({
-        stored: false,
-        provider: "none",
-        notified: false,
-        database_enabled: false,
-        database_stored: false,
-        webhook_sent: false,
-        webhook_skipped_existing_email: false,
-        bypass_mode: true,
-      });
     }
 
     // 1. Save to Supabase FIRST  -  fail hard if it doesn't work

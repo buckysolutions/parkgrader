@@ -22,7 +22,7 @@ const MAX_CONCURRENT_CHECKS = 3;
  * Monitoring worker endpoint. Called by cron (either Vercel Cron or an
  * external scheduler like cron-job.org).
  *
- * Auth: header `x-monitoring-key` must match MONITORING_SECRET or BYPASS_KEY.
+ * Auth: header `x-monitoring-key` must match MONITORING_SECRET.
  */
 export async function POST(request: NextRequest) {
   const authKey = request.headers.get("x-monitoring-key");

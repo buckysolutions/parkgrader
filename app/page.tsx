@@ -70,14 +70,6 @@ type ScanResponse = {
   previousScanResult?: ScanResponse | null;
 };
 
-type HubSpotContactOption = {
-  id: string;
-  email: string;
-  name: string;
-  company: string;
-  website: string;
-};
-
 type Answers = {
   booking_platform?: string;
   primary_challenge?: string;
@@ -175,15 +167,6 @@ const normalizeUrl = (raw: string): string => {
 
 const formatDisplayUrl = (raw: string): string => {
   return normalizeUrl(raw);
-};
-
-const hasEnabledQueryFlag = (params: URLSearchParams, key: string): boolean => {
-  const value = params.get(key);
-  if (value === null) {
-    return false;
-  }
-
-  return value === "" || value === "true" || value === "1";
 };
 
 const formatPhoneInput = (raw: string): string => {
@@ -418,18 +401,10 @@ export default function Home() {
   const [reportId, setReportId] = useState("");
   const [copied, setCopied] = useState(false);
   const [demoMode, setDemoMode] = useState<DemoMode>(null);
-  const [isTradeshowMode, setIsTradeshowMode] = useState(false);
-  const [isWebsiteMode, setIsWebsiteMode] = useState(false);
   const [loomRequested, setLoomRequested] = useState(false);
   const [isReportUnlocked, setIsReportUnlocked] = useState(true);
   const [urlInputShakeCount, setUrlInputShakeCount] = useState(0);
   const [emailInputShakeCount, setEmailInputShakeCount] = useState(0);
-  const [hubspotContactId, setHubspotContactId] = useState("");
-  const [contactSearch, setContactSearch] = useState("");
-  const [contactSearchResults, setContactSearchResults] = useState<HubSpotContactOption[]>([]);
-  const [isContactSearchOpen, setIsContactSearchOpen] = useState(false);
-  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
-  const [selectedContactWebsite, setSelectedContactWebsite] = useState("");
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [previousScanResult, setPreviousScanResult] = useState<ScanResponse | null>(null);
   const [isHydratingSharedReport, setIsHydratingSharedReport] = useState(() => Boolean(getReportIdFromPathname(pathname ?? "")));
@@ -480,7 +455,7 @@ export default function Home() {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [isHydratingSharedReport, step, isTradeshowMode]);
+  }, [isHydratingSharedReport, step]);
 
   const finalScore = scanResult?.score ?? 0;
   const gaugeTargetProgress = Math.max(0, Math.min(finalScore / 100, 1));
@@ -566,22 +541,10 @@ export default function Home() {
         report_id: nextReportId,
         report_snapshot: reportSnapshotPayload,
         lead_intent: options?.leadIntent || undefined,
-        hubspot_contact_id: hubspotContactId || undefined,
         loom_requested: loomRequested || undefined,
       };
 
-      let leadEndpoint = "/api/lead";
-      if (typeof window !== "undefined") {
-        const params = new URLSearchParams(window.location.search);
-        const bypassEnabled = hasEnabledQueryFlag(params, "bypass");
-        const key = (params.get("tsk") ?? "").trim();
-
-        if (bypassEnabled && key) {
-          leadEndpoint = `/api/lead?bypass=true&key=${encodeURIComponent(key)}`;
-        }
-      }
-
-      const response = await fetch(leadEndpoint, {
+      const response = await fetch("/api/lead", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -606,8 +569,6 @@ export default function Home() {
       demoMode,
       email,
       emailConfirmation,
-      hubspotContactId,
-      isTradeshowMode,
       name,
       previousScanResult,
       propertyName,
@@ -697,53 +658,11 @@ export default function Home() {
     void runScan(reportUrl, scanResult.industry);
   }, [isScanning, reportUrl, runScan, scanResult]);
 
-  useEffect(() => {
-    if (!isTradeshowMode || step !== "landing" || !isContactSearchOpen) {
-      return;
-    }
-
-    const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      setIsLoadingContacts(true);
-      try {
-        const query = contactSearch.trim();
-        const response = await fetch(`/api/hubspot-contacts?q=${encodeURIComponent(query)}&limit=20`, {
-          signal: controller.signal,
-        });
-        if (!response.ok) {
-          setContactSearchResults([]);
-          return;
-        }
-        const payload = (await response.json()) as { contacts?: HubSpotContactOption[] };
-        setContactSearchResults(payload.contacts ?? []);
-      } catch {
-        if (!controller.signal.aborted) {
-          setContactSearchResults([]);
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsLoadingContacts(false);
-        }
-      }
-    }, 200);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [contactSearch, isContactSearchOpen, isTradeshowMode, step]);
-
   const beginAssessment = async () => {
-    const normalized = normalizeUrl(isTradeshowMode ? selectedContactWebsite : urlInput);
+    const normalized = normalizeUrl(urlInput);
     if (!normalized) {
-      setScanError(isTradeshowMode ? "Select a contact with a website URL." : "Please enter your URL.");
+      setScanError("Please enter your URL.");
         setUrlInputShakeCount((value) => value + 1);
-      return;
-    }
-
-    if (isTradeshowMode && !hubspotContactId) {
-      setScanError("Select a contact from lookup to continue.");
-      setUrlInputShakeCount((value) => value + 1);
       return;
     }
 
@@ -755,10 +674,6 @@ export default function Home() {
     setCopied(false);
     setReportId("");
     setDisplayScore(0);
-    setContactSearch("");
-    setContactSearchResults([]);
-    setIsContactSearchOpen(false);
-    setSelectedContactWebsite("");
     setExpandedCardId(null);
     setEngagementIssueClicks(0);
     setIsReportUnlocked(true);
@@ -775,11 +690,6 @@ export default function Home() {
     }
     setReportUrl(normalized);
     trackEvent("audit_started", { url: normalized });
-    if (isTradeshowMode) {
-      setStep("partial");
-      void runScan(normalized, "campground");
-      return;
-    }
     setStep("questions");
   };
 
@@ -825,45 +735,7 @@ export default function Home() {
       trackedSharedReportRef.current.add(snapshot.reportId);
       trackEvent("shared_report_viewed", { report_id: snapshot.reportId });
     }
-  }, [isTradeshowMode, syncReportPath]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const validateTradeshowAccess = async () => {
-      const params = new URLSearchParams(window.location.search);
-      setIsWebsiteMode(hasEnabledQueryFlag(params, "website"));
-
-      if (hasEnabledQueryFlag(params, "loom")) {
-        setLoomRequested(true);
-      }
-
-      if (!hasEnabledQueryFlag(params, "tradeshow")) {
-        return;
-      }
-
-      const key = params.get("tsk") ?? "";
-
-      try {
-        const response = await fetch(`/api/tradeshow-access?key=${encodeURIComponent(key)}`);
-        if (!response.ok) {
-          return;
-        }
-        const payload = (await response.json()) as { enabled?: boolean };
-        if (!cancelled && payload.enabled) {
-          setIsTradeshowMode(true);
-          setIsReportUnlocked(true);
-        }
-      } catch {
-        // Keep default locked behavior when validation fails.
-      }
-    };
-
-    void validateTradeshowAccess();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }, [syncReportPath]);
 
   useEffect(() => {
     let cancelled = false;
@@ -940,7 +812,7 @@ export default function Home() {
     );
 
     return () => window.clearTimeout(timeout);
-  }, [demoMode, isScanning, isTradeshowMode, reportId, reportUrl, scanResult, step, syncReportPath]);
+  }, [demoMode, isScanning, reportId, reportUrl, scanResult, step, syncReportPath]);
 
   useEffect(() => {
     if (step !== "report" || !reportId || !reportUrl || !scanResult || demoMode) {
@@ -969,7 +841,7 @@ export default function Home() {
 
   // Fire email_gate_shown when inline gate scrolls into view (Bug 1 fix)
   useEffect(() => {
-    if (step !== "report" || isTradeshowMode || hasSubmittedEmailGate) {
+    if (step !== "report" || hasSubmittedEmailGate) {
       return;
     }
     const gateEl = inlineGateRef.current;
@@ -995,7 +867,7 @@ export default function Home() {
       clearTimeout(timer);
       // observer.disconnect() is handled inside the callback
     };
-  }, [hasSubmittedEmailGate, isTradeshowMode, reportId, step]);
+  }, [hasSubmittedEmailGate, reportId, step]);
 
   useEffect(() => {
     if (step !== "report") {
@@ -1293,7 +1165,8 @@ export default function Home() {
   const isDebug = useMemo(() => {
     if (typeof window === "undefined") return false;
     const params = new URLSearchParams(window.location.search);
-    return hasEnabledQueryFlag(params, "debug");
+    const v = params.get("debug");
+    return v === "" || v === "true" || v === "1";
   }, []);
 
   const visibleChecks = useMemo(() => {
@@ -1358,17 +1231,15 @@ export default function Home() {
           >
             <TopographicPanel />
 
-            {!isWebsiteMode ? (
-              <div className="pointer-events-none absolute left-0 right-0 top-6 z-20 flex justify-center lg:left-10 lg:right-auto lg:top-8 lg:block">
-                <Image
-                  src={PARKGRADER_LOGO}
-                  alt="ParkGrader"
-                  width={181}
-                  height={32}
-                  className="h-7 w-auto"
-                />
-              </div>
-            ) : null}
+            <div className="pointer-events-none absolute left-0 right-0 top-6 z-20 flex justify-center lg:left-10 lg:right-auto lg:top-8 lg:block">
+              <Image
+                src={PARKGRADER_LOGO}
+                alt="ParkGrader"
+                width={181}
+                height={32}
+                className="h-7 w-auto"
+              />
+            </div>
 
             <motion.div
               className="relative z-10 mx-auto flex w-full max-w-7xl flex-col items-center px-4 lg:min-h-screen lg:flex-row lg:items-end lg:px-12 lg:gap-16"
@@ -1396,93 +1267,26 @@ export default function Home() {
                       animate={urlInputShakeCount > 0 ? { x: [0, -10, 10, -7, 7, -3, 3, 0] } : { x: 0 }}
                       transition={{ duration: 0.4 }}
                     >
-                      {isTradeshowMode ? (
-                        <div className="relative">
-                          <input
-                            ref={landingInputRef}
-                            value={contactSearch}
-                            onFocus={() => setIsContactSearchOpen(true)}
-                            onBlur={() => {
-                              window.setTimeout(() => setIsContactSearchOpen(false), 160);
-                            }}
-                            onChange={(event) => {
-                              setContactSearch(event.target.value);
-                              setHubspotContactId("");
-                              setSelectedContactWebsite("");
-                              if (scanError) {
-                                setScanError("");
-                              }
-                            }}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                void beginAssessment();
-                              }
-                            }}
-                            placeholder="Search by name, email, or company"
-                            className={`h-12 w-full border-0 border-b-2 bg-transparent px-0 pb-2 text-lg font-semibold text-[#0A1628] text-center outline-none transition-colors placeholder:font-normal placeholder:text-[#6E7C90] ${
-                              scanError ? "border-[#DC2626]" : "border-[#5B6776] hover:border-[#2DA4A9] focus:border-[#2DA4A9]"
-                            }`}
-                          />
-                          {isContactSearchOpen ? (
-                            <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto border border-[#E6EBF0] bg-white shadow-[0_10px_30px_rgba(10,22,40,0.08)]">
-                              {isLoadingContacts ? (
-                                <p className="px-3 py-2 text-xs text-[#5B6776]">Loading contacts...</p>
-                              ) : contactSearchResults.length > 0 ? (
-                                contactSearchResults.map((contact) => (
-                                  <button
-                                    key={contact.id}
-                                    type="button"
-                                    onMouseDown={(event) => event.preventDefault()}
-                                    onClick={() => {
-                                      setHubspotContactId(contact.id);
-                                      setContactSearch(contact.email);
-                                      setSelectedContactWebsite(contact.website || "");
-                                      setEmail(contact.email);
-                                      if (!name && contact.name) {
-                                        setName(contact.name);
-                                      }
-                                      if (!propertyName && contact.company) {
-                                        setPropertyName(contact.company);
-                                      }
-                                      setIsContactSearchOpen(false);
-                                    }}
-                                    className="block w-full border-b border-[#F1F5F9] px-3 py-2 text-left text-xs text-[#0A1628] hover:bg-[#F8FAFC]"
-                                  >
-                                    <p className="font-medium">{contact.email}</p>
-                                    {contact.name || contact.company ? (
-                                      <p className="mt-0.5 text-[#5B6776]">{[contact.name, contact.company].filter(Boolean).join(" - ")}</p>
-                                    ) : null}
-                                  </button>
-                                ))
-                              ) : (
-                                <p className="px-3 py-2 text-xs text-[#5B6776]">No contacts found.</p>
-                              )}
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <input
-                          ref={landingInputRef}
-                          value={urlInput}
-                          onChange={(event) => {
-                            setUrlInput(event.target.value);
-                            if (scanError) {
-                              setScanError("");
-                            }
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              void beginAssessment();
-                            }
-                          }}
-                          placeholder="e.g. happycampsrvpark.com"
-                          className={`h-12 w-full !rounded-[12px] border bg-white px-4 text-left text-base text-[#0A1628] outline-none transition-all placeholder:text-[#8C97A8] ${
-                            scanError ? "border-[#DC2626] focus:border-[#DC2626] focus:shadow-[0_0_0_3px_rgba(220,38,38,0.10)]" : "border-[#C4CCD4] hover:border-[#2DA4A9]/40 focus:border-[#2DA4A9] focus:shadow-[0_0_0_3px_rgba(45,164,169,0.12)]"
-                          }`}
-                        />
-                      )}
+                      <input
+                        ref={landingInputRef}
+                        value={urlInput}
+                        onChange={(event) => {
+                          setUrlInput(event.target.value);
+                          if (scanError) {
+                            setScanError("");
+                          }
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void beginAssessment();
+                          }
+                        }}
+                        placeholder="e.g. happycampsrvpark.com"
+                        className={`h-12 w-full !rounded-[12px] border bg-white px-4 text-left text-base text-[#0A1628] outline-none transition-all placeholder:text-[#8C97A8] ${
+                          scanError ? "border-[#DC2626] focus:border-[#DC2626] focus:shadow-[0_0_0_3px_rgba(220,38,38,0.10)]" : "border-[#C4CCD4] hover:border-[#2DA4A9]/40 focus:border-[#2DA4A9] focus:shadow-[0_0_0_3px_rgba(45,164,169,0.12)]"
+                        }`}
+                      />
                     </motion.div>
                     {scanError ? <p className="mt-2 text-center text-base text-[#B42318]">{scanError}</p> : null}
                   </div>
@@ -1821,7 +1625,6 @@ export default function Home() {
                 </motion.div>
 
                 {/* ── Detail Cards ── */}
-                {isReportUnlocked || isTradeshowMode ? (
                 <div className="relative mt-12">
                   {/* Report summary */}
                   <div className="mb-6 text-left">
@@ -1909,8 +1712,7 @@ export default function Home() {
                   </div>
 
                   {/* Email capture — bottom of report, non-dismissible */}
-                  {!isTradeshowMode ? (
-                    hasSubmittedEmailGate ? (
+                  {hasSubmittedEmailGate ? (
                       /* Thank-you state — shown inline where form was */
                       <motion.section
                         className="mt-10 px-1"
@@ -2026,13 +1828,12 @@ export default function Home() {
                         </div>
                       </motion.section>
                     )
-                  ) : null}
+                  }
 
                 </div>
-                ) : null}
 
                 <AnimatePresence>
-                  {showSharePrompt && !isTradeshowMode ? (
+                  {showSharePrompt ? (
                     <motion.div
                       className="print-hidden fixed inset-0 z-50 flex items-center justify-center bg-[#0A1628]/55 px-4 py-6 backdrop-blur-[2px]"
                       initial={{ opacity: 0 }}
