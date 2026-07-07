@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAllWebsites, createWebsite } from "@/lib/services/monitoring/MonitoringService";
+import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,17 @@ export async function GET(request: NextRequest) {
   const search = request.nextUrl.searchParams.get("search") ?? undefined;
   const websites = await getAllWebsites(search);
 
+  // Check which emails are unsubscribed.
+  const emails = websites.map(w => w.contactEmail).filter(Boolean) as string[];
+  const unsubscribedSet = new Set<string>();
+  if (emails.length > 0) {
+    const records = await prisma.unsubscribedEmail.findMany({
+      where: { email: { in: emails } },
+      select: { email: true },
+    });
+    for (const r of records) unsubscribedSet.add(r.email);
+  }
+
   return NextResponse.json({
     websites: websites.map((w) => ({
       id: w.id,
@@ -23,6 +35,8 @@ export async function GET(request: NextRequest) {
       bookingUrl: w.bookingUrl,
       monitoringEnabled: w.monitoringEnabled,
       monitoringFrequency: w.monitoringFrequency,
+      contactEmail: w.contactEmail,
+      isUnsubscribed: w.contactEmail ? unsubscribedSet.has(w.contactEmail) : false,
       lastCheck: w.checks[0] ?? null,
       openIncidents: w.incidents.length,
     })),
@@ -51,6 +65,7 @@ export async function POST(request: NextRequest) {
     homepageUrl: body.homepageUrl,
     bookingUrl: body.bookingUrl,
     contactUrl: body.contactUrl,
+    contactEmail: body.contactEmail,
     monitoringFrequency: body.monitoringFrequency,
   });
 

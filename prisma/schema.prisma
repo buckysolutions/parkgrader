@@ -46,6 +46,7 @@ model MonitoringWebsite {
   homepageUrl         String
   bookingUrl          String?
   contactUrl          String?
+  contactEmail        String?
   monitoringEnabled   Boolean  @default(true)
   monitoringFrequency Int      @default(60)
   createdAt           DateTime @default(now())

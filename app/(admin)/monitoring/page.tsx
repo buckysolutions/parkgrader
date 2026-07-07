@@ -9,6 +9,8 @@ interface WebsiteRow {
   businessName: string;
   domain: string;
   monitoringEnabled: boolean;
+  contactEmail: string | null;
+  isUnsubscribed: boolean;
   lastCheck: { checkedAt: string; homepageStatus: number | null; responseTime: number | null } | null;
   openIncidents: number;
 }
@@ -20,7 +22,7 @@ export default function OverviewPage() {
   const [error, setError] = useState("");
 
   const [showAddForm, setShowAddForm] = useState(false);
-  const [form, setForm] = useState({ businessName: "", domain: "", homepageUrl: "", bookingUrl: "", monitoringFrequency: "60" });
+  const [form, setForm] = useState({ businessName: "", domain: "", homepageUrl: "", bookingUrl: "", contactEmail: "", monitoringFrequency: "60" });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -57,6 +59,7 @@ export default function OverviewPage() {
           domain: form.domain,
           homepageUrl: form.homepageUrl,
           bookingUrl: form.bookingUrl || undefined,
+          contactEmail: form.contactEmail || undefined,
           monitoringFrequency: parseInt(form.monitoringFrequency),
         }),
       });
@@ -66,7 +69,7 @@ export default function OverviewPage() {
         return;
       }
       setShowAddForm(false);
-      setForm({ businessName: "", domain: "", homepageUrl: "", bookingUrl: "", monitoringFrequency: "60" });
+      setForm({ businessName: "", domain: "", homepageUrl: "", bookingUrl: "", contactEmail: "", monitoringFrequency: "60" });
       await loadData();
     } catch {
       setFormError("Network error");
@@ -145,6 +148,10 @@ export default function OverviewPage() {
                 <input type="text" value={form.bookingUrl} onChange={(e) => setForm({ ...form, bookingUrl: e.target.value })} placeholder="https://example.com/book (optional)" style={{ borderRadius: "12px" }} className="h-11 w-full border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] placeholder-[#8C97A8] transition focus:border-[#2DA4A9] focus:outline-none focus:ring-2 focus:ring-[#2DA4A9]/20" />
               </div>
               <div>
+                <label className="mb-1 block text-sm font-medium text-[#0A1628]">Contact Email</label>
+                <input type="email" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} placeholder="email@example.com (optional)" style={{ borderRadius: "12px" }} className="h-11 w-full border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] placeholder-[#8C97A8] transition focus:border-[#2DA4A9] focus:outline-none focus:ring-2 focus:ring-[#2DA4A9]/20" />
+              </div>
+              <div>
                 <label className="mb-1 block text-sm font-medium text-[#0A1628]">Check Frequency</label>
                 <select value={form.monitoringFrequency} onChange={(e) => setForm({ ...form, monitoringFrequency: e.target.value })} style={{ borderRadius: "12px" }} className="h-11 w-full border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] transition focus:border-[#2DA4A9] focus:outline-none focus:ring-2 focus:ring-[#2DA4A9]/20">
                   <option value="5">Every 5 minutes</option>
@@ -202,11 +209,12 @@ export default function OverviewPage() {
                 : "unknown";
 
               return (
-                <Link key={site.id} href={`/monitoring/websites/${site.id}`} className="glass-card flex items-center gap-4 rounded-2xl bg-white p-4 transition hover:shadow-md">
+                <Link key={site.id} href={`/monitoring/websites/${site.id}`} className={`glass-card flex items-center gap-4 rounded-2xl bg-white p-4 transition hover:shadow-md ${site.isUnsubscribed ? "opacity-50" : ""}`}>
                   <StatusDot status={status} />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-[#0A1628]">{site.businessName}</p>
+                    <p className={`truncate font-medium text-[#0A1628] ${site.isUnsubscribed ? "line-through" : ""}`}>{site.businessName}</p>
                     <p className="truncate text-sm text-[#8C97A8]">{site.domain}</p>
+                    {site.isUnsubscribed && <span className="mt-0.5 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-[#8C97A8]">Unsubscribed</span>}
                   </div>
                   <div className="hidden shrink-0 gap-6 text-right text-sm sm:flex">
                     <div><p className="text-[#8C97A8]">Response</p><p className="font-medium tabular-nums text-[#0A1628]">{site.lastCheck?.responseTime ? `${site.lastCheck.responseTime}ms` : "—"}</p></div>

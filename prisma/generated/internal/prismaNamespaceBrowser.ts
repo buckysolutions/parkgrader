@@ -109,6 +109,7 @@ export const MonitoringWebsiteScalarFieldEnum = {
   homepageUrl: 'homepageUrl',
   bookingUrl: 'bookingUrl',
   contactUrl: 'contactUrl',
+  contactEmail: 'contactEmail',
   monitoringEnabled: 'monitoringEnabled',
   monitoringFrequency: 'monitoringFrequency',
   createdAt: 'createdAt',

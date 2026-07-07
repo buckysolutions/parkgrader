@@ -329,7 +329,7 @@ export async function sendMonitoringAlert(
       Content: {
         Simple: {
           Subject: {
-            Data: `[ParkGrader Alert] ${params.websiteName} — ${label}`,
+            Data: `[ParkGrader Alert] ${params.websiteName} — ${label} — ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`,
             Charset: "UTF-8",
           },
           Body: { Html: { Data: html, Charset: "UTF-8" } },
