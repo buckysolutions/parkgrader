@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sendWelcomeEmail } from "@/lib/email/ses";
+import { prisma as prismaImport } from "@/lib/db/prisma";
 type LeadPayload = {
   email?: string;
   name?: string;
@@ -929,11 +931,11 @@ export async function POST(request: NextRequest) {
 
     // Send welcome email with report link if they provided an email address.
     if (payload.email && payload.url) {
-      const { sendWelcomeEmail } = await import("@/lib/email/ses");
       const reportUrl = `${(process.env.APP_BASE_URL ?? "https://parkgrader.com").replace(/\/$/, "")}/r/${encodeURIComponent(payload.report_id)}`;
+
       sendWelcomeEmail({
         to: payload.email,
-        websiteName: payload.property_name || new URL(payload.url).hostname,
+        websiteName: payload.property_name || payload.url.replace(/^https?:\/\//, "").replace(/\/.*$/, ""),
         websiteUrl: payload.url,
         reportUrl,
       }).catch((err) => {
@@ -942,12 +944,13 @@ export async function POST(request: NextRequest) {
 
       // Auto-enroll in monthly reports if they submitted through the audit.
       try {
-        const domain = new URL(payload.url).hostname.replace(/^www\./, "");
-        const { prisma } = await import("@/lib/db/prisma");
-        await prisma.monitoringWebsite.updateMany({
-          where: { domain, contactEmail: null },
-          data: { contactEmail: payload.email, monthlyReportsEnabled: true },
-        });
+        const hostname = payload.url.replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
+        if (hostname) {
+          await prismaImport.monitoringWebsite.updateMany({
+            where: { domain: hostname, contactEmail: null },
+            data: { contactEmail: payload.email, monthlyReportsEnabled: true },
+          });
+        }
       } catch { /* ignore — website may not exist in monitoring yet */ }
     }
 
