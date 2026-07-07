@@ -3,6 +3,7 @@ import { DM_Sans, Geist } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { AnalyticsScripts } from "@/components/AnalyticsScripts";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -81,29 +82,7 @@ export default function RootLayout({
       className={cn("h-full", "antialiased", dmSans.variable, "font-sans", geist.variable)}
     >
       <body className="min-h-full flex flex-col">
-        {IS_PRODUCTION ? (
-          <>
-            <Script id="hs-conversations-settings" strategy="afterInteractive">
-              {`window.hsConversationsSettings = window.hsConversationsSettings || {}; window.hsConversationsSettings.loadImmediately = false;`}
-            </Script>
-            <Script
-              id="hs-script-loader"
-              src="https://js-na2.hs-scripts.com/245580588.js"
-              strategy="afterInteractive"
-            />
-          </>
-        ) : null}
-        {process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ? (
-          <>
-            <Script
-              src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}`}
-              strategy="afterInteractive"
-            />
-            <Script id="ga-init" strategy="afterInteractive">
-              {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID}');`}
-            </Script>
-          </>
-        ) : null}
+        {IS_PRODUCTION && <AnalyticsScripts />}
         {IS_PRODUCTION && META_PIXEL_ID ? (
           <>
             <Script id="meta-pixel-init" strategy="afterInteractive">
