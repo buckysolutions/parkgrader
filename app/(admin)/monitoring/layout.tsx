@@ -19,7 +19,7 @@ function AdminNav() {
   const keyParam = key ? `?admin_key=${encodeURIComponent(key)}` : "";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[#E6EBF0] bg-white">
+    <header className="sticky top-0 z-40 border-b border-white/20 bg-white/40 backdrop-blur-xl">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
         {/* Logo */}
         <Link
