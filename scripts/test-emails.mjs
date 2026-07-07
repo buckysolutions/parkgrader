@@ -125,27 +125,27 @@ function buildTestAlert() {
 
 function buildTestWelcome() {
   return wrap(`
-    <p style="color: #888888; font-size: 16px; line-height: 24px; margin: 0 0 6px 0;">Monitoring is now active</p>
+    <p style="color: #888888; font-size: 16px; line-height: 24px; margin: 0 0 6px 0;">Your website report is ready</p>
     <p style="color: #000000; font-size: 22px; font-weight: bold; line-height: 28px; margin: 0 0 30px 0;">Example Campground</p>
 
-    <p style="font-size: 16px; line-height: 24px; margin: 0 0 15px 0; color: #000000;">ParkGrader is now monitoring your website. We&rsquo;ll keep an eye on availability, performance, SSL certificates, DNS, and your booking page.</p>
-    <p style="font-size: 16px; line-height: 24px; margin: 0 0 30px 0; color: #000000;">If we detect an issue, we&rsquo;ll send you an alert so you can fix it before it affects your visitors.</p>
+    <p style="font-size: 16px; line-height: 24px; margin: 0 0 15px 0; color: #000000;">Thanks for running your free ParkGrader audit. We scanned your website and found areas that may be affecting your bookings.</p>
 
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin: 0 0 30px 0;">
-        <tr><td style="border-top: 1px solid #EAEAEA; font-size: 1px; line-height: 1px;">&nbsp;</td></tr>
-    </table>
+    <p style="font-size: 16px; line-height: 24px; margin: 0 0 15px 0; color: #000000;">
+        <a href="https://example.com/r/test123" style="color: #2da4a9; font-weight: 600;">View your full report here</a> to see your score and the specific fixes we recommend.
+    </p>
 
-    <p style="color: #888888; font-size: 13px; letter-spacing: 0.5px; text-transform: uppercase; line-height: 20px; margin: 0 0 12px 0;">What we monitor</p>
-    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom: 30px;">
-        <tr><td style="font-size: 16px; line-height: 28px; color: #000000; padding: 0 0 6px 0;">&bull; Website availability &amp; response time</td></tr>
-        <tr><td style="font-size: 16px; line-height: 28px; color: #000000; padding: 0 0 6px 0;">&bull; Booking page availability</td></tr>
-        <tr><td style="font-size: 16px; line-height: 28px; color: #000000; padding: 0 0 6px 0;">&bull; SSL certificate expiration</td></tr>
-        <tr><td style="font-size: 16px; line-height: 28px; color: #000000; padding: 0 0 6px 0;">&bull; DNS resolution</td></tr>
-    </table>
+    <p style="font-size: 16px; line-height: 24px; margin: 0 0 15px 0; color: #000000;">We&rsquo;ll also send you a personalized video overview walking through your results. This can take us a little time to prepare &mdash; we&rsquo;ll email you as soon as it&rsquo;s ready.</p>
+
+    <p style="font-size: 16px; line-height: 24px; margin: 0 0 30px 0; color: #000000;">In the meantime, we&rsquo;ll keep an eye on your website and let you know if anything needs attention.</p>
 
     <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
         <tr><td align="center" class="email-btn-td" style="border-radius: 12px; background-color: #2da4a9;">
-            <a href="https://example.com" style="display: block; width: 100%; padding: 18px 0; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: bold; border-radius: 12px;">Visit your website</a>
+            <a href="https://example.com/r/test123" style="display: block; width: 100%; padding: 18px 0; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: bold; border-radius: 12px;">View your report</a>
+        </td></tr>
+    </table>
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-top: 14px;">
+        <tr><td align="center" class="email-btn-td" style="border-radius: 12px; border: 1px solid #2da4a9;">
+            <a href="mailto:help@buckysolutions.com" style="display: block; width: 100%; padding: 18px 0; color: #2da4a9; text-decoration: none; font-size: 16px; font-weight: bold; border-radius: 12px;">Contact us</a>
         </td></tr>
     </table>
   `);

@@ -927,13 +927,15 @@ export async function POST(request: NextRequest) {
     // Fire webhooks and HubSpot in the background  -  don't await
     fireWebhooksInBackground();
 
-    // Send welcome email if they provided an email address.
+    // Send welcome email with report link if they provided an email address.
     if (payload.email && payload.url) {
       const { sendWelcomeEmail } = await import("@/lib/email/ses");
+      const reportUrl = `${(process.env.APP_BASE_URL ?? "https://parkgrader.com").replace(/\/$/, "")}/r/${encodeURIComponent(payload.report_id)}`;
       sendWelcomeEmail({
         to: payload.email,
         websiteName: payload.property_name || new URL(payload.url).hostname,
         websiteUrl: payload.url,
+        reportUrl,
       }).catch((err) => {
         console.error("Welcome email failed:", err);
       });

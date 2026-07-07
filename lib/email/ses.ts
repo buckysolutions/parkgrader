@@ -186,6 +186,7 @@ function buildWelcomeHtml(params: {
   websiteName: string;
   websiteUrl: string;
   email: string;
+  reportUrl?: string;
 }): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -220,18 +221,29 @@ function buildWelcomeHtml(params: {
                             <img src="${PARKGRADER_LOGO}" alt="ParkGrader" width="180" class="email-logo" style="display: block; max-width: 180px; width: 100%; height: auto; margin-bottom: 40px; border: 0;">
 
                             <p style="color: #888888; font-size: 16px; line-height: 24px; margin: 0 0 6px 0;">
-                                Monitoring is now active
+                                Your website report is ready
                             </p>
                             <p style="color: #000000; font-size: 22px; font-weight: bold; line-height: 28px; margin: 0 0 30px 0;">
                                 ${esc(params.websiteName)}
                             </p>
 
                             <p style="font-size: 16px; line-height: 24px; margin: 0 0 15px 0; color: #000000;">
-                                ParkGrader is now monitoring your website. We&rsquo;ll keep an eye on availability, performance, SSL certificates, DNS, and your booking page.
+                                Thanks for running your free ParkGrader audit. We scanned your website and found areas that may be affecting your bookings.
+                            </p>
+
+                            ${params.reportUrl
+                              ? `<p style="font-size: 16px; line-height: 24px; margin: 0 0 15px 0; color: #000000;">
+                                    <a href="${esc(params.reportUrl)}" style="color: #2da4a9; font-weight: 600;">View your full report here</a> to see your score and the specific fixes we recommend.
+                                </p>`
+                              : ""
+                            }
+
+                            <p style="font-size: 16px; line-height: 24px; margin: 0 0 15px 0; color: #000000;">
+                                We&rsquo;ll also send you a personalized video overview walking through your results. This can take us a little time to prepare — we&rsquo;ll email you as soon as it&rsquo;s ready.
                             </p>
 
                             <p style="font-size: 16px; line-height: 24px; margin: 0 0 30px 0; color: #000000;">
-                                If we detect an issue, we&rsquo;ll send you an alert so you can fix it before it affects your visitors.
+                                In the meantime, we&rsquo;ll keep an eye on your website and let you know if anything needs attention.
                             </p>
 
                             <!-- Divider -->
@@ -239,26 +251,27 @@ function buildWelcomeHtml(params: {
                                 <tr><td style="border-top: 1px solid #EAEAEA; font-size: 1px; line-height: 1px;">&nbsp;</td></tr>
                             </table>
 
-                            <p style="color: #888888; font-size: 13px; letter-spacing: 0.5px; text-transform: uppercase; line-height: 20px; margin: 0 0 12px 0;">
-                                What we monitor
-                            </p>
-                            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom: 30px;">
-                                <tr><td style="font-size: 16px; line-height: 28px; color: #000000; padding: 0 0 6px 0;">&bull; Website availability &amp; response time</td></tr>
-                                <tr><td style="font-size: 16px; line-height: 28px; color: #000000; padding: 0 0 6px 0;">&bull; Booking page availability</td></tr>
-                                <tr><td style="font-size: 16px; line-height: 28px; color: #000000; padding: 0 0 6px 0;">&bull; SSL certificate expiration</td></tr>
-                                <tr><td style="font-size: 16px; line-height: 28px; color: #000000; padding: 0 0 6px 0;">&bull; DNS resolution</td></tr>
-                            </table>
-
-                            <!-- CTA -->
-                            <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
-                                <tr>
-                                    <td align="center" class="email-btn-td" style="border-radius: 12px; background-color: #2da4a9;">
-                                        <a href="${esc(params.websiteUrl)}" style="display: block; width: 100%; padding: 18px 0; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: bold; border-radius: 12px;">
-                                            Visit your website
-                                        </a>
-                                    </td>
-                                </tr>
-                            </table>
+                            ${params.reportUrl
+                              ? `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+                                    <tr>
+                                        <td align="center" class="email-btn-td" style="border-radius: 12px; background-color: #2da4a9;">
+                                            <a href="${esc(params.reportUrl)}" style="display: block; width: 100%; padding: 18px 0; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: bold; border-radius: 12px;">
+                                                View your report
+                                            </a>
+                                        </td>
+                                    </tr>
+                                </table>
+                                <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-top: 14px;">
+                                    <tr>
+                                        <td align="center" class="email-btn-td" style="border-radius: 12px; border: 1px solid #2da4a9;">
+                                            <a href="mailto:help@buckysolutions.com" style="display: block; width: 100%; padding: 18px 0; color: #2da4a9; text-decoration: none; font-size: 16px; font-weight: bold; border-radius: 12px;">
+                                                Contact us
+                                            </a>
+                                        </td>
+                                    </tr>
+                                </table>`
+                              : ""
+                            }
 
                         </td>
                     </tr>
@@ -289,6 +302,7 @@ export interface WelcomeEmailParams {
   to: string;
   websiteName: string;
   websiteUrl: string;
+  reportUrl?: string;
 }
 
 export interface SendResult {
