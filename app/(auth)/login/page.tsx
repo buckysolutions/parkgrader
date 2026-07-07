@@ -48,7 +48,6 @@ export default function LoginPage() {
             alt="ParkGrader"
             className="mx-auto h-8 w-auto"
           />
-          <p className="mt-3 text-sm text-[#8C97A8]">Sign in to your dashboard</p>
         </div>
 
         {/* Form card */}
