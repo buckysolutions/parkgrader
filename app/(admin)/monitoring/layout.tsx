@@ -1,7 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { createClient } from "@/lib/supabase/browser";
 
 const PARKGRADER_LOGO = "https://assets.buckysolutions.com/parkgrader_logo.svg";
 
@@ -13,6 +15,14 @@ const navItems = [
 
 function AdminNav() {
   const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createClient();
+
+  async function signOut() {
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-[#E6EBF0] bg-white">
@@ -43,6 +53,12 @@ function AdminNav() {
               </Link>
             );
           })}
+          <button
+            onClick={signOut}
+            className="btn-rounded ml-3 px-3 py-1.5 text-sm font-medium text-[#8C97A8] transition hover:bg-gray-100 hover:text-[#DC2626]"
+          >
+            Sign out
+          </button>
         </nav>
       </div>
     </header>

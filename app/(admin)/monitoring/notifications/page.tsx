@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 
 interface NotificationItem {
   id: string;
@@ -42,12 +41,7 @@ export default function NotificationsPage() {
   return (
     <div className="space-y-8">
       <div>
-        <div className="flex items-center gap-2 text-sm">
-          <Link href="/monitoring" className="text-[#8C97A8] hover:text-[#2DA4A9]">Monitoring</Link>
-          <span className="text-[#C4CCD4]">/</span>
-          <span className="font-medium text-[#0A1628]">Notifications</span>
-        </div>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[#0A1628]">Notifications</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-[#0A1628]">Notifications</h1>
         <p className="mt-1 text-sm text-[#8C97A8]">Review and approve alerts before they are sent</p>
       </div>
 

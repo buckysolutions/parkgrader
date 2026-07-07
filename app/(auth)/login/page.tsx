@@ -15,8 +15,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit() {
     setError("");
     setLoading(true);
 
@@ -61,7 +60,7 @@ export default function LoginPage() {
 
         {/* Form card */}
         <div className="glass-card rounded-2xl bg-white p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-4">
             {error && (
               <div className="rounded-xl bg-red-50 p-3 text-sm text-[#DC2626]">
                 {error}
@@ -101,13 +100,14 @@ export default function LoginPage() {
             </div>
 
             <button
-              type="submit"
+              type="button"
+              onClick={handleSubmit}
               disabled={loading}
               className="btn-rounded w-full bg-[#2DA4A9] py-2.5 text-sm font-medium text-white transition hover:bg-[#24858A] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Signing in..." : "Sign in"}
             </button>
-          </form>
+          </div>
         </div>
 
         <div className="mt-6 flex justify-center">

@@ -44,14 +44,7 @@ function IncidentsPage() {
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-sm">
-            <Link href="/monitoring" className="text-[#8C97A8] hover:text-[#2DA4A9]">Monitoring</Link>
-            <span className="text-[#C4CCD4]">/</span>
-            <span className="font-medium text-[#0A1628]">Incidents</span>
-          </div>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[#0A1628]">Incidents</h1>
-        </div>
+        <h1 className="text-2xl font-semibold tracking-tight text-[#0A1628]">Incidents</h1>
         <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
           {(["open", "resolved"] as const).map((f) => (
             <Link key={f} href={`/monitoring/incidents?status=${f}`}
