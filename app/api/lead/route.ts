@@ -927,6 +927,18 @@ export async function POST(request: NextRequest) {
     // Fire webhooks and HubSpot in the background  -  don't await
     fireWebhooksInBackground();
 
+    // Send welcome email if they provided an email address.
+    if (payload.email && payload.url) {
+      const { sendWelcomeEmail } = await import("@/lib/email/ses");
+      sendWelcomeEmail({
+        to: payload.email,
+        websiteName: payload.property_name || new URL(payload.url).hostname,
+        websiteUrl: payload.url,
+      }).catch((err) => {
+        console.error("Welcome email failed:", err);
+      });
+    }
+
     // Build the response
     const responseBody: Record<string, unknown> = {
       stored: supabaseStoreResult.stored,
