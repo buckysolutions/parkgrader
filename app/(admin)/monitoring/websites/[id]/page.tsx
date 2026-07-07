@@ -22,41 +22,20 @@ export default function WebsiteDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Settings form
-  const [editingSettings, setEditingSettings] = useState(false);
+  // Settings form — always visible
   const [savingSettings, setSavingSettings] = useState(false);
-  const [settingsForm, setSettingsForm] = useState({ contactEmail: "", monitoringFrequency: 60, monitoringEnabled: true });
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(`/api/admin/monitoring/websites/${id}`);
-        if (!res.ok) { setError("Website not found."); return; }
-        const d = await res.json();
-        setData(d);
-        setSettingsForm({
-          contactEmail: d.website.contactEmail || "",
-          monitoringFrequency: d.website.monitoringFrequency,
-          monitoringEnabled: d.website.monitoringEnabled,
-        });
-      } catch { setError("Network error."); }
-      finally { setLoading(false); }
-    }
-    load();
-  }, [id]);
-
-  async function saveSettings() {
+  async function saveField(field: string, value: unknown) {
     setSavingSettings(true);
     const res = await fetch(`/api/admin/monitoring/websites/${website.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(settingsForm),
+      body: JSON.stringify({ [field]: value }),
     });
     if (res.ok) {
       const json = await res.json();
       setData((prev) => prev ? { ...prev, website: json.website } : prev);
-      setEditingSettings(false);
     }
     setSavingSettings(false);
   }
@@ -65,6 +44,19 @@ export default function WebsiteDetailPage() {
     await fetch(`/api/admin/monitoring/websites/${website.id}`, { method: "DELETE" });
     window.location.href = "/monitoring";
   }
+
+  // Fetch data
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch(`/api/admin/monitoring/websites/${id}`);
+        if (!res.ok) { setError("Website not found."); return; }
+        setData(await res.json());
+      } catch { setError("Network error."); }
+      finally { setLoading(false); }
+    }
+    load();
+  }, [id]);
 
   if (loading) {
     return (
@@ -87,18 +79,6 @@ export default function WebsiteDetailPage() {
   const { website, latestCheck, healthScore, recentIncidents, recentChecks } = data;
   const statusColor = healthScore.status === "healthy" ? "#16A34A" : healthScore.status === "warning" ? "#D97706" : "#DC2626";
   const STATUS_LABELS: Record<string, string> = { healthy: "Healthy", warning: "Needs Attention", critical: "At Risk", unknown: "No Data" };
-
-  async function toggleMonthlyReports() {
-    const res = await fetch(`/api/admin/monitoring/websites/${website.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ monthlyReportsEnabled: !website.monthlyReportsEnabled }),
-    });
-    if (res.ok) {
-      const json = await res.json();
-      setData((prev) => prev ? { ...prev, website: json.website } : prev);
-    }
-  }
 
   return (
     <div className="space-y-8">
@@ -139,76 +119,68 @@ export default function WebsiteDetailPage() {
         <MetricCard label="Booking Page" value={latestCheck?.bookingStatus != null ? `HTTP ${latestCheck.bookingStatus}` : "—"} ok={latestCheck?.bookingStatus != null && latestCheck.bookingStatus >= 200 && latestCheck.bookingStatus < 300} />
       </div>
 
-      {/* Settings panel */}
+      {/* Manage card — everything in one place */}
       <div className="glass-card rounded-2xl bg-white p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold tracking-tight text-[#0A1628]">Settings</h2>
-          <button onClick={() => setEditingSettings(!editingSettings)} className="btn-rounded px-4 py-1.5 text-sm font-medium text-[#2DA4A9] hover:bg-[#2DA4A9]/10">
-            {editingSettings ? "Cancel" : "Edit"}
-          </button>
-        </div>
-
-        {editingSettings ? (
-          <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-[#8C97A8]">Contact Email</label>
-                <input type="email" value={settingsForm.contactEmail} onChange={(e) => setSettingsForm({ ...settingsForm, contactEmail: e.target.value })} placeholder="email@example.com" style={{ borderRadius: "12px" }} className="h-10 w-full border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628] focus:border-[#2DA4A9] focus:outline-none focus:ring-2 focus:ring-[#2DA4A9]/20" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-[#8C97A8]">Check Frequency</label>
-                <select value={settingsForm.monitoringFrequency} onChange={(e) => setSettingsForm({ ...settingsForm, monitoringFrequency: parseInt(e.target.value) })} style={{ borderRadius: "12px" }} className="h-10 w-full border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628] focus:border-[#2DA4A9] focus:outline-none">
-                  <option value={5}>Every 5 minutes</option>
-                  <option value={15}>Every 15 minutes</option>
-                  <option value={30}>Every 30 minutes</option>
-                  <option value={60}>Every hour</option>
-                  <option value={360}>Every 6 hours</option>
-                  <option value={1440}>Daily</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={settingsForm.monitoringEnabled} onChange={(e) => setSettingsForm({ ...settingsForm, monitoringEnabled: e.target.checked })} className="h-4 w-4 rounded border-[#C4CCD4] text-[#2DA4A9]" />
-                <span className="text-sm text-[#0A1628]">Monitoring enabled</span>
-              </label>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={saveSettings} disabled={savingSettings} className="btn-rounded bg-[#2DA4A9] px-4 py-2 text-sm font-medium text-white hover:bg-[#24858A] disabled:opacity-50">{savingSettings ? "Saving..." : "Save"}</button>
-              <button onClick={() => setConfirmDelete(true)} className="btn-rounded bg-[#DC2626] px-4 py-2 text-sm font-medium text-white hover:bg-red-700">Delete</button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-[#8C97A8]">Email</span><span className="text-[#0A1628]">{website.contactEmail || "—"}</span></div>
-            <div className="flex justify-between"><span className="text-[#8C97A8]">Frequency</span><span className="text-[#0A1628]">{freqLabel(website.monitoringFrequency)}</span></div>
-            <div className="flex justify-between"><span className="text-[#8C97A8]">Status</span><span className={website.monitoringEnabled ? "text-[#16A34A]" : "text-[#DC2626]"}>{website.monitoringEnabled ? "Active" : "Paused"}</span></div>
-          </div>
-        )}
-      </div>
-
-      {/* Monthly reports toggle */}
-      <div className="glass-card rounded-2xl bg-white p-5">
-        <div className="flex items-center justify-between">
+        <h2 className="mb-4 text-lg font-semibold tracking-tight text-[#0A1628]">Manage</h2>
+        <div className="grid gap-4 sm:grid-cols-3">
           <div>
-            <p className="font-medium text-[#0A1628]">Monthly Reports</p>
-            <p className="text-sm text-[#8C97A8]">
-              {website.monthlyReportsEnabled
-                ? website.contactEmail
-                  ? `Sending to ${website.contactEmail}`
-                  : "Enabled (no email set — add one in Settings)"
-                : "Monthly reports are off"}
-            </p>
+            <label className="mb-1 block text-xs font-medium text-[#8C97A8]">Contact Email</label>
+            <input
+              type="email"
+              defaultValue={website.contactEmail || ""}
+              onBlur={(e) => { if (e.target.value !== (website.contactEmail || "")) saveField("contactEmail", e.target.value || null); }}
+              placeholder="email@example.com"
+              style={{ borderRadius: "12px" }}
+              className="h-10 w-full border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628] placeholder-[#8C97A8] focus:border-[#2DA4A9] focus:outline-none focus:ring-2 focus:ring-[#2DA4A9]/20"
+            />
           </div>
-          <button
-            onClick={toggleMonthlyReports}
-            className={`btn-rounded px-4 py-2 text-sm font-medium transition ${
-              website.monthlyReportsEnabled
-                ? "bg-[#16A34A] text-white hover:bg-green-700"
-                : "bg-gray-200 text-[#5B6776] hover:bg-gray-300"
-            }`}
-          >
-            {website.monthlyReportsEnabled ? "On" : "Off"}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[#8C97A8]">Check Frequency</label>
+            <select
+              defaultValue={website.monitoringFrequency}
+              onChange={(e) => saveField("monitoringFrequency", parseInt(e.target.value))}
+              style={{ borderRadius: "12px" }}
+              className="h-10 w-full border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628] focus:border-[#2DA4A9] focus:outline-none"
+            >
+              <option value={5}>Every 5 minutes</option>
+              <option value={15}>Every 15 minutes</option>
+              <option value={30}>Every 30 minutes</option>
+              <option value={60}>Every hour</option>
+              <option value={360}>Every 6 hours</option>
+              <option value={1440}>Daily</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[#8C97A8]">Monitoring</label>
+            <select
+              defaultValue={website.monitoringEnabled ? "1" : "0"}
+              onChange={(e) => saveField("monitoringEnabled", e.target.value === "1")}
+              style={{ borderRadius: "12px" }}
+              className="h-10 w-full border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628] focus:border-[#2DA4A9] focus:outline-none"
+            >
+              <option value="1">Active</option>
+              <option value="0">Paused</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[#8C97A8]">Monthly Reports</label>
+            <select
+              defaultValue={website.monthlyReportsEnabled ? "1" : "0"}
+              onChange={(e) => saveField("monthlyReportsEnabled", e.target.value === "1")}
+              style={{ borderRadius: "12px" }}
+              className="h-10 w-full border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628] focus:border-[#2DA4A9] focus:outline-none"
+            >
+              <option value="1">On</option>
+              <option value="0">Off</option>
+            </select>
+          </div>
+        </div>
+        <div className="mt-5 flex items-center justify-between border-t border-[#E6EBF0] pt-4">
+          <p className="text-xs text-[#8C97A8]">
+            {savingSettings ? "Saving..." : "Changes save automatically"}
+          </p>
+          <button onClick={() => setConfirmDelete(true)} className="btn-rounded bg-[#DC2626] px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
+            Delete Website
           </button>
         </div>
       </div>
@@ -282,16 +254,6 @@ export default function WebsiteDetailPage() {
       </div>
     </div>
   );
-}
-
-function freqLabel(min: number): string {
-  if (min === 5) return "Every 5 minutes";
-  if (min === 15) return "Every 15 minutes";
-  if (min === 30) return "Every 30 minutes";
-  if (min === 60) return "Every hour";
-  if (min === 360) return "Every 6 hours";
-  if (min === 1440) return "Daily";
-  return `Every ${min} min`;
 }
 
 function MetricCard({ label, value, ok }: { label: string; value: string; ok: boolean }) {
