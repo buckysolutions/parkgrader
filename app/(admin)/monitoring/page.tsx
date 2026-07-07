@@ -242,8 +242,7 @@ function OverviewPage() {
               <button
                 onClick={() => setShowAddForm(false)}
                 style={{ borderRadius: "12px" }}
-                style={{ borderRadius: "12px" }}
-              className="flex-1 border border-[#E6EBF0] bg-white px-5 py-2.5 text-sm font-medium text-[#5B6776] transition hover:bg-gray-50"
+                className="flex-1 border border-[#E6EBF0] bg-white px-5 py-2.5 text-sm font-medium text-[#5B6776] transition hover:bg-gray-50"
               >
                 Cancel
               </button>
