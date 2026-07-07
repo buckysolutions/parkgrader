@@ -63,8 +63,8 @@ export default function WebsiteDetailPage() {
       body: JSON.stringify({ monthlyReportsEnabled: !website.monthlyReportsEnabled }),
     });
     if (res.ok) {
-      const updated = await res.json();
-      setData({ ...data, website: updated.website });
+      const json = await res.json();
+      setData((prev) => prev ? { ...prev, website: json.website } : prev);
     }
   }
 
