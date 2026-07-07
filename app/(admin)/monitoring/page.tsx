@@ -143,84 +143,110 @@ function OverviewPage() {
             {summary?.totalCount ?? 0} websites
           </span>
           <button
-            onClick={() => setShowAddForm(!showAddForm)}
+            onClick={() => setShowAddForm(true)}
             className="btn-rounded inline-flex items-center gap-1.5 rounded-xl bg-[#0A1628] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0A1628]/85"
           >
-            {showAddForm ? "Cancel" : "+ Add Website"}
+            + Add Website
           </button>
         </div>
       </div>
 
-      {/* Add website form */}
+      {/* Add website modal */}
       {showAddForm && (
-        <div className="glass-card rounded-2xl bg-white p-6">
-          <h2 className="mb-4 text-lg font-semibold tracking-tight text-[#0A1628]">Add Website</h2>
-          {formError && (
-            <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-[#DC2626]">{formError}</p>
-          )}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-[#0A1628]">Business Name *</label>
-              <input
-                type="text"
-                value={form.businessName}
-                onChange={(e) => setForm({ ...form, businessName: e.target.value })}
-                placeholder="Acme Campground"
-                className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] placeholder-[#8C97A8] transition focus:border-[#2DA4A9] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-[#0A1628]">Domain *</label>
-              <input
-                type="text"
-                value={form.domain}
-                onChange={(e) => setForm({ ...form, domain: e.target.value })}
-                placeholder="example.com"
-                className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] placeholder-[#8C97A8] transition focus:border-[#2DA4A9] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-[#0A1628]">Homepage URL *</label>
-              <input
-                type="text"
-                value={form.homepageUrl}
-                onChange={(e) => setForm({ ...form, homepageUrl: e.target.value })}
-                placeholder="https://example.com"
-                className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] placeholder-[#8C97A8] transition focus:border-[#2DA4A9] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-[#0A1628]">Booking URL</label>
-              <input
-                type="text"
-                value={form.bookingUrl}
-                onChange={(e) => setForm({ ...form, bookingUrl: e.target.value })}
-                placeholder="https://example.com/book (optional)"
-                className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] placeholder-[#8C97A8] transition focus:border-[#2DA4A9] focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-[#0A1628]">Check Frequency</label>
-              <select
-                value={form.monitoringFrequency}
-                onChange={(e) => setForm({ ...form, monitoringFrequency: e.target.value })}
-                className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] transition focus:border-[#2DA4A9] focus:outline-none"
-              >
-                <option value="5">Every 5 minutes</option>
-                <option value="15">Every 15 minutes</option>
-                <option value="30">Every 30 minutes</option>
-                <option value="60">Every hour (default)</option>
-              </select>
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+            onClick={() => setShowAddForm(false)}
+          />
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="glass-card w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold tracking-tight text-[#0A1628]">Add Website</h2>
+                <button
+                  onClick={() => setShowAddForm(false)}
+                  className="rounded-xl p-1 text-[#8C97A8] transition hover:bg-gray-100 hover:text-[#0A1628]"
+                >
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 5l10 10M15 5L5 15"/></svg>
+                </button>
+              </div>
+              {formError && (
+                <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-[#DC2626]">{formError}</p>
+              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-[#0A1628]">Business Name *</label>
+                  <input
+                    type="text"
+                    value={form.businessName}
+                    onChange={(e) => setForm({ ...form, businessName: e.target.value })}
+                    placeholder="Acme Campground"
+                    className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] placeholder-[#8C97A8] transition focus:border-[#2DA4A9] focus:outline-none focus:ring-2 focus:ring-[#2DA4A9]/20"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-[#0A1628]">Domain *</label>
+                  <input
+                    type="text"
+                    value={form.domain}
+                    onChange={(e) => setForm({ ...form, domain: e.target.value })}
+                    placeholder="example.com"
+                    className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] placeholder-[#8C97A8] transition focus:border-[#2DA4A9] focus:outline-none focus:ring-2 focus:ring-[#2DA4A9]/20"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-[#0A1628]">Homepage URL *</label>
+                  <input
+                    type="text"
+                    value={form.homepageUrl}
+                    onChange={(e) => setForm({ ...form, homepageUrl: e.target.value })}
+                    placeholder="https://example.com"
+                    className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] placeholder-[#8C97A8] transition focus:border-[#2DA4A9] focus:outline-none focus:ring-2 focus:ring-[#2DA4A9]/20"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-[#0A1628]">Booking URL</label>
+                  <input
+                    type="text"
+                    value={form.bookingUrl}
+                    onChange={(e) => setForm({ ...form, bookingUrl: e.target.value })}
+                    placeholder="https://example.com/book (optional)"
+                    className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] placeholder-[#8C97A8] transition focus:border-[#2DA4A9] focus:outline-none focus:ring-2 focus:ring-[#2DA4A9]/20"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-[#0A1628]">Check Frequency</label>
+                  <select
+                    value={form.monitoringFrequency}
+                    onChange={(e) => setForm({ ...form, monitoringFrequency: e.target.value })}
+                    className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] transition focus:border-[#2DA4A9] focus:outline-none focus:ring-2 focus:ring-[#2DA4A9]/20"
+                  >
+                    <option value="5">Every 5 minutes</option>
+                    <option value="15">Every 15 minutes</option>
+                    <option value="30">Every 30 minutes</option>
+                    <option value="60">Every hour (default)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-5 flex gap-3">
+                <button
+                  onClick={() => setShowAddForm(false)}
+                  className="btn-rounded flex-1 rounded-xl border border-[#E6EBF0] bg-white px-5 py-2.5 text-sm font-medium text-[#5B6776] transition hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={addWebsite}
+                  disabled={saving || !form.businessName || !form.domain || !form.homepageUrl}
+                  className="btn-rounded flex-1 rounded-xl bg-[#2DA4A9] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#24858A] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving ? "Adding..." : "Add Website"}
+                </button>
+              </div>
             </div>
           </div>
-          <button
-            onClick={addWebsite}
-            disabled={saving || !form.businessName || !form.domain || !form.homepageUrl}
-            className="btn-rounded mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#2DA4A9] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#24858A] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? "Adding..." : "Add Website"}
-          </button>
-        </div>
+        </>
       )}
 
       {/* Stat cards */}
