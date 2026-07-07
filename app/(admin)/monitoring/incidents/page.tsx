@@ -88,7 +88,7 @@ function IncidentsPage() {
                   </p>
                 </div>
                 {!i.resolved && (
-                  <button onClick={() => resolveIncident(i.id)} style={{ borderRadius: "12px" }} className="bg-[#0A1628] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0A1628]/80">
+                  <button onClick={() => resolveIncident(i.id)} className="btn-rounded bg-[#0A1628] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0A1628]/80">
                     Resolve
                   </button>
                 )}

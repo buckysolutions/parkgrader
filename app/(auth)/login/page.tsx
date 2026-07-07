@@ -95,17 +95,29 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              style={{ borderRadius: "12px" }}
-              className="w-full bg-[#2DA4A9] py-2.5 text-sm font-medium text-white transition hover:bg-[#24858A] disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-rounded w-full bg-[#2DA4A9] py-2.5 text-sm font-medium text-white transition hover:bg-[#24858A] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Signing in..." : "Sign in"}
             </button>
           </form>
         </div>
 
-        <p className="mt-6 text-center text-xs text-[#8C97A8]">
-          Powered by <span className="font-semibold text-[#2DA4A9]">ParkGrader</span>
-        </p>
+        <div className="mt-6 flex justify-center">
+          <a
+            href="https://www.buckysolutions.com"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 text-xs text-[#5B6776]"
+          >
+            Powered by
+            <img
+              src="https://assets.buckysolutions.com/bucky%2Blogo%2Bwhite.svg"
+              alt="Bucky's Solutions"
+              className="h-4 w-auto"
+              style={{ filter: "brightness(0) saturate(100%) invert(41%) sepia(9%) saturate(735%) hue-rotate(175deg) brightness(92%) contrast(87%)" }}
+            />
+          </a>
+        </div>
       </div>
     </div>
   );

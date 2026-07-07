@@ -28,8 +28,7 @@ export default function NotFoundPage() {
         </p>
         <Link
           href="/"
-          className="mt-6 inline-block rounded-xl bg-[#2DA4A9] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#24858A]"
-          style={{ borderRadius: "12px" }}
+          className="btn-rounded mt-6 inline-block bg-[#2DA4A9] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#24858A]"
         >
           Go home
         </Link>
