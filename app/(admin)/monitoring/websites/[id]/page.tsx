@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { HealthScore } from "@/lib/services/monitoring/types";
 
 interface WebsiteDetailData {
-  website: { id: string; businessName: string; domain: string; homepageUrl: string; bookingUrl: string | null; monitoringEnabled: boolean; monitoringFrequency: number };
+  website: { id: string; businessName: string; domain: string; homepageUrl: string; bookingUrl: string | null; monitoringEnabled: boolean; monitoringFrequency: number; contactEmail: string | null; monthlyReportsEnabled: boolean };
   latestCheck: { id: string; checkedAt: string; homepageStatus: number | null; bookingStatus: number | null; responseTime: number | null; sslDaysRemaining: number | null; dnsStatus: string | null } | null;
   healthScore: HealthScore;
   openIncidents: Array<{ id: string; type: string; severity: string; startedAt: string; message: string }>;
@@ -56,6 +56,18 @@ export default function WebsiteDetailPage() {
   const statusColor = healthScore.status === "healthy" ? "#16A34A" : healthScore.status === "warning" ? "#D97706" : "#DC2626";
   const STATUS_LABELS: Record<string, string> = { healthy: "Healthy", warning: "Needs Attention", critical: "At Risk", unknown: "No Data" };
 
+  async function toggleMonthlyReports() {
+    const res = await fetch(`/api/admin/monitoring/websites/${website.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ monthlyReportsEnabled: !website.monthlyReportsEnabled }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setData({ ...data, website: updated.website });
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-2 text-sm">
@@ -94,6 +106,31 @@ export default function WebsiteDetailPage() {
         <MetricCard label="DNS" value={latestCheck?.dnsStatus === "ok" ? "OK" : latestCheck?.dnsStatus ?? "—"} ok={latestCheck?.dnsStatus === "ok"} />
         <MetricCard label="Booking Page" value={latestCheck?.bookingStatus != null ? `HTTP ${latestCheck.bookingStatus}` : "—"} ok={latestCheck?.bookingStatus != null && latestCheck.bookingStatus >= 200 && latestCheck.bookingStatus < 300} />
       </div>
+
+      {website.contactEmail && (
+        <div className="glass-card rounded-2xl bg-white p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium text-[#0A1628]">Monthly Reports</p>
+              <p className="text-sm text-[#8C97A8]">
+                {website.monthlyReportsEnabled
+                  ? `Monthly reports will be sent to ${website.contactEmail}`
+                  : `Monthly reports are off for ${website.contactEmail}`}
+              </p>
+            </div>
+            <button
+              onClick={toggleMonthlyReports}
+              className={`btn-rounded px-4 py-2 text-sm font-medium transition ${
+                website.monthlyReportsEnabled
+                  ? "bg-[#16A34A] text-white hover:bg-green-700"
+                  : "bg-gray-200 text-[#5B6776] hover:bg-gray-300"
+              }`}
+            >
+              {website.monthlyReportsEnabled ? "On" : "Off"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="glass-card rounded-2xl bg-white p-6">
         <h2 className="mb-4 text-lg font-semibold tracking-tight text-[#0A1628]">Health Score</h2>
