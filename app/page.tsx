@@ -500,8 +500,15 @@ export default function Home() {
 
   const saveAuditSession = useCallback(
     async (leadEmail?: string, options?: SaveAuditSessionOptions) => {
-      if (!reportUrl || !scanResult) {
+      if (!scanResult) {
         throw new Error("Missing report details.");
+      }
+
+      // Use scanResult.url as fallback if reportUrl is somehow empty
+      // (e.g. shared report hydration edge case).
+      const url = (reportUrl || scanResult.url || "").trim();
+      if (!url) {
+        throw new Error("Invalid URL");
       }
 
       const nextReportId = reportId || makeReportId();
@@ -516,7 +523,7 @@ export default function Home() {
       const savedAt = new Date().toISOString();
       const reportSnapshotPayload: ReportSnapshot = {
         reportId: nextReportId,
-        reportUrl,
+        reportUrl: url,
         scanResult,
         previousScanResult: previousScanResult || undefined,
         answers,
@@ -533,7 +540,7 @@ export default function Home() {
         name: normalizedName,
         phone: normalizedPhone || undefined,
         property_name: propertyName,
-        url: reportUrl,
+        url,
         score: scanResult.score ?? 0,
         booking_platform: bookingPlatform,
         primary_challenge: primaryChallenge,
@@ -1765,7 +1772,7 @@ export default function Home() {
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.6, duration: 0.4 }}
                             >
-                              We&apos;ll personally review your site and send a short video with your fix list to <span className="font-medium text-[#0A1628]">{inlineGateEmail}</span>, usually within 24 hours. In the meantime, scroll up to explore your results.
+                              Your report and fix list are on the way to <span className="font-medium text-[#0A1628]">{inlineGateEmail}</span>. We&apos;ll also send a personalized video walkthrough within 24 hours. You&apos;ll start receiving free monthly website health reports — unsubscribe anytime. Scroll up to explore your results.
                             </motion.p>
                           </div>
                         </div>
@@ -1781,9 +1788,9 @@ export default function Home() {
                         <div className="relative" ref={inlineGateRef}>
                           <div className="glow-blob" />
                           <div className="glow-card px-8 py-10 text-center">
-                            <p className="text-[1.75rem] font-medium leading-tight text-[#0A1628]">Get a personalized video review</p>
+                            <p className="text-[1.75rem] font-medium leading-tight text-[#0A1628]">Get your results + free monitoring</p>
                             <p className="mx-auto mt-2 max-w-md text-base leading-7 text-[#5B6776]">
-                              We&apos;ll look at your results, record a short walkthrough of your biggest opportunities, and send it with your <span className="font-semibold text-[#4A5A6A]">fix list</span> and <span className="font-semibold text-[#4A5A6A]">full report</span>, usually within 24 hours.
+                              We&apos;ll send your <span className="font-semibold text-[#4A5A6A]">full report</span>, a personalized <span className="font-semibold text-[#4A5A6A]">video walkthrough</span>, and enroll you in <span className="font-semibold text-[#4A5A6A]">free monthly website monitoring</span> so you know if anything breaks. You can unsubscribe anytime.
                             </p>
                             <div className="mt-6 mx-auto w-full max-w-sm">
                               <input
@@ -1818,7 +1825,7 @@ export default function Home() {
                               className="report-btn-rounded mt-6 inline-flex min-h-12 w-full max-w-sm items-center justify-center bg-[#F57D52] px-5 py-3 text-base font-medium text-white transition-all hover:bg-[#E0683E] hover:shadow-[0_0_28px_rgba(245,125,82,0.35)] disabled:cursor-not-allowed disabled:opacity-70"
                               disabled={isSubmittingInlineGate}
                             >
-                              {isSubmittingInlineGate ? "Saving..." : "Send Me the Video"}
+                              {isSubmittingInlineGate ? "Sending..." : "Send My Results"}
                             </button>
                             <p className="mt-3 flex items-center justify-center gap-1.5 text-sm text-[#8C97A8]">
                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#8c97a8" viewBox="0 0 256 256"><path d="M117.25,157.92a60,60,0,1,0-66.5,0A95.83,95.83,0,0,0,3.53,195.63a8,8,0,1,0,13.4,8.74,80,80,0,0,1,134.14,0,8,8,0,0,0,13.4-8.74A95.83,95.83,0,0,0,117.25,157.92ZM40,108a44,44,0,1,1,44,44A44.05,44.05,0,0,1,40,108Zm210.14,98.7a8,8,0,0,1-11.07-2.33A79.83,79.83,0,0,0,172,168a8,8,0,0,1,0-16,44,44,0,1,0-16.34-84.87,8,8,0,1,1-5.94-14.85,60,60,0,0,1,55.53,105.64,95.83,95.83,0,0,1,47.22,37.71A8,8,0,0,1,250.14,206.7Z"></path></svg>
