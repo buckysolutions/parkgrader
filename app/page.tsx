@@ -259,7 +259,7 @@ function PolicyFooter({ fixed }: { fixed?: boolean }) {
         </a>
         <span>·</span>
         <a className="transition-colors hover:text-[#5B6776]" href="/terms">
-          Terms
+          Terms of Service
         </a>
         <span>·</span>
         <a className="transition-colors hover:text-[#5B6776]" href="/monitoring-policy">

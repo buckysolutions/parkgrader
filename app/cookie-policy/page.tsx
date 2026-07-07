@@ -22,8 +22,7 @@ export default function CookiePolicyPage() {
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <div className="glass-card rounded-2xl bg-white p-8 sm:p-10">
-          <h1 className="text-3xl font-semibold tracking-tight text-[#0A1628]">Cookie Policy</h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-[#0A1628]">Cookie Policy</h1>
           <p className="mt-2 text-sm text-[#8C97A8]">Effective Date: July 7, 2026</p>
           <div className="mt-10 space-y-8">
             <Section number="1" title="Introduction">
@@ -69,7 +68,6 @@ export default function CookiePolicyPage() {
               </div>
             </Section>
           </div>
-        </div>
       </main>
       <footer className="border-t border-[#E6EBF0] bg-white py-6 text-center">
         <p className="text-xs text-[#8C97A8]">&copy; {new Date().getFullYear()} Bucky Solutions LLC. All rights reserved.</p>

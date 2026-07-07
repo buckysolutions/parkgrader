@@ -38,15 +38,14 @@ export default function PrivacyPolicyPage() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <div className="glass-card rounded-2xl bg-white p-8 sm:p-10">
-          <h1 className="text-3xl font-semibold tracking-tight text-[#0A1628]">
-            Privacy Policy
-          </h1>
-          <p className="mt-2 text-sm text-[#8C97A8]">
-            Effective Date: July 7, 2026
-          </p>
+        <h1 className="text-3xl font-semibold tracking-tight text-[#0A1628]">
+          Privacy Policy
+        </h1>
+        <p className="mt-2 text-sm text-[#8C97A8]">
+          Effective Date: July 7, 2026
+        </p>
 
-          <div className="mt-10 space-y-8">
+        <div className="mt-10 space-y-8">
             {/* 1. Introduction */}
             <Section number="1" title="Introduction">
               <p>
@@ -282,7 +281,6 @@ export default function PrivacyPolicyPage() {
               </div>
             </Section>
           </div>
-        </div>
       </main>
 
       {/* Footer */}
