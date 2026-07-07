@@ -33,7 +33,7 @@ const esc = (v) =>
 
 // ── Shared wrapper ──────────────────────────────────────────────────
 
-function wrap(inner: string): string {
+function wrap(inner) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -153,7 +153,7 @@ function buildTestWelcome() {
 
 // ── Send ────────────────────────────────────────────────────────────
 
-async function sendEmail(subject: string, html: string) {
+async function sendEmail(subject, html) {
   loadEnvConfig(process.cwd());
 
   const ses = new SESv2Client({
