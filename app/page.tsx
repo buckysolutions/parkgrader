@@ -250,16 +250,20 @@ function PolicyFooter({ fixed }: { fixed?: boolean }) {
       className={`${fixed ? "fixed" : "relative"} bottom-4 left-1/2 z-20 -translate-x-1/2 text-xs text-[#A7BCCF] print-hidden`}
     >
       <div className="flex items-center gap-2 whitespace-nowrap px-1 py-1">
-        <a className="transition-colors hover:text-[#5B6776]" href="https://www.buckysolutions.com/privacy-policy/" target="_blank" rel="noreferrer">
+        <a className="transition-colors hover:text-[#5B6776]" href="/privacy-policy">
           Privacy Policy
         </a>
         <span>·</span>
-        <a className="transition-colors hover:text-[#5B6776]" href="https://www.buckysolutions.com/cookie-policy/" target="_blank" rel="noreferrer">
+        <a className="transition-colors hover:text-[#5B6776]" href="/cookie-policy">
           Cookie Policy
         </a>
         <span>·</span>
-        <a className="transition-colors hover:text-[#5B6776]" href="https://www.buckysolutions.com/terms-and-conditions/" target="_blank" rel="noreferrer">
-          Terms and Conditions
+        <a className="transition-colors hover:text-[#5B6776]" href="/terms">
+          Terms
+        </a>
+        <span>·</span>
+        <a className="transition-colors hover:text-[#5B6776]" href="/monitoring-policy">
+          Monitoring Policy
         </a>
       </div>
     </footer>
