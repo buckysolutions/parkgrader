@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/db/prisma";
 import {
   getWebsiteById,
   updateWebsite,
@@ -103,6 +104,6 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  await updateWebsite(id, { monitoringEnabled: false });
+  await prisma.monitoringWebsite.delete({ where: { id } });
   return NextResponse.json({ success: true });
 }

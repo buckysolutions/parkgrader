@@ -22,6 +22,7 @@ export default function OverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const [search, setSearch] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [form, setForm] = useState({ businessName: "", domain: "", homepageUrl: "", bookingUrl: "", contactEmail: "", monitoringFrequency: "60", monthlyReportsEnabled: false });
   const [saving, setSaving] = useState(false);
@@ -313,9 +314,19 @@ export default function OverviewPage() {
         </Link>
       )}
 
-      {/* Website list */}
+      {/* Search + Website list */}
       <div>
-        <h2 className="mb-4 text-lg font-semibold tracking-tight text-[#0A1628]">Websites</h2>
+        <div className="mb-4 flex items-center gap-3">
+          <h2 className="text-lg font-semibold tracking-tight text-[#0A1628]">Websites</h2>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or domain..."
+            style={{ borderRadius: "12px" }}
+            className="h-9 flex-1 max-w-xs border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628] placeholder-[#8C97A8] focus:border-[#2DA4A9] focus:outline-none focus:ring-2 focus:ring-[#2DA4A9]/20"
+          />
+        </div>
         {websites.length === 0 ? (
           <div className="glass-card rounded-2xl bg-white py-16 text-center">
             <p className="text-[#8C97A8]">No websites added yet.</p>
@@ -323,7 +334,11 @@ export default function OverviewPage() {
           </div>
         ) : (
           <div className="space-y-2">
-            {websites.map((site) => {
+            {websites.filter(site => {
+              if (!search) return true;
+              const q = search.toLowerCase();
+              return site.businessName.toLowerCase().includes(q) || site.domain.toLowerCase().includes(q);
+            }).map((site) => {
               const status: "healthy" | "warning" | "critical" | "unknown" =
                 site.openIncidents > 0 ? "critical"
                 : site.lastCheck?.homepageStatus != null && site.lastCheck.homepageStatus >= 500 ? "critical"
