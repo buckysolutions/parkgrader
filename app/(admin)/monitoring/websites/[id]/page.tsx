@@ -71,7 +71,7 @@ function WebsiteDetailPage() {
     return (
       <div className="glass-card rounded-2xl bg-white p-8 text-center">
         <p className="text-[#DC2626]">{error}</p>
-        <Link href={`/monitoring/overview?admin_key=${adminKey}`} className="mt-3 inline-block text-sm text-[#2DA4A9] hover:underline">
+        <Link href={`/monitoring?admin_key=${adminKey}`} className="mt-3 inline-block text-sm text-[#2DA4A9] hover:underline">
           ← Back to overview
         </Link>
       </div>
@@ -86,7 +86,7 @@ function WebsiteDetailPage() {
     <div className="space-y-8">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm">
-        <Link href={`/monitoring/overview${keyParam}`} className="text-[#8C97A8] hover:text-[#2DA4A9]">
+        <Link href={`/monitoring${keyParam}`} className="text-[#8C97A8] hover:text-[#2DA4A9]">
           Monitoring
         </Link>
         <span className="text-[#C4CCD4]">/</span>

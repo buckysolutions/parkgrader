@@ -48,7 +48,7 @@ function IncidentsPage() {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm">
-            <Link href={`/monitoring/overview${keyParam}`} className="text-[#8C97A8] hover:text-[#2DA4A9]">Monitoring</Link>
+            <Link href={`/monitoring${keyParam}`} className="text-[#8C97A8] hover:text-[#2DA4A9]">Monitoring</Link>
             <span className="text-[#C4CCD4]">/</span>
             <span className="font-medium text-[#0A1628]">Incidents</span>
           </div>

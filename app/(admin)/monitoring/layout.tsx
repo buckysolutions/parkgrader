@@ -7,9 +7,9 @@ import { Suspense } from "react";
 const PARKGRADER_LOGO = "https://assets.buckysolutions.com/parkgrader_logo.svg";
 
 const navItems = [
-  { href: "overview", label: "Overview" },
-  { href: "incidents", label: "Incidents" },
-  { href: "notifications", label: "Notifications" },
+  { href: "", label: "Overview" },
+  { href: "/incidents", label: "Incidents" },
+  { href: "/notifications", label: "Notifications" },
 ];
 
 function AdminNav() {
@@ -18,17 +18,12 @@ function AdminNav() {
   const key = params.get("admin_key") ?? "";
   const keyParam = key ? `?admin_key=${encodeURIComponent(key)}` : "";
 
-  function isActive(href: string) {
-    if (href === "overview" && (pathname === "/monitoring" || pathname === "/monitoring/overview")) return true;
-    return pathname === `/monitoring/${href}`;
-  }
-
   return (
     <header className="sticky top-0 z-40 border-b border-[#E6EBF0] bg-white">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
         {/* Logo */}
         <Link
-          href={`/monitoring/overview${keyParam}`}
+          href={`/monitoring${keyParam}`}
           className="flex items-center gap-2"
         >
           <img
@@ -43,19 +38,26 @@ function AdminNav() {
 
         {/* Nav */}
         <nav className="flex items-center gap-1">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={`/monitoring/${item.href}${keyParam}`}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                isActive(item.href)
-                  ? "bg-[#2DA4A9]/10 text-[#2DA4A9]"
-                  : "text-[#5B6776] hover:bg-gray-100 hover:text-[#0A1628]"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const fullHref = `/monitoring${item.href}${keyParam}`;
+            const active = item.href === ""
+              ? pathname === "/monitoring"
+              : pathname === `/monitoring${item.href}`;
+
+            return (
+              <Link
+                key={item.href}
+                href={fullHref}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+                  active
+                    ? "bg-[#2DA4A9]/10 text-[#2DA4A9]"
+                    : "text-[#5B6776] hover:bg-gray-100 hover:text-[#0A1628]"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
       </div>
     </header>
