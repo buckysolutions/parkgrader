@@ -198,30 +198,6 @@ export default function WebsiteDetailPage() {
         </div>
       </div>
 
-      {/* Delete — at the bottom */}
-      <div className="glass-card rounded-2xl bg-white p-6">
-        <h2 className="mb-3 text-lg font-semibold tracking-tight text-[#DC2626]">Danger Zone</h2>
-        <p className="mb-4 text-sm text-[#8C97A8]">Permanently remove this website and all monitoring history.</p>
-        <button onClick={() => setConfirmDelete(true)} className="btn-rounded bg-[#DC2626] px-5 py-2 text-sm font-medium text-white hover:bg-red-700">
-          Delete {website.businessName}
-        </button>
-      </div>
-
-      {/* Confirm delete modal */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, width: "100vw", height: "100vh" }}>
-          <div className="absolute inset-0 bg-black/50" onClick={() => setConfirmDelete(false)} />
-          <div className="relative z-10 w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl text-center">
-            <p className="font-semibold text-[#0A1628]">Delete {website.businessName}?</p>
-            <p className="mt-2 text-sm text-[#8C97A8]">Monitoring and check history will be permanently removed.</p>
-            <div className="mt-4 flex gap-2">
-              <button onClick={() => setConfirmDelete(false)} className="btn-rounded flex-1 border border-[#E6EBF0] bg-white px-4 py-2 text-sm font-medium text-[#5B6776]">Cancel</button>
-              <button onClick={deleteWebsite} className="btn-rounded flex-1 bg-[#DC2626] px-4 py-2 text-sm font-medium text-white hover:bg-red-700">Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="glass-card rounded-2xl bg-white p-6">
         <h2 className="mb-4 text-lg font-semibold tracking-tight text-[#0A1628]">Health Score</h2>
         <div className="space-y-3">
@@ -274,6 +250,30 @@ export default function WebsiteDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Danger Zone — at the bottom */}
+      <div className="glass-card rounded-2xl bg-white p-6">
+        <h2 className="mb-3 text-lg font-semibold tracking-tight text-[#DC2626]">Danger Zone</h2>
+        <p className="mb-4 text-sm text-[#8C97A8]">Permanently remove this website and all monitoring history.</p>
+        <button onClick={() => setConfirmDelete(true)} className="btn-rounded bg-[#DC2626] px-5 py-2 text-sm font-medium text-white hover:bg-red-700">
+          Delete {website.businessName}
+        </button>
+      </div>
+
+      {/* Confirm delete modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, width: "100vw", height: "100vh" }}>
+          <div className="absolute inset-0 bg-black/50" onClick={() => setConfirmDelete(false)} />
+          <div className="relative z-10 w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl text-center">
+            <p className="font-semibold text-[#0A1628]">Delete {website.businessName}?</p>
+            <p className="mt-2 text-sm text-[#8C97A8]">Monitoring and check history will be permanently removed.</p>
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => setConfirmDelete(false)} className="btn-rounded flex-1 border border-[#E6EBF0] bg-white px-4 py-2 text-sm font-medium text-[#5B6776]">Cancel</button>
+              <button onClick={deleteWebsite} className="btn-rounded flex-1 bg-[#DC2626] px-4 py-2 text-sm font-medium text-white hover:bg-red-700">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
