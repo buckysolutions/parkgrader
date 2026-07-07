@@ -5,6 +5,7 @@ import {
   updateNotificationStatus,
 } from "@/lib/services/monitoring/MonitoringService";
 import { sendMonitoringAlert } from "@/lib/email/ses";
+import { prisma } from "@/lib/db/prisma";
 
 export const runtime = "nodejs";
 
@@ -51,20 +52,27 @@ export async function POST(request: NextRequest) {
   switch (body.action) {
     case "approve": {
       if (notification.email) {
-        const { getWebsiteById } = await import(
-          "@/lib/services/monitoring/MonitoringService"
-        );
-        const website = await getWebsiteById(notification.websiteId);
+        // Check if unsubscribed before sending.
+        const unsubscribed = await prisma.unsubscribedEmail.findUnique({
+          where: { email: notification.email.toLowerCase().trim() },
+        });
 
-        if (website) {
-          await sendMonitoringAlert({
-            to: notification.email,
-            websiteName: website.businessName,
-            incidentType: notification.type,
-            incidentMessage: `An issue was detected with ${website.domain}.`,
-            incidentTime: notification.createdAt.toISOString(),
-            websiteUrl: website.homepageUrl,
-          });
+        if (!unsubscribed) {
+          const { getWebsiteById } = await import(
+            "@/lib/services/monitoring/MonitoringService"
+          );
+          const website = await getWebsiteById(notification.websiteId);
+
+          if (website) {
+            await sendMonitoringAlert({
+              to: notification.email,
+              websiteName: website.businessName,
+              incidentType: notification.type,
+              incidentMessage: `An issue was detected with ${website.domain}.`,
+              incidentTime: notification.createdAt.toISOString(),
+              websiteUrl: website.homepageUrl,
+            });
+          }
         }
       }
 

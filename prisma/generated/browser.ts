@@ -47,3 +47,8 @@ export type MonitoringNotification = Prisma.MonitoringNotificationModel
  * 
  */
 export type MonitoringSettings = Prisma.MonitoringSettingsModel
+/**
+ * Model UnsubscribedEmail
+ * 
+ */
+export type UnsubscribedEmail = Prisma.UnsubscribedEmailModel

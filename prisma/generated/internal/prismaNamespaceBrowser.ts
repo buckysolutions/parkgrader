@@ -56,7 +56,8 @@ export const ModelName = {
   MonitoringCheck: 'MonitoringCheck',
   MonitoringIncident: 'MonitoringIncident',
   MonitoringNotification: 'MonitoringNotification',
-  MonitoringSettings: 'MonitoringSettings'
+  MonitoringSettings: 'MonitoringSettings',
+  UnsubscribedEmail: 'UnsubscribedEmail'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -172,6 +173,15 @@ export const MonitoringSettingsScalarFieldEnum = {
 } as const
 
 export type MonitoringSettingsScalarFieldEnum = (typeof MonitoringSettingsScalarFieldEnum)[keyof typeof MonitoringSettingsScalarFieldEnum]
+
+
+export const UnsubscribedEmailScalarFieldEnum = {
+  id: 'id',
+  email: 'email',
+  createdAt: 'createdAt'
+} as const
+
+export type UnsubscribedEmailScalarFieldEnum = (typeof UnsubscribedEmailScalarFieldEnum)[keyof typeof UnsubscribedEmailScalarFieldEnum]
 
 
 export const SortOrder = {

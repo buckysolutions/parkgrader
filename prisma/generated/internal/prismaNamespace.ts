@@ -389,7 +389,8 @@ export const ModelName = {
   MonitoringCheck: 'MonitoringCheck',
   MonitoringIncident: 'MonitoringIncident',
   MonitoringNotification: 'MonitoringNotification',
-  MonitoringSettings: 'MonitoringSettings'
+  MonitoringSettings: 'MonitoringSettings',
+  UnsubscribedEmail: 'UnsubscribedEmail'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -405,7 +406,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "parkgrader_audits" | "monitoringWebsite" | "monitoringCheck" | "monitoringIncident" | "monitoringNotification" | "monitoringSettings"
+    modelProps: "parkgrader_audits" | "monitoringWebsite" | "monitoringCheck" | "monitoringIncident" | "monitoringNotification" | "monitoringSettings" | "unsubscribedEmail"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -853,6 +854,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    UnsubscribedEmail: {
+      payload: Prisma.$UnsubscribedEmailPayload<ExtArgs>
+      fields: Prisma.UnsubscribedEmailFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.UnsubscribedEmailFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UnsubscribedEmailPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.UnsubscribedEmailFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UnsubscribedEmailPayload>
+        }
+        findFirst: {
+          args: Prisma.UnsubscribedEmailFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UnsubscribedEmailPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.UnsubscribedEmailFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UnsubscribedEmailPayload>
+        }
+        findMany: {
+          args: Prisma.UnsubscribedEmailFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UnsubscribedEmailPayload>[]
+        }
+        create: {
+          args: Prisma.UnsubscribedEmailCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UnsubscribedEmailPayload>
+        }
+        createMany: {
+          args: Prisma.UnsubscribedEmailCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.UnsubscribedEmailCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UnsubscribedEmailPayload>[]
+        }
+        delete: {
+          args: Prisma.UnsubscribedEmailDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UnsubscribedEmailPayload>
+        }
+        update: {
+          args: Prisma.UnsubscribedEmailUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UnsubscribedEmailPayload>
+        }
+        deleteMany: {
+          args: Prisma.UnsubscribedEmailDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.UnsubscribedEmailUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.UnsubscribedEmailUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UnsubscribedEmailPayload>[]
+        }
+        upsert: {
+          args: Prisma.UnsubscribedEmailUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$UnsubscribedEmailPayload>
+        }
+        aggregate: {
+          args: Prisma.UnsubscribedEmailAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateUnsubscribedEmail>
+        }
+        groupBy: {
+          args: Prisma.UnsubscribedEmailGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UnsubscribedEmailGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.UnsubscribedEmailCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.UnsubscribedEmailCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -989,6 +1064,15 @@ export const MonitoringSettingsScalarFieldEnum = {
 } as const
 
 export type MonitoringSettingsScalarFieldEnum = (typeof MonitoringSettingsScalarFieldEnum)[keyof typeof MonitoringSettingsScalarFieldEnum]
+
+
+export const UnsubscribedEmailScalarFieldEnum = {
+  id: 'id',
+  email: 'email',
+  createdAt: 'createdAt'
+} as const
+
+export type UnsubscribedEmailScalarFieldEnum = (typeof UnsubscribedEmailScalarFieldEnum)[keyof typeof UnsubscribedEmailScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -1244,6 +1328,7 @@ export type GlobalOmitConfig = {
   monitoringIncident?: Prisma.MonitoringIncidentOmit
   monitoringNotification?: Prisma.MonitoringNotificationOmit
   monitoringSettings?: Prisma.MonitoringSettingsOmit
+  unsubscribedEmail?: Prisma.UnsubscribedEmailOmit
 }
 
 /* Types for Logging */
