@@ -24,16 +24,15 @@ async function main() {
   const client = new Client({ connectionString: url, ssl: { rejectUnauthorized: false } });
   await client.connect();
 
-  // Get all unique domains with their business names, emails, and URLs.
+  // Get all unique domains with their contact names, emails, and URLs.
   const { rows } = await client.query(`
     SELECT DISTINCT ON (domain)
       domain,
-      company_name,
+      contact_name,
       website_url,
       email
     FROM parkgrader_audits
     WHERE domain IS NOT NULL
-      AND company_name IS NOT NULL
       AND website_url IS NOT NULL
     ORDER BY domain, scan_date DESC
   `);
@@ -45,8 +44,9 @@ async function main() {
 
   for (const row of rows) {
     const domain = row.domain.toLowerCase().trim();
-    const name = row.company_name.trim();
-    const homepageUrl = row.website_url.trim();
+    const name = (row.contact_name || row.domain || "").trim() || domain;
+    let homepageUrl = row.website_url.trim();
+    if (!homepageUrl.startsWith("http")) homepageUrl = "https://" + homepageUrl;
     const email = (row.email || "").toLowerCase().trim();
 
     // Check if already in monitoring.
