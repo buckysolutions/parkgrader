@@ -25,6 +25,12 @@ function OverviewPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Add website form
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [form, setForm] = useState({ businessName: "", domain: "", homepageUrl: "", bookingUrl: "", monitoringFrequency: "60" });
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+
   useEffect(() => {
     async function load() {
       try {
@@ -46,6 +52,44 @@ function OverviewPage() {
     }
     load();
   }, [adminKey]);
+
+  async function addWebsite() {
+    setSaving(true);
+    setFormError("");
+    try {
+      const res = await fetch(`/api/admin/monitoring/websites?admin_key=${adminKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessName: form.businessName,
+          domain: form.domain,
+          homepageUrl: form.homepageUrl,
+          bookingUrl: form.bookingUrl || undefined,
+          monitoringFrequency: parseInt(form.monitoringFrequency),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        setFormError(err.error ?? "Failed to add website");
+        return;
+      }
+      setShowAddForm(false);
+      setForm({ businessName: "", domain: "", homepageUrl: "", bookingUrl: "", monitoringFrequency: "60" });
+      // Reload
+      const [dashRes, sitesRes] = await Promise.all([
+        fetch(`/api/admin/monitoring/dashboard?admin_key=${adminKey}`),
+        fetch(`/api/admin/monitoring/websites?admin_key=${adminKey}`),
+      ]);
+      if (dashRes.ok && sitesRes.ok) {
+        setSummary(await dashRes.json());
+        setWebsites((await sitesRes.json()).websites ?? []);
+      }
+    } catch {
+      setFormError("Network error");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (!adminKey) {
     return (
@@ -94,10 +138,90 @@ function OverviewPage() {
             Real-time website health across all monitored properties
           </p>
         </div>
-        <span className="rounded-full bg-[#2DA4A9]/10 px-3 py-1 text-xs font-medium text-[#2DA4A9]">
-          {summary?.totalCount ?? 0} websites
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="rounded-full bg-[#2DA4A9]/10 px-3 py-1 text-xs font-medium text-[#2DA4A9]">
+            {summary?.totalCount ?? 0} websites
+          </span>
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="btn-rounded inline-flex items-center gap-1.5 rounded-xl bg-[#0A1628] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0A1628]/85"
+          >
+            {showAddForm ? "Cancel" : "+ Add Website"}
+          </button>
+        </div>
       </div>
+
+      {/* Add website form */}
+      {showAddForm && (
+        <div className="glass-card rounded-2xl bg-white p-6">
+          <h2 className="mb-4 text-lg font-semibold tracking-tight text-[#0A1628]">Add Website</h2>
+          {formError && (
+            <p className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-[#DC2626]">{formError}</p>
+          )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[#0A1628]">Business Name *</label>
+              <input
+                type="text"
+                value={form.businessName}
+                onChange={(e) => setForm({ ...form, businessName: e.target.value })}
+                placeholder="Acme Campground"
+                className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] placeholder-[#8C97A8] transition focus:border-[#2DA4A9] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[#0A1628]">Domain *</label>
+              <input
+                type="text"
+                value={form.domain}
+                onChange={(e) => setForm({ ...form, domain: e.target.value })}
+                placeholder="example.com"
+                className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] placeholder-[#8C97A8] transition focus:border-[#2DA4A9] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[#0A1628]">Homepage URL *</label>
+              <input
+                type="text"
+                value={form.homepageUrl}
+                onChange={(e) => setForm({ ...form, homepageUrl: e.target.value })}
+                placeholder="https://example.com"
+                className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] placeholder-[#8C97A8] transition focus:border-[#2DA4A9] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[#0A1628]">Booking URL</label>
+              <input
+                type="text"
+                value={form.bookingUrl}
+                onChange={(e) => setForm({ ...form, bookingUrl: e.target.value })}
+                placeholder="https://example.com/book (optional)"
+                className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] placeholder-[#8C97A8] transition focus:border-[#2DA4A9] focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-[#0A1628]">Check Frequency</label>
+              <select
+                value={form.monitoringFrequency}
+                onChange={(e) => setForm({ ...form, monitoringFrequency: e.target.value })}
+                className="h-11 w-full rounded-xl border border-[#C4CCD4] bg-white px-4 text-sm text-[#0A1628] transition focus:border-[#2DA4A9] focus:outline-none"
+              >
+                <option value="5">Every 5 minutes</option>
+                <option value="15">Every 15 minutes</option>
+                <option value="30">Every 30 minutes</option>
+                <option value="60">Every hour (default)</option>
+              </select>
+            </div>
+          </div>
+          <button
+            onClick={addWebsite}
+            disabled={saving || !form.businessName || !form.domain || !form.homepageUrl}
+            className="btn-rounded mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#2DA4A9] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#24858A] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? "Adding..." : "Add Website"}
+          </button>
+        </div>
+      )}
 
       {/* Stat cards */}
       {summary && (
