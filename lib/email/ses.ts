@@ -1,7 +1,7 @@
 import { SESv2Client, SendEmailCommand } from "@aws-sdk/client-sesv2";
 import { createHmac } from "node:crypto";
 
-const PARKGRADER_LOGO = "https://assets.buckysolutions.com/parkgrader%2Blogo%2Balternate.png";
+const PARKGRADER_LOGO = "https://assets.buckysolutions.com/parkgrader%2Blogo%2Bgrey.png";
 
 const esc = (v: string) =>
   String(v)
