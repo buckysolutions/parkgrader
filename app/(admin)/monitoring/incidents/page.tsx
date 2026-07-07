@@ -111,7 +111,8 @@ function IncidentsPage() {
                 {!i.resolved && (
                   <button
                     onClick={() => resolveIncident(i.id)}
-                    className="rounded-xl bg-[#0A1628] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0A1628]/80"
+                    style={{ borderRadius: "12px" }}
+                    className="bg-[#0A1628] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0A1628]/80"
                   >
                     Resolve
                   </button>

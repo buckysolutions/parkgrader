@@ -144,7 +144,8 @@ function OverviewPage() {
           </span>
           <button
             onClick={() => setShowAddForm(true)}
-            className="btn-rounded inline-flex items-center gap-1.5 rounded-xl bg-[#0A1628] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0A1628]/85"
+            style={{ borderRadius: "12px" }}
+            className="btn-rounded inline-flex items-center gap-1.5 bg-[#0A1628] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0A1628]/85"
           >
             + Add Website
           </button>
@@ -168,7 +169,8 @@ function OverviewPage() {
               <h2 className="text-lg font-semibold tracking-tight text-[#0A1628]">Add Website</h2>
               <button
                 onClick={() => setShowAddForm(false)}
-                className="rounded-lg p-1 text-[#8C97A8] transition hover:bg-gray-100 hover:text-[#0A1628]"
+                style={{ borderRadius: "8px" }}
+                className="p-1 text-[#8C97A8] transition hover:bg-gray-100 hover:text-[#0A1628]"
               >
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 5l10 10M15 5L5 15"/></svg>
               </button>
@@ -240,7 +242,8 @@ function OverviewPage() {
               <button
                 onClick={() => setShowAddForm(false)}
                 style={{ borderRadius: "12px" }}
-                className="flex-1 border border-[#E6EBF0] bg-white px-5 py-2.5 text-sm font-medium text-[#5B6776] transition hover:bg-gray-50"
+                style={{ borderRadius: "12px" }}
+              className="flex-1 border border-[#E6EBF0] bg-white px-5 py-2.5 text-sm font-medium text-[#5B6776] transition hover:bg-gray-50"
               >
                 Cancel
               </button>

@@ -83,21 +83,24 @@ function NotificationsPage() {
                   <button
                     onClick={() => handleAction(n.id, "approve")}
                     disabled={acting === n.id}
-                    className="rounded-xl bg-[#16A34A] px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
+                    style={{ borderRadius: "12px" }}
+                    className="bg-[#16A34A] px-4 py-2 text-sm font-medium text-white transition hover:bg-green-700 disabled:opacity-50"
                   >
                     Approve &amp; Send
                   </button>
                   <button
                     onClick={() => handleAction(n.id, "snooze")}
                     disabled={acting === n.id}
-                    className="rounded-xl bg-[#D97706] px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700 disabled:opacity-50"
+                    style={{ borderRadius: "12px" }}
+                    className="bg-[#D97706] px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700 disabled:opacity-50"
                   >
                     Snooze
                   </button>
                   <button
                     onClick={() => handleAction(n.id, "dismiss")}
                     disabled={acting === n.id}
-                    className="rounded-xl bg-gray-200 px-4 py-2 text-sm font-medium text-[#5B6776] transition hover:bg-gray-300 disabled:opacity-50"
+                    style={{ borderRadius: "12px" }}
+                    className="bg-gray-200 px-4 py-2 text-sm font-medium text-[#5B6776] transition hover:bg-gray-300 disabled:opacity-50"
                   >
                     Dismiss
                   </button>
