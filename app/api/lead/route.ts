@@ -942,16 +942,36 @@ export async function POST(request: NextRequest) {
         console.error("Welcome email failed:", err);
       });
 
-      // Auto-enroll in monthly reports if they submitted through the audit.
+      // Auto-enroll in monitoring if they submitted through the audit.
       try {
         const hostname = payload.url.replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
         if (hostname) {
-          await prismaImport.monitoringWebsite.updateMany({
-            where: { domain: hostname, contactEmail: null },
-            data: { contactEmail: payload.email, monthlyReportsEnabled: true },
-          });
+          // Check if website already exists.
+          const existing = await prismaImport.monitoringWebsite.findUnique({ where: { domain: hostname } });
+          if (existing) {
+            // Update email if not set.
+            if (!existing.contactEmail && payload.email) {
+              await prismaImport.monitoringWebsite.update({
+                where: { id: existing.id },
+                data: { contactEmail: payload.email, monthlyReportsEnabled: true },
+              });
+            }
+          } else {
+            // Create the website in monitoring.
+            const site = await prismaImport.monitoringWebsite.create({
+              data: {
+                businessName: payload.property_name || hostname,
+                domain: hostname,
+                homepageUrl: payload.url,
+                contactEmail: payload.email || undefined,
+                monthlyReportsEnabled: !!payload.email,
+              },
+            });
+            // Create default settings.
+            await prismaImport.monitoringSettings.create({ data: { websiteId: site.id } });
+          }
         }
-      } catch { /* ignore — website may not exist in monitoring yet */ }
+      } catch { /* ignore */ }
     }
 
     // Build the response
