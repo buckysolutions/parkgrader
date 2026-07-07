@@ -193,21 +193,20 @@ export default function WebsiteDetailPage() {
           <div>
             <p className="font-medium text-[#0A1628]">Monthly Reports</p>
             <p className="text-sm text-[#8C97A8]">
-              {website.contactEmail
-                ? website.monthlyReportsEnabled
-                  ? `Monthly reports will be sent to ${website.contactEmail}`
-                  : `Monthly reports are off`
-                : "Add a contact email to enable monthly reports"}
+              {website.monthlyReportsEnabled
+                ? website.contactEmail
+                  ? `Sending to ${website.contactEmail}`
+                  : "Enabled (no email set — add one in Settings)"
+                : "Monthly reports are off"}
             </p>
           </div>
           <button
             onClick={toggleMonthlyReports}
-            disabled={!website.contactEmail}
             className={`btn-rounded px-4 py-2 text-sm font-medium transition ${
               website.monthlyReportsEnabled
                 ? "bg-[#16A34A] text-white hover:bg-green-700"
                 : "bg-gray-200 text-[#5B6776] hover:bg-gray-300"
-            } disabled:opacity-40`}
+            }`}
           >
             {website.monthlyReportsEnabled ? "On" : "Off"}
           </button>

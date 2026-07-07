@@ -10,6 +10,7 @@ interface WebsiteRow {
   domain: string;
   monitoringEnabled: boolean;
   contactEmail: string | null;
+  monthlyReportsEnabled: boolean;
   isUnsubscribed: boolean;
   lastCheck: { checkedAt: string; homepageStatus: number | null; responseTime: number | null } | null;
   openIncidents: number;
@@ -26,45 +27,12 @@ export default function OverviewPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
-  // Bulk selection
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Bulk actions modal
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkFilter, setBulkFilter] = useState("all");
   const [bulkAction, setBulkAction] = useState("");
   const [bulkConfirm, setBulkConfirm] = useState(false);
-
-  function toggleSelect(id: string) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
-
-  function selectAll() {
-    if (selectedIds.size === websites.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(websites.map((w) => w.id)));
-    }
-  }
-
-  async function runBulkAction() {
-    if (bulkAction === "delete") {
-      await Promise.all(Array.from(selectedIds).map((id) => fetch(`/api/admin/monitoring/websites/${id}`, { method: "DELETE" })));
-    } else if (bulkAction) {
-      // Bulk update frequency or toggle
-      const body: Record<string, unknown> = {};
-      if (bulkAction.startsWith("freq_")) body.monitoringFrequency = parseInt(bulkAction.replace("freq_", ""));
-      if (bulkAction === "disable") body.monitoringEnabled = false;
-      if (bulkAction === "enable") body.monitoringEnabled = true;
-      await Promise.all(Array.from(selectedIds).map((id) => fetch(`/api/admin/monitoring/websites/${id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-      })));
-    }
-    setSelectedIds(new Set());
-    setBulkAction("");
-    setBulkConfirm(false);
-    await loadData();
-  }
+  const [bulkProcessing, setBulkProcessing] = useState(false);
 
   async function loadData() {
     try {
@@ -86,6 +54,17 @@ export default function OverviewPage() {
   }
 
   useEffect(() => { loadData(); }, []);
+
+  async function toggleMonthlyReports(site: WebsiteRow) {
+    await fetch(`/api/admin/monitoring/websites/${site.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ monthlyReportsEnabled: !site.monthlyReportsEnabled }),
+    });
+    setWebsites((prev) => prev.map((w) =>
+      w.id === site.id ? { ...w, monthlyReportsEnabled: !site.monthlyReportsEnabled } : w
+    ));
+  }
 
   async function addWebsite() {
     setSaving(true);
@@ -112,12 +91,44 @@ export default function OverviewPage() {
       setShowAddForm(false);
       setForm({ businessName: "", domain: "", homepageUrl: "", bookingUrl: "", contactEmail: "", monitoringFrequency: "60", monthlyReportsEnabled: false });
       await loadData();
-    } catch {
-      setFormError("Network error");
-    } finally {
-      setSaving(false);
-    }
+    } catch { setFormError("Network error"); }
+    finally { setSaving(false); }
   }
+
+  async function runBulkAction() {
+    setBulkProcessing(true);
+    const targets = getFilteredSites();
+    const ids = targets.map((w) => w.id);
+
+    if (bulkAction === "delete") {
+      await Promise.all(ids.map((id) => fetch(`/api/admin/monitoring/websites/${id}`, { method: "DELETE" })));
+    } else {
+      const body: Record<string, unknown> = {};
+      if (bulkAction.startsWith("freq_")) body.monitoringFrequency = parseInt(bulkAction.replace("freq_", ""));
+      if (bulkAction === "disable") body.monitoringEnabled = false;
+      if (bulkAction === "enable") body.monitoringEnabled = true;
+      if (bulkAction === "reports_on") body.monthlyReportsEnabled = true;
+      if (bulkAction === "reports_off") body.monthlyReportsEnabled = false;
+      await Promise.all(ids.map((id) => fetch(`/api/admin/monitoring/websites/${id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      })));
+    }
+
+    setBulkProcessing(false);
+    setBulkConfirm(false);
+    setBulkAction("");
+    await loadData();
+  }
+
+  function getFilteredSites(): WebsiteRow[] {
+    if (bulkFilter === "all") return websites;
+    if (bulkFilter === "email") return websites.filter((w) => w.contactEmail);
+    if (bulkFilter === "no_email") return websites.filter((w) => !w.contactEmail);
+    if (bulkFilter === "disabled") return websites.filter((w) => !w.monitoringEnabled);
+    return websites;
+  }
+
+  const filteredCount = getFilteredSites().length;
 
   if (loading) {
     return (
@@ -150,10 +161,10 @@ export default function OverviewPage() {
           <span className="rounded-full bg-[#2DA4A9]/10 px-3 py-1 text-xs font-medium text-[#2DA4A9]">
             {summary?.totalCount ?? 0} websites
           </span>
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="btn-rounded inline-flex items-center gap-1.5 bg-[#0A1628] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0A1628]/85"
-          >
+          <button onClick={() => setShowBulkModal(true)} className="btn-rounded border border-[#E6EBF0] bg-white px-4 py-2 text-sm font-medium text-[#5B6776] hover:bg-gray-50">
+            Bulk Actions
+          </button>
+          <button onClick={() => setShowAddForm(true)} className="btn-rounded inline-flex items-center gap-1.5 bg-[#0A1628] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#0A1628]/85">
             + Add Website
           </button>
         </div>
@@ -203,18 +214,80 @@ export default function OverviewPage() {
               </div>
             </div>
             <label className="mt-4 flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.monthlyReportsEnabled}
-                onChange={(e) => setForm({ ...form, monthlyReportsEnabled: e.target.checked })}
-                className="h-4 w-4 rounded border-[#C4CCD4] text-[#2DA4A9] focus:ring-[#2DA4A9]"
-              />
-              <span className="text-sm text-[#0A1628]">Send monthly monitoring reports to this contact</span>
+              <input type="checkbox" checked={form.monthlyReportsEnabled} onChange={(e) => setForm({ ...form, monthlyReportsEnabled: e.target.checked })} className="h-4 w-4 rounded border-[#C4CCD4] text-[#2DA4A9] focus:ring-[#2DA4A9]" />
+              <span className="text-sm text-[#0A1628]">Send monthly monitoring reports</span>
             </label>
             <div className="mt-5 flex gap-3">
               <button onClick={() => setShowAddForm(false)} className="btn-rounded flex-1 border border-[#E6EBF0] bg-white px-5 py-2.5 text-sm font-medium text-[#5B6776] transition hover:bg-gray-50">Cancel</button>
               <button onClick={addWebsite} disabled={saving || !form.businessName || !form.domain || !form.homepageUrl} className="btn-rounded flex-1 bg-[#2DA4A9] px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#24858A] disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Adding..." : "Add Website"}</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk actions modal */}
+      {showBulkModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, width: "100vw", height: "100vh" }}>
+          <div className="absolute inset-0 bg-black/50" onClick={() => { setShowBulkModal(false); setBulkConfirm(false); }} />
+          <div className="relative z-10 w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
+            <h2 className="text-lg font-semibold tracking-tight text-[#0A1628] mb-4">Bulk Actions</h2>
+
+            {!bulkConfirm ? (
+              <>
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-[#8C97A8]">Filter</label>
+                    <select value={bulkFilter} onChange={(e) => setBulkFilter(e.target.value)} style={{ borderRadius: "12px" }} className="h-10 w-full border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628]">
+                      <option value="all">All websites ({websites.length})</option>
+                      <option value="email">Has email ({websites.filter(w => w.contactEmail).length})</option>
+                      <option value="no_email">No email ({websites.filter(w => !w.contactEmail).length})</option>
+                      <option value="disabled">Disabled ({websites.filter(w => !w.monitoringEnabled).length})</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-[#8C97A8]">Action</label>
+                    <select value={bulkAction} onChange={(e) => setBulkAction(e.target.value)} style={{ borderRadius: "12px" }} className="h-10 w-full border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628]">
+                      <option value="">Choose action...</option>
+                      <option value="freq_5">Set check frequency → 5 min</option>
+                      <option value="freq_15">Set check frequency → 15 min</option>
+                      <option value="freq_30">Set check frequency → 30 min</option>
+                      <option value="freq_60">Set check frequency → 1 hour</option>
+                      <option value="freq_360">Set check frequency → 6 hours</option>
+                      <option value="freq_1440">Set check frequency → Daily</option>
+                      <option value="enable">Enable monitoring</option>
+                      <option value="disable">Disable monitoring</option>
+                      <option value="reports_on">Turn monthly reports ON</option>
+                      <option value="reports_off">Turn monthly reports OFF</option>
+                      <option value="delete">Delete permanently</option>
+                    </select>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs text-[#8C97A8]">{filteredCount} website{filteredCount !== 1 ? "s" : ""} will be affected</p>
+                <div className="mt-4 flex gap-2">
+                  <button onClick={() => setShowBulkModal(false)} className="btn-rounded flex-1 border border-[#E6EBF0] bg-white px-4 py-2 text-sm font-medium text-[#5B6776]">Cancel</button>
+                  <button onClick={() => setBulkConfirm(true)} disabled={!bulkAction || filteredCount === 0} className="btn-rounded flex-1 bg-[#0A1628] px-4 py-2 text-sm font-medium text-white disabled:opacity-30">
+                    Review
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-xl bg-gray-50 p-4 text-center">
+                  <p className="font-semibold text-[#0A1628]">
+                    {bulkAction === "delete" ? `Delete ${filteredCount} websites?` : `Update ${filteredCount} websites?`}
+                  </p>
+                  <p className="mt-1 text-xs text-[#8C97A8]">
+                    {bulkAction === "delete" ? "This cannot be undone." : `Filter: ${bulkFilter} · Action: ${bulkAction.replace(/_/g, " ")}`}
+                  </p>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <button onClick={() => setBulkConfirm(false)} className="btn-rounded flex-1 border border-[#E6EBF0] bg-white px-4 py-2 text-sm font-medium text-[#5B6776]">Back</button>
+                  <button onClick={runBulkAction} disabled={bulkProcessing} className={`btn-rounded flex-1 px-4 py-2 text-sm font-medium text-white ${bulkAction === "delete" ? "bg-[#DC2626] hover:bg-red-700" : "bg-[#2DA4A9] hover:bg-[#24858A]"} disabled:opacity-50`}>
+                    {bulkProcessing ? "Processing..." : bulkAction === "delete" ? "Delete all" : "Apply"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -240,58 +313,9 @@ export default function OverviewPage() {
         </Link>
       )}
 
-      {/* Bulk actions */}
-      {selectedIds.size > 0 && (
-        <div className="glass-card sticky top-[72px] z-30 flex items-center gap-3 rounded-2xl bg-[#0A1628] p-4 text-white">
-          <span className="text-sm font-medium">{selectedIds.size} selected</span>
-          <select value={bulkAction} onChange={(e) => setBulkAction(e.target.value)} style={{ borderRadius: "8px" }} className="h-9 border-0 bg-white/15 px-3 text-sm text-white">
-            <option value="" className="text-[#0A1628]">Bulk action...</option>
-            <option value="freq_5" className="text-[#0A1628]">Set to every 5 min</option>
-            <option value="freq_15" className="text-[#0A1628]">Set to every 15 min</option>
-            <option value="freq_30" className="text-[#0A1628]">Set to every 30 min</option>
-            <option value="freq_60" className="text-[#0A1628]">Set to every hour</option>
-            <option value="freq_360" className="text-[#0A1628]">Set to every 6 hours</option>
-            <option value="freq_1440" className="text-[#0A1628]">Set to daily</option>
-            <option value="enable" className="text-[#0A1628]">Enable monitoring</option>
-            <option value="disable" className="text-[#0A1628]">Disable monitoring</option>
-            <option value="delete" className="text-[#0A1628]">Delete</option>
-          </select>
-          <button onClick={() => setBulkConfirm(true)} disabled={!bulkAction} className="btn-rounded bg-white px-3 py-1.5 text-sm font-medium text-[#0A1628] disabled:opacity-30">Apply</button>
-          <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-sm text-white/60 hover:text-white">Clear</button>
-        </div>
-      )}
-
-      {/* Bulk confirm modal */}
-      {bulkConfirm && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, width: "100vw", height: "100vh" }}>
-          <div className="absolute inset-0 bg-black/50" onClick={() => setBulkConfirm(false)} />
-          <div className="relative z-10 w-full max-w-sm rounded-xl bg-white p-6 shadow-2xl text-center">
-            <p className="font-semibold text-[#0A1628]">
-              {bulkAction === "delete" ? `Delete ${selectedIds.size} websites?` : `Update ${selectedIds.size} websites?`}
-            </p>
-            <p className="mt-2 text-sm text-[#8C97A8]">
-              {bulkAction === "delete" ? "Monitoring data will be permanently removed." : "This will apply to all selected websites."}
-            </p>
-            <div className="mt-4 flex gap-2">
-              <button onClick={() => setBulkConfirm(false)} className="btn-rounded flex-1 border border-[#E6EBF0] bg-white px-4 py-2 text-sm font-medium text-[#5B6776]">Cancel</button>
-              <button onClick={runBulkAction} className={`btn-rounded flex-1 px-4 py-2 text-sm font-medium text-white ${bulkAction === "delete" ? "bg-[#DC2626] hover:bg-red-700" : "bg-[#2DA4A9] hover:bg-[#24858A]"}`}>
-                {bulkAction === "delete" ? "Delete" : "Apply"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Website list */}
       <div>
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight text-[#0A1628]">Websites</h2>
-          {websites.length > 0 && (
-            <button onClick={selectAll} className="btn-rounded text-xs font-medium text-[#8C97A8] hover:text-[#2DA4A9]">
-              {selectedIds.size === websites.length ? "Deselect all" : "Select all"}
-            </button>
-          )}
-        </div>
+        <h2 className="mb-4 text-lg font-semibold tracking-tight text-[#0A1628]">Websites</h2>
         {websites.length === 0 ? (
           <div className="glass-card rounded-2xl bg-white py-16 text-center">
             <p className="text-[#8C97A8]">No websites added yet.</p>
@@ -308,28 +332,31 @@ export default function OverviewPage() {
                 : "unknown";
 
               return (
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(site.id)}
-                    onChange={() => toggleSelect(site.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="h-4 w-4 rounded border-[#C4CCD4] text-[#2DA4A9] focus:ring-[#2DA4A9]"
-                  />
-                  <Link href={`/monitoring/websites/${site.id}`} className={`glass-card flex flex-1 items-center gap-4 rounded-2xl bg-white p-4 transition hover:shadow-md ${site.isUnsubscribed ? "opacity-50" : ""}`}>
+                <Link key={site.id} href={`/monitoring/websites/${site.id}`} className={`glass-card flex items-center gap-4 rounded-2xl bg-white p-4 transition hover:shadow-md ${site.isUnsubscribed ? "opacity-50" : ""}`}>
                   <StatusDot status={status} />
                   <div className="min-w-0 flex-1">
                     <p className={`truncate font-medium text-[#0A1628] ${site.isUnsubscribed ? "line-through" : ""}`}>{site.businessName}</p>
                     <p className="truncate text-sm text-[#8C97A8]">{site.domain}</p>
                     {site.isUnsubscribed && <span className="mt-0.5 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-[#8C97A8]">Unsubscribed</span>}
                   </div>
+                  {/* Monthly reports toggle */}
+                  <button
+                    onClick={(e) => { e.preventDefault(); toggleMonthlyReports(site); }}
+                    className={`btn-rounded hidden shrink-0 px-3 py-1 text-[11px] font-medium transition sm:inline-block ${
+                      site.monthlyReportsEnabled
+                        ? "bg-[#16A34A]/10 text-[#16A34A] hover:bg-[#16A34A]/20"
+                        : "bg-gray-100 text-[#8C97A8] hover:bg-gray-200"
+                    }`}
+                    title={site.monthlyReportsEnabled ? "Monthly reports ON" : "Monthly reports OFF"}
+                  >
+                    {site.monthlyReportsEnabled ? "Reports ON" : "Reports OFF"}
+                  </button>
                   <div className="hidden shrink-0 gap-6 text-right text-sm sm:flex">
                     <div><p className="text-[#8C97A8]">Response</p><p className="font-medium tabular-nums text-[#0A1628]">{site.lastCheck?.responseTime ? `${site.lastCheck.responseTime}ms` : "—"}</p></div>
                     <div><p className="text-[#8C97A8]">Incidents</p><p className={`font-medium tabular-nums ${site.openIncidents > 0 ? "text-[#DC2626]" : "text-[#16A34A]"}`}>{site.openIncidents}</p></div>
                     <div><p className="text-[#8C97A8]">Last Check</p><p className="font-medium text-[#0A1628]">{site.lastCheck ? new Date(site.lastCheck.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Never"}</p></div>
                   </div>
                 </Link>
-                </div>
               );
             })}
           </div>
