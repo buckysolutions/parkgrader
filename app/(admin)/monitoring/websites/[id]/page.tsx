@@ -22,22 +22,30 @@ export default function WebsiteDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Settings form — always visible
+  // Settings form
   const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({ contactEmail: "", monitoringFrequency: 60, monitoringEnabled: true, monthlyReportsEnabled: false });
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [settingsDirty, setSettingsDirty] = useState(false);
 
-  async function saveField(field: string, value: unknown) {
+  async function saveSettings() {
     setSavingSettings(true);
     const res = await fetch(`/api/admin/monitoring/websites/${website.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [field]: value }),
+      body: JSON.stringify(settingsForm),
     });
     if (res.ok) {
       const json = await res.json();
       setData((prev) => prev ? { ...prev, website: json.website } : prev);
+      setSettingsDirty(false);
     }
     setSavingSettings(false);
+  }
+
+  function updateField(field: string, value: unknown) {
+    setSettingsForm((prev) => ({ ...prev, [field]: value }));
+    setSettingsDirty(true);
   }
 
   async function deleteWebsite() {
@@ -51,7 +59,14 @@ export default function WebsiteDetailPage() {
       try {
         const res = await fetch(`/api/admin/monitoring/websites/${id}`);
         if (!res.ok) { setError("Website not found."); return; }
-        setData(await res.json());
+        const d = await res.json();
+        setData(d);
+        setSettingsForm({
+          contactEmail: d.website.contactEmail || "",
+          monitoringFrequency: d.website.monitoringFrequency,
+          monitoringEnabled: d.website.monitoringEnabled,
+          monthlyReportsEnabled: d.website.monthlyReportsEnabled,
+        });
       } catch { setError("Network error."); }
       finally { setLoading(false); }
     }
@@ -122,13 +137,13 @@ export default function WebsiteDetailPage() {
       {/* Manage card — everything in one place */}
       <div className="glass-card rounded-2xl bg-white p-6">
         <h2 className="mb-4 text-lg font-semibold tracking-tight text-[#0A1628]">Manage</h2>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <label className="mb-1 block text-xs font-medium text-[#8C97A8]">Contact Email</label>
             <input
               type="email"
-              defaultValue={website.contactEmail || ""}
-              onBlur={(e) => { if (e.target.value !== (website.contactEmail || "")) saveField("contactEmail", e.target.value || null); }}
+              value={settingsForm.contactEmail}
+              onChange={(e) => updateField("contactEmail", e.target.value)}
               placeholder="email@example.com"
               style={{ borderRadius: "12px" }}
               className="h-10 w-full border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628] placeholder-[#8C97A8] focus:border-[#2DA4A9] focus:outline-none focus:ring-2 focus:ring-[#2DA4A9]/20"
@@ -137,8 +152,8 @@ export default function WebsiteDetailPage() {
           <div>
             <label className="mb-1 block text-xs font-medium text-[#8C97A8]">Check Frequency</label>
             <select
-              defaultValue={website.monitoringFrequency}
-              onChange={(e) => saveField("monitoringFrequency", parseInt(e.target.value))}
+              value={settingsForm.monitoringFrequency}
+              onChange={(e) => updateField("monitoringFrequency", parseInt(e.target.value))}
               style={{ borderRadius: "12px" }}
               className="h-10 w-full border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628] focus:border-[#2DA4A9] focus:outline-none"
             >
@@ -153,8 +168,8 @@ export default function WebsiteDetailPage() {
           <div>
             <label className="mb-1 block text-xs font-medium text-[#8C97A8]">Monitoring</label>
             <select
-              defaultValue={website.monitoringEnabled ? "1" : "0"}
-              onChange={(e) => saveField("monitoringEnabled", e.target.value === "1")}
+              value={settingsForm.monitoringEnabled ? "1" : "0"}
+              onChange={(e) => updateField("monitoringEnabled", e.target.value === "1")}
               style={{ borderRadius: "12px" }}
               className="h-10 w-full border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628] focus:border-[#2DA4A9] focus:outline-none"
             >
@@ -165,8 +180,8 @@ export default function WebsiteDetailPage() {
           <div>
             <label className="mb-1 block text-xs font-medium text-[#8C97A8]">Monthly Reports</label>
             <select
-              defaultValue={website.monthlyReportsEnabled ? "1" : "0"}
-              onChange={(e) => saveField("monthlyReportsEnabled", e.target.value === "1")}
+              value={settingsForm.monthlyReportsEnabled ? "1" : "0"}
+              onChange={(e) => updateField("monthlyReportsEnabled", e.target.value === "1")}
               style={{ borderRadius: "12px" }}
               className="h-10 w-full border border-[#C4CCD4] bg-white px-3 text-sm text-[#0A1628] focus:border-[#2DA4A9] focus:outline-none"
             >
@@ -175,14 +190,21 @@ export default function WebsiteDetailPage() {
             </select>
           </div>
         </div>
-        <div className="mt-5 flex items-center justify-between border-t border-[#E6EBF0] pt-4">
-          <p className="text-xs text-[#8C97A8]">
-            {savingSettings ? "Saving..." : "Changes save automatically"}
-          </p>
-          <button onClick={() => setConfirmDelete(true)} className="btn-rounded bg-[#DC2626] px-4 py-2 text-sm font-medium text-white hover:bg-red-700">
-            Delete Website
+        <div className="mt-5 flex items-center gap-3 border-t border-[#E6EBF0] pt-4">
+          <button onClick={saveSettings} disabled={!settingsDirty || savingSettings} className="btn-rounded bg-[#2DA4A9] px-5 py-2 text-sm font-medium text-white hover:bg-[#24858A] disabled:opacity-50">
+            {savingSettings ? "Saving..." : settingsDirty ? "Save Changes" : "Saved"}
           </button>
+          {settingsDirty && <span className="text-xs text-[#D97706]">You have unsaved changes</span>}
         </div>
+      </div>
+
+      {/* Delete — at the bottom */}
+      <div className="glass-card rounded-2xl bg-white p-6">
+        <h2 className="mb-3 text-lg font-semibold tracking-tight text-[#DC2626]">Danger Zone</h2>
+        <p className="mb-4 text-sm text-[#8C97A8]">Permanently remove this website and all monitoring history.</p>
+        <button onClick={() => setConfirmDelete(true)} className="btn-rounded bg-[#DC2626] px-5 py-2 text-sm font-medium text-white hover:bg-red-700">
+          Delete {website.businessName}
+        </button>
       </div>
 
       {/* Confirm delete modal */}
