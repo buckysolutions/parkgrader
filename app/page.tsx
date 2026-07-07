@@ -1778,7 +1778,7 @@ export default function Home() {
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.6, duration: 0.4 }}
                             >
-                              Your report and fix list are on the way to <span className="font-medium text-[#0A1628]">{inlineGateEmail}</span>. We&apos;ll also send a personalized video walkthrough within 24 hours. You&apos;ll start receiving free monthly website health reports — unsubscribe anytime. Scroll up to explore your results.
+                              Report and video walkthrough on the way to <span className="font-medium text-[#0A1628]">{inlineGateEmail}</span>. Scroll up to explore your results.
                             </motion.p>
                           </div>
                         </div>
