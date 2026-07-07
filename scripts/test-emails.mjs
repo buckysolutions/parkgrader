@@ -21,7 +21,7 @@ import { createHmac } from "node:crypto";
 const { loadEnvConfig } = nextEnv;
 
 const TO = "brian@buckysolutions.com";
-const PARKGRADER_LOGO = "https://assets.buckysolutions.com/parkgrader%2Blogo.png";
+const PARKGRADER_LOGO = "https://assets.buckysolutions.com/parkgrader%2Blogo%2Balternate.png";
 
 const esc = (v) =>
   String(v)
