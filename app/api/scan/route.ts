@@ -971,11 +971,13 @@ export async function GET(request: NextRequest) {
       ? "Responsive design settings detected  -  your site adapts to phone screens"
       : "Missing responsive settings  -  your site may appear tiny and zoomed out on phones";
 
-    // Build a Places search query from the domain and, if available, the site name
-    // from og:site_name meta (much more reliable than parsing SEO titles).
+    // Build a Places search query from the domain and the site/business name.
+    // Prefer og:site_name (explicit); fall back to <title> which almost always
+    // contains the business name and matches Google Places far better than a bare domain.
     const ogSiteName = extractMeta(html, "og:site_name");
-    if (ogSiteName) {
-      placesSearchQuery = `${ogSiteName} ${placesSearchQuery}`;
+    const siteName = ogSiteName || extractMeta(html, "title");
+    if (siteName) {
+      placesSearchQuery = `${siteName} ${placesSearchQuery}`;
     }
     // Include phone number in the search , Google Places matches phone numbers to listings
     if (scrapedPhoneDigits.length === 10) {
